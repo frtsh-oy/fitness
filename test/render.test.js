@@ -4,12 +4,13 @@ import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { makeDom } from './setup.js';
 import { renderWorkout, renderIntro, markId, videoUrl } from '../render.js';
+import { countMarks } from '../workouts/schema.js';
 import legsMwf from '../workouts/legs-mwf.js';
 
-// Достаёт текст вставки pairRules прямо из src-original/app.js (а не из
-// константы, набранной руками) — так тест сверяет наш рендер с оригиналом,
-// а не с чьим-то пересказом оригинала.
-function extractOriginalPairRulesParagraphs() {
+// Достаёт заголовок и текст вставки pairRules прямо из src-original/app.js
+// (а не из константы, набранной руками) — так тест сверяет наш рендер
+// с оригиналом, а не с чьим-то пересказом оригинала.
+function extractOriginalPairRules() {
   const appPath = fileURLToPath(new URL('../src-original/app.js', import.meta.url));
   const appSrc = fs.readFileSync(appPath, 'utf8');
   const m = appSrc.match(/const pairRules=(['"])((?:\\.|(?!\1)[\s\S])*)\1;/);
@@ -18,12 +19,16 @@ function extractOriginalPairRulesParagraphs() {
   // eslint-disable-next-line no-new-func
   const html = Function(`"use strict"; return (${literal});`)();
   const { document } = makeDom(`<!doctype html><html><body>${html}</body></html>`);
-  return [...document.querySelectorAll('.pair-rules p')].map(p => p.textContent);
+  return {
+    title: document.querySelector('.pair-rules h2').textContent,
+    paragraphs: [...document.querySelectorAll('.pair-rules p')].map(p => p.textContent),
+  };
 }
 
-test('markId собирает идентификатор из блока, индекса и круга', () => {
+test('markId собирает идентификатор из блока, идентификатора упражнения и круга', () => {
   assert.equal(markId('legs1', 0, 1), 'legs1-0-1');
   assert.equal(markId('circuit', 3, 2), 'circuit-3-2');
+  assert.equal(markId('legs3', 'bird-dog', 2), 'legs3-bird-dog-2');
 });
 
 test('videoUrl собирает ссылку с таймкодом', () => {
@@ -50,7 +55,7 @@ test('рендерятся все 19 упражнений', () => {
 test('число кнопок отметок совпадает с countMarks', () => {
   const { document } = makeDom();
   const fragment = renderWorkout(legsMwf, document);
-  assert.equal(fragment.querySelectorAll('input[data-mark]').length, 37);
+  assert.equal(fragment.querySelectorAll('input[data-mark]').length, countMarks(legsMwf));
 });
 
 test('идентификаторы отметок уникальны', () => {
@@ -58,6 +63,45 @@ test('идентификаторы отметок уникальны', () => {
   const fragment = renderWorkout(legsMwf, document);
   const ids = [...fragment.querySelectorAll('input[data-mark]')].map(b => b.dataset.mark);
   assert.equal(new Set(ids).size, ids.length);
+});
+
+test('идентификатор отметки строится по item.key, если он есть, иначе по индексу упражнения', () => {
+  const { document } = makeDom();
+  const fragment = renderWorkout(legsMwf, document);
+  const legs3 = fragment.querySelector('#legs3');
+  const exercises = [...legs3.querySelectorAll('.exercise')];
+  const idsOf = article => [...article.querySelectorAll('input[data-mark]')].map(i => i.dataset.mark);
+
+  // item[0] «Подъём верхней ноги лёжа на боку» — key не задан, id по индексу (0).
+  assert.deepEqual(idsOf(exercises[0]), ['legs3-0-1', 'legs3-0-2']);
+  // item[1] «Птица-собака» — key: 'bird-dog', id по key, а не по индексу (1).
+  assert.deepEqual(idsOf(exercises[1]), ['legs3-bird-dog-1', 'legs3-bird-dog-2']);
+});
+
+test('перестановка упражнений внутри блока не меняет идентификатор отметки у упражнения с key', () => {
+  const { document: doc1 } = makeDom();
+  const before = renderWorkout(legsMwf, doc1);
+  const beforeAll = [...before.querySelector('#legs3').querySelectorAll('input[data-mark]')].map(i => i.dataset.mark);
+
+  const reordered = structuredClone(legsMwf);
+  reordered.blocks.find(b => b.id === 'legs3').items.reverse();
+  const { document: doc2 } = makeDom();
+  const after = renderWorkout(reordered, doc2);
+  const afterAll = [...after.querySelector('#legs3').querySelectorAll('input[data-mark]')].map(i => i.dataset.mark);
+
+  // Суть находки: у упражнения с key ('bird-dog') идентификатор не меняется,
+  // хотя оно переехало с позиции 1 на позицию 0.
+  const keyedBefore = beforeAll.filter(id => id.includes('bird-dog'));
+  const keyedAfter = afterAll.filter(id => id.includes('bird-dog'));
+  assert.deepEqual(keyedAfter, keyedBefore);
+  assert.deepEqual(keyedBefore, ['legs3-bird-dog-1', 'legs3-bird-dog-2']);
+
+  // Контраст: у упражнения без key идентификатор строится по индексу и поэтому
+  // меняется вместе с позицией (было legs3-0-*, стало legs3-1-*).
+  const indexedBefore = beforeAll.filter(id => id.startsWith('legs3-0-'));
+  const indexedAfter = afterAll.filter(id => id.startsWith('legs3-1-'));
+  assert.deepEqual(indexedBefore, ['legs3-0-1', 'legs3-0-2']);
+  assert.deepEqual(indexedAfter, ['legs3-1-1', 'legs3-1-2']);
 });
 
 test('у блока с одним кругом отметка подписана «Готово», у многокруговых — «Круг N»', () => {
@@ -107,12 +151,20 @@ test('в preamble ровно два элемента strong — с длител�
   assert.deepEqual(strongs.map(s => s.textContent), ['30–45 с отдыха', '60–90 с отдыха']);
 });
 
+test('заголовок preamble совпадает с оригиналом из src-original/app.js', () => {
+  const original = extractOriginalPairRules();
+  const { document } = makeDom();
+  const fragment = renderWorkout(legsMwf, document);
+  const h2 = fragment.querySelector('.pair-rules h2');
+  assert.equal(h2.textContent, original.title);
+});
+
 test('текст preamble совпадает с оригиналом из src-original/app.js', () => {
-  const original = extractOriginalPairRulesParagraphs();
+  const original = extractOriginalPairRules();
   const { document } = makeDom();
   const fragment = renderWorkout(legsMwf, document);
   const ours = [...fragment.querySelectorAll('.pair-rules p')].map(p => p.textContent);
-  assert.deepEqual(ours, original);
+  assert.deepEqual(ours, original.paragraphs);
 });
 
 test('блок без preamble не порождает секцию pair-rules', () => {
