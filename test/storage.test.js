@@ -137,3 +137,116 @@ test('НАХОДКА E: clear работает с CloudStorage и удаляет
   assert.ok(!store.has('w:legs-mwf:2026-09-14'), 'ключ не удалён из CloudStorage');
   assert.deepEqual([...(await s.load('legs-mwf'))], []);
 });
+
+// Раунд 4: Fallback на localStorage при отказе облака
+
+test('ПРАВИЛО 1A: ошибка getItem → читаем из localStorage', async () => {
+  const local = fakeLocal();
+  local.setItem('w:legs-mwf:2026-09-14', '["локальная-отметка"]');
+  const cloud = { getItem: (k, cb) => cb(new Error('нет сети')) };
+  const s = createStorage({ cloud, local, today });
+  // При ошибке облака берём из localStorage
+  assert.deepEqual([...(await s.load('legs-mwf'))], ['локальная-отметка']);
+});
+
+test('ПРАВИЛО 1B: синхронный throw getItem → читаем из localStorage', async () => {
+  const local = fakeLocal();
+  local.setItem('w:legs-mwf:2026-09-14', '["локальная-отметка"]');
+  const cloud = { getItem: () => { throw new Error('бум'); } };
+  const s = createStorage({ cloud, local, today });
+  // При синхронном throw берём из localStorage
+  assert.deepEqual([...(await s.load('legs-mwf'))], ['локальная-отметка']);
+});
+
+test('ПРАВИЛО 1C: таймаут getItem → читаем из localStorage', async () => {
+  const local = fakeLocal();
+  local.setItem('w:legs-mwf:2026-09-14', '["локальная-отметка"]');
+  const cloud = { getItem: () => { /* никогда не вызовет cb */ } };
+  const s = createStorage({ cloud, local, today, cloudTimeout: 10 });
+  // При таймауте берём из localStorage
+  assert.deepEqual([...(await s.load('legs-mwf'))], ['локальная-отметка']);
+});
+
+test('ПРАВИЛО 1D: пустой успешный ответ облака не подменяется localStorage', async () => {
+  const local = fakeLocal();
+  local.setItem('w:legs-mwf:2026-09-14', '["устаревшая-отметка"]');
+  const cloud = { getItem: (k, cb) => cb(null, '') }; // Успешный пустой ответ
+  const s = createStorage({ cloud, local, today });
+  // Успешный ответ берём как есть, даже если пусто (не подменяем локальными)
+  assert.deepEqual([...(await s.load('legs-mwf'))], []);
+});
+
+test('ПРАВИЛО 2A: ошибка setItem → пишем в localStorage', async () => {
+  const local = fakeLocal();
+  const cloud = {
+    setItem: (k, v, cb) => cb(new Error('квота превышена')),
+    getItem: (k, cb) => cb(new Error('нет сети')), // getItem тоже отказал
+  };
+  const s = createStorage({ cloud, local, today });
+  await s.save('legs-mwf', new Set(['отметка']));
+  // При ошибке облака должны сохранить в localStorage, и при загрузке она прочитается
+  assert.deepEqual([...(await s.load('legs-mwf'))], ['отметка']);
+});
+
+test('ПРАВИЛО 2B: синхронный throw setItem → пишем в localStorage', async () => {
+  const local = fakeLocal();
+  const cloud = {
+    setItem: () => { throw new Error('бум'); },
+    getItem: (k, cb) => cb(new Error('бум')), // getItem тоже отказал
+  };
+  const s = createStorage({ cloud, local, today });
+  await s.save('legs-mwf', new Set(['отметка']));
+  // При синхронном throw должны сохранить в localStorage
+  assert.deepEqual([...(await s.load('legs-mwf'))], ['отметка']);
+});
+
+test('ПРАВИЛО 2C: таймаут setItem → пишем в localStorage', async () => {
+  const local = fakeLocal();
+  const cloud = {
+    setItem: () => { /* никогда не вызовет cb */ },
+    getItem: (k, cb) => { /* тоже никогда не вызовет cb */ },
+  };
+  const s = createStorage({ cloud, local, today, cloudTimeout: 10 });
+  await s.save('legs-mwf', new Set(['отметка']));
+  // При таймауте должны сохранить в localStorage
+  assert.deepEqual([...(await s.load('legs-mwf'))], ['отметка']);
+});
+
+test('ПРАВИЛО 3A: ошибка removeItem → чистим localStorage', async () => {
+  const local = fakeLocal();
+  local.setItem('w:legs-mwf:2026-09-14', '["отметка"]');
+  const cloud = {
+    removeItem: (k, cb) => cb(new Error('нет сети')),
+    getItem: (k, cb) => cb(new Error('нет сети')), // getItem тоже отказал
+  };
+  const s = createStorage({ cloud, local, today });
+  await s.clear('legs-mwf');
+  // После clear с ошибкой облака должны очистить localStorage, чтобы getItem вернул пустое
+  assert.deepEqual([...(await s.load('legs-mwf'))], []);
+});
+
+test('ПРАВИЛО 3B: синхронный throw removeItem → чистим localStorage', async () => {
+  const local = fakeLocal();
+  local.setItem('w:legs-mwf:2026-09-14', '["отметка"]');
+  const cloud = {
+    removeItem: () => { throw new Error('бум'); },
+    getItem: (k, cb) => cb(new Error('бум')), // getItem тоже отказал
+  };
+  const s = createStorage({ cloud, local, today });
+  await s.clear('legs-mwf');
+  // При синхронном throw должны очистить localStorage
+  assert.deepEqual([...(await s.load('legs-mwf'))], []);
+});
+
+test('ПРАВИЛО 3C: таймаут removeItem → чистим localStorage', async () => {
+  const local = fakeLocal();
+  local.setItem('w:legs-mwf:2026-09-14', '["отметка"]');
+  const cloud = {
+    removeItem: () => { /* никогда не вызовет cb */ },
+    getItem: (k, cb) => { /* тоже никогда не вызовет cb */ },
+  };
+  const s = createStorage({ cloud, local, today, cloudTimeout: 10 });
+  await s.clear('legs-mwf');
+  // При таймауте должны очистить localStorage, иначе при getItem с таймаутом вернулась старая отметка
+  assert.deepEqual([...(await s.load('legs-mwf'))], []);
+});

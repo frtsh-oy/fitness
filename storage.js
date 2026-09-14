@@ -24,21 +24,27 @@ export function createStorage({ cloud = null, local = null, today = () => new Da
       return;
     }
 
-    // Обрабатываем синхронное исключение, ошибку в колбэке и таймаут
+    // ПРАВИЛО 1: Если облако отказало — читаем из localStorage
     let timedOut = false;
-    const timer = setTimeout(() => { timedOut = true; resolve(''); }, cloudTimeout);
+    const timer = setTimeout(() => { timedOut = true; resolve(local?.getItem(key) ?? ''); }, cloudTimeout);
 
     try {
       cloud.getItem(key, (err, value) => {
         clearTimeout(timer);
         if (!timedOut) {
-          // При ошибке отбрасываем значение — оно не заслуживает доверия
-          resolve(err ? '' : (value ?? ''));
+          // Успешный ответ берём как есть, даже если пусто (не подменяем локальными)
+          if (err) {
+            // Ошибка → читаем из localStorage
+            resolve(local?.getItem(key) ?? '');
+          } else {
+            resolve(value ?? '');
+          }
         }
       });
     } catch {
       clearTimeout(timer);
-      resolve('');
+      // Синхронное исключение → читаем из localStorage
+      resolve(local?.getItem(key) ?? '');
     }
   });
 
@@ -52,15 +58,29 @@ export function createStorage({ cloud = null, local = null, today = () => new Da
     // Сериализуем операции на один ключ
     const chain = (queues.get(key) || Promise.resolve()).then(() => new Promise(resolveWrite => {
       let timedOut = false;
-      const timer = setTimeout(() => { timedOut = true; resolveWrite(); }, cloudTimeout);
+      const timer = setTimeout(() => {
+        timedOut = true;
+        // ПРАВИЛО 2: Таймаут → пишем в localStorage
+        try { local?.setItem(key, value); } catch { /* приватный режим */ }
+        resolveWrite();
+      }, cloudTimeout);
 
       try {
-        cloud.setItem(key, value, () => {
+        cloud.setItem(key, value, (err) => {
           clearTimeout(timer);
-          if (!timedOut) resolveWrite();
+          if (!timedOut) {
+            if (err) {
+              // ПРАВИЛО 2: Ошибка → пишем в localStorage
+              try { local?.setItem(key, value); } catch { /* приватный режим */ }
+            }
+            // Успех → не пишем в localStorage, облако уже сохранил
+            resolveWrite();
+          }
         });
       } catch {
         clearTimeout(timer);
+        // ПРАВИЛО 2: Синхронное исключение → пишем в localStorage
+        try { local?.setItem(key, value); } catch { /* приватный режим */ }
         resolveWrite();
       }
     }));
@@ -79,15 +99,26 @@ export function createStorage({ cloud = null, local = null, today = () => new Da
     // Сериализуем операции на один ключ
     const chain = (queues.get(key) || Promise.resolve()).then(() => new Promise(resolveDrop => {
       let timedOut = false;
-      const timer = setTimeout(() => { timedOut = true; resolveDrop(); }, cloudTimeout);
+      const timer = setTimeout(() => {
+        timedOut = true;
+        // ПРАВИЛО 3: Таймаут → чистим localStorage
+        try { local?.removeItem(key); } catch { /* приватный режим */ }
+        resolveDrop();
+      }, cloudTimeout);
 
       try {
-        cloud.removeItem(key, () => {
+        cloud.removeItem(key, (err) => {
           clearTimeout(timer);
-          if (!timedOut) resolveDrop();
+          if (!timedOut) {
+            // ПРАВИЛО 3: Всегда чистим localStorage (успех или ошибка)
+            try { local?.removeItem(key); } catch { /* приватный режим */ }
+            resolveDrop();
+          }
         });
       } catch {
         clearTimeout(timer);
+        // ПРАВИЛО 3: Синхронное исключение → чистим localStorage
+        try { local?.removeItem(key); } catch { /* приватный режим */ }
         resolveDrop();
       }
     }));
