@@ -74,7 +74,7 @@ Expected: все пять хешей совпадают с эталоном.
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node --test test/*.test.js"
+    "test": "node --test"
   },
   "devDependencies": {
     "jsdom": "^30.0.0"
