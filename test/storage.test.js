@@ -339,32 +339,9 @@ test('НАХОДКА 2A: отметка переживает неудачную 
   assert.equal(local.getItem(PENDING), '1', 'признак неподтверждённой записи не поставлен');
 });
 
-test('НАХОДКА 2B: удачная досылка снимает признак, дальше приоритет снова у облака', async () => {
-  const local = fakeLocal();
-  const store = new Map();
-  let cloudUp = false;
-  const cloud = {
-    setItem: (k, v, cb) => {
-      if (!cloudUp) { cb(new Error('нет сети')); return; }
-      store.set(k, v);
-      cb(null, true);
-    },
-    getItem: (k, cb) => cb(null, store.get(k) ?? ''),
-    removeItem: (k, cb) => { store.delete(k); cb(null, true); },
-  };
-  await createStorage({ cloud, local, today }).save('legs-mwf', new Set(['squat']));
-  assert.equal(local.getItem(PENDING), '1', 'признак не поставлен');
-
-  cloudUp = true;
-  const reopened = createStorage({ cloud, local, today });
-  assert.deepEqual([...(await reopened.load('legs-mwf'))], ['squat']);
-  assert.equal(store.get(KEY), '["squat"]', 'досылка не ушла в облако');
-  assert.equal(local.getItem(PENDING), null, 'признак не снят после удачной досылки');
-
-  // Признака больше нет: сброс с другого устройства теперь виден как сброс
-  store.set(KEY, '[]');
-  assert.deepEqual([...(await createStorage({ cloud, local, today }).load('legs-mwf'))], []);
-});
+// Раунд 6 заменил этот тест: досылка из read() убрана как last-write-wins
+// заведомо несвежим источником, набор доносит первое же успешное save.
+// См. РАУНД 6 C.
 
 test('НАХОДКА 2C: без признака пустой успешный ответ облака отдаётся пустым, даже если в localStorage есть отметки', async () => {
   const local = fakeLocal();
@@ -440,7 +417,7 @@ test('НАХОДКА 2G: удачная запись после неудачно
   assert.deepEqual([...(await createStorage({ cloud, local, today }).load('legs-mwf'))].sort(), ['lunge', 'squat']);
 });
 
-test('НАХОДКА 2H: признак без локального значения не затирает облако пустой досылкой', async () => {
+test('НАХОДКА 2H: признак без локального значения не перекрывает облако', async () => {
   const local = fakeLocal();
   // Признак лёг, а сама отметка — нет: localStorage принял короткое значение
   // и отказал на длинном (переполненная квота)
@@ -455,6 +432,113 @@ test('НАХОДКА 2H: признак без локального значен
   const s = createStorage({ cloud, local, today });
   // Защищать нечего — признак ничего не значит, читаем облако обычным порядком
   assert.deepEqual([...(await s.load('legs-mwf'))], ['с-другого-устройства']);
-  assert.deepEqual(pushed, [], 'пустая досылка ушла в облако');
-  assert.equal(store.get(KEY), '["с-другого-устройства"]', 'облачные данные затёрты пустотой');
+  assert.deepEqual(pushed, [], 'чтение записало в облако');
+  assert.equal(store.get(KEY), '["с-другого-устройства"]', 'облачные данные затёрты');
+});
+
+// Раунд 6: досылка из read() убрана. Признак остаётся и по-прежнему отдаёт
+// локальное значение вместо облачного, но чтение больше ничего не пишет.
+
+test('РАУНД 6 A: чтение не встаёт в очередь записей — load при стоящем признаке не ждёт ни одного таймаута', async () => {
+  const local = fakeLocal();
+  // Мёртвое облако: ни одна операция никогда не вызовет колбэк
+  const cloud = { setItem: () => {}, getItem: () => {}, removeItem: () => {} };
+  const s = createStorage({ cloud, local, today, cloudTimeout: 60 });
+
+  await s.save('legs-mwf', new Set(['squat']));
+  assert.equal(local.getItem(PENDING), '1', 'признак не поставлен');
+
+  // Пользователь быстро тапает ещё дважды — обе записи висят в очереди ключа
+  s.save('legs-mwf', new Set(['squat', 'lunge']));
+  s.save('legs-mwf', new Set(['squat', 'lunge', 'plank']));
+
+  const start = Date.now();
+  const marks = await s.load('legs-mwf');
+  const elapsed = Date.now() - start;
+
+  assert.deepEqual([...marks], ['squat']);
+  assert.ok(elapsed < 40, `load ждал ${elapsed}ms — чтение снова встало в очередь записей`);
+});
+
+test('РАУНД 6 B: чтение на устройстве с признаком не откатывает облако к своему состоянию', async () => {
+  const local = fakeLocal();   // localStorage устройства A
+  const store = new Map();     // общий CloudStorage обоих устройств
+  let cloudUp = false;
+  const writes = [];
+  const cloud = {
+    setItem: (k, v, cb) => {
+      writes.push(v);
+      if (!cloudUp) { cb(new Error('нет сети')); return; }
+      store.set(k, v);
+      cb(null, true);
+    },
+    getItem: (k, cb) => cb(null, store.get(k) ?? ''),
+    removeItem: (k, cb) => { store.delete(k); cb(null, true); },
+  };
+
+  // Устройство A в офлайне отмечает присед
+  await createStorage({ cloud, local, today }).save('legs-mwf', new Set(['squat']));
+  assert.equal(local.getItem(PENDING), '1', 'признак не поставлен');
+
+  // Пока A офлайн, устройство B успешно пишет в общее облако более полный набор
+  store.set(KEY, '["squat","lunge","plank"]');
+
+  // У A восстановилась сеть, пользователь просто открывает тренировку
+  cloudUp = true;
+  writes.length = 0;
+  const reopened = createStorage({ cloud, local, today });
+  assert.deepEqual([...(await reopened.load('legs-mwf'))], ['squat'], 'A не увидел свою отметку');
+
+  // Открытие тренировки не имеет права ничего писать в облако
+  assert.deepEqual(writes, [], 'чтение записало в облако');
+  assert.equal(store.get(KEY), '["squat","lunge","plank"]', 'облако откатилось к состоянию A — прогресс с B потерян');
+});
+
+test('РАУНД 6 C: после восстановления связи первое же успешное save доносит набор в облако и снимает признак', async () => {
+  const local = fakeLocal();
+  const store = new Map();
+  let cloudUp = false;
+  const cloud = {
+    setItem: (k, v, cb) => {
+      if (!cloudUp) { cb(new Error('нет сети')); return; }
+      store.set(k, v);
+      cb(null, true);
+    },
+    getItem: (k, cb) => cb(null, store.get(k) ?? ''),
+    removeItem: (k, cb) => { store.delete(k); cb(null, true); },
+  };
+  const s = createStorage({ cloud, local, today });
+
+  await s.save('legs-mwf', new Set(['squat']));
+  assert.equal(local.getItem(PENDING), '1', 'признак не поставлен');
+  assert.equal(store.has(KEY), false, 'отказавшая запись всё-таки попала в облако');
+
+  // Связь вернулась. Приложение сохраняет ВЕСЬ текущий набор, а не разницу,
+  // поэтому офлайновая отметка доезжает штатной записью, без всякой досылки.
+  cloudUp = true;
+  await s.save('legs-mwf', new Set(['squat', 'lunge']));
+  assert.equal(store.get(KEY), '["squat","lunge"]', 'набор не донесён в облако');
+  assert.equal(local.getItem(PENDING), null, 'признак не снят');
+
+  // Признака больше нет — приоритет снова у облака, сброс с другого устройства виден
+  store.set(KEY, '[]');
+  assert.deepEqual([...(await createStorage({ cloud, local, today }).load('legs-mwf'))], []);
+});
+
+test('РАУНД 6 D: опоздавший и повторный ответ облака не меняют уже отданный результат', async () => {
+  const local = fakeLocal();
+  local.setItem(KEY, '["локальная-отметка"]');
+  let late = null;
+  const cloud = { getItem: (k, cb) => { late = cb; } };  // колбэк придёт позже таймаута
+  const s = createStorage({ cloud, local, today, cloudTimeout: 10 });
+
+  assert.deepEqual([...(await s.load('legs-mwf'))], ['локальная-отметка']);
+
+  // Облако очнулось и отвечает после таймаута, да ещё и дважды, да ещё и другим
+  // значением. Первый исход уже принят — повторные не должны ни бросить, ни подменить.
+  assert.doesNotThrow(() => {
+    late(null, '["опоздавшая"]');
+    late(null, '["и-ещё-раз"]');
+  });
+  assert.deepEqual([...(await s.load('legs-mwf'))], ['локальная-отметка']);
 });
