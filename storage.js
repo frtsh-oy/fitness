@@ -14,31 +14,86 @@ function parseMarks(raw) {
   }
 }
 
-export function createStorage({ cloud = null, local = null, today = () => new Date().toISOString().slice(0, 10) } = {}) {
+export function createStorage({ cloud = null, local = null, today = () => new Date().toISOString().slice(0, 10), cloudTimeout = 5000 } = {}) {
+  // Сериализуем write-операции для каждого ключа (save и clear должны применяться в порядке вызова)
+  const queues = new Map();
+
   const read = key => new Promise(resolve => {
-    if (cloud) {
-      cloud.getItem(key, (err, value) => resolve(err ? '' : value));
+    if (!cloud) {
+      try { resolve(local?.getItem(key) ?? ''); } catch { resolve(''); }
       return;
     }
-    try { resolve(local?.getItem(key) ?? ''); } catch { resolve(''); }
+
+    // Обрабатываем синхронное исключение, ошибку в колбэке и таймаут
+    let timedOut = false;
+    const timer = setTimeout(() => { timedOut = true; resolve(''); }, cloudTimeout);
+
+    try {
+      cloud.getItem(key, (err, value) => {
+        clearTimeout(timer);
+        if (!timedOut) {
+          // При ошибке возвращаем старые данные, если они есть
+          resolve(err ? (value ?? '') : (value ?? ''));
+        }
+      });
+    } catch {
+      clearTimeout(timer);
+      resolve('');
+    }
   });
 
   const write = (key, value) => new Promise(resolve => {
-    if (cloud) {
-      cloud.setItem(key, value, () => resolve());
+    if (!cloud) {
+      try { local?.setItem(key, value); } catch { /* приватный режим — молча пропускаем */ }
+      resolve();
       return;
     }
-    try { local?.setItem(key, value); } catch { /* приватный режим — молча пропускаем */ }
-    resolve();
+
+    // Сериализуем операции на один ключ
+    const chain = (queues.get(key) || Promise.resolve()).then(() => new Promise(resolveWrite => {
+      let timedOut = false;
+      const timer = setTimeout(() => { timedOut = true; resolveWrite(); }, cloudTimeout);
+
+      try {
+        cloud.setItem(key, value, () => {
+          clearTimeout(timer);
+          if (!timedOut) resolveWrite();
+        });
+      } catch {
+        clearTimeout(timer);
+        resolveWrite();
+      }
+    }));
+
+    queues.set(key, chain);
+    chain.then(() => resolve());
   });
 
   const drop = key => new Promise(resolve => {
-    if (cloud) {
-      cloud.removeItem(key, () => resolve());
+    if (!cloud) {
+      try { local?.removeItem(key); } catch { /* см. выше */ }
+      resolve();
       return;
     }
-    try { local?.removeItem(key); } catch { /* см. выше */ }
-    resolve();
+
+    // Сериализуем операции на один ключ
+    const chain = (queues.get(key) || Promise.resolve()).then(() => new Promise(resolveDrop => {
+      let timedOut = false;
+      const timer = setTimeout(() => { timedOut = true; resolveDrop(); }, cloudTimeout);
+
+      try {
+        cloud.removeItem(key, () => {
+          clearTimeout(timer);
+          if (!timedOut) resolveDrop();
+        });
+      } catch {
+        clearTimeout(timer);
+        resolveDrop();
+      }
+    }));
+
+    queues.set(key, chain);
+    chain.then(() => resolve());
   });
 
   return {
