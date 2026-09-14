@@ -38,6 +38,16 @@ test('приводящие и средняя ягодичная размечен
   assert.ok(load.some(l => l.glutes_med === 1), 'нет упражнения с целевой средней ягодичной');
 });
 
+test('средняя ягодичная набирает подходы более чем в одном упражнении', () => {
+  const withGlutesMed = legsMwf.blocks
+    .flatMap(b => b.items)
+    .filter(i => 'glutes_med' in i.load);
+  assert.ok(
+    withGlutesMed.length > 1,
+    `средняя ягодичная размечена только в ${withGlutesMed.length} упражнении(ях), а программа заявлена на неё`,
+  );
+});
+
 test('у каждого блока есть короткая подпись nav, отличная от заголовка', () => {
   assert.deepEqual(
     legsMwf.blocks.map(b => b.nav),

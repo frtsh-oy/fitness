@@ -1,6 +1,6 @@
 import { isMuscleId } from '../muscles.js';
 
-export const PATTERNS = ['hinge', 'squat', 'lunge', 'push', 'pull', 'core', 'mobility', 'stretch'];
+export const PATTERNS = ['hinge', 'squat', 'lunge', 'push', 'pull', 'core', 'isolation', 'mobility', 'stretch'];
 export const GEAR = ['band_long', 'loop_short', 'none'];
 export const KINDS = ['warmup', 'strength', 'cooldown'];
 export const LOAD_VALUES = [0.5, 1];
