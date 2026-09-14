@@ -17,6 +17,17 @@ function isNonEmptyString(value) {
   return typeof value === 'string' && value.length > 0;
 }
 
+// Часть абзаца preamble: либо обычный текст, либо { b: 'текст' } для полужирного —
+// так инлайновая разметка переносится без innerHTML и без своего мини-языка.
+function isValidPreamblePart(part) {
+  if (typeof part === 'string') return part.length > 0;
+  if (typeof part === 'object' && part !== null && !Array.isArray(part)) {
+    const keys = Object.keys(part);
+    return keys.length === 1 && keys[0] === 'b' && isNonEmptyString(part.b);
+  }
+  return false;
+}
+
 export function validateWorkout(workout) {
   const problems = [];
 
@@ -66,6 +77,31 @@ export function validateWorkout(workout) {
     if (!Number.isInteger(block.rounds) || block.rounds < 1) {
       problems.push(`${where}: rounds должен быть целым числом не меньше 1, получено ${block.rounds}`);
     }
+
+    if (block.preamble !== undefined) {
+      const { preamble } = block;
+      if (typeof preamble !== 'object' || preamble === null || Array.isArray(preamble)) {
+        problems.push(`${where}: preamble должен быть объектом`);
+      } else {
+        if (!isNonEmptyString(preamble.title)) problems.push(`${where}: preamble.title должен быть непустой строкой`);
+        if (!Array.isArray(preamble.paragraphs) || preamble.paragraphs.length === 0) {
+          problems.push(`${where}: preamble.paragraphs должен быть непустым массивом`);
+        } else {
+          preamble.paragraphs.forEach((paragraph, pi) => {
+            if (!Array.isArray(paragraph) || paragraph.length === 0) {
+              problems.push(`${where}: preamble.paragraphs[${pi}] должен быть непустым массивом`);
+              return;
+            }
+            paragraph.forEach((part, parti) => {
+              if (!isValidPreamblePart(part)) {
+                problems.push(`${where}: preamble.paragraphs[${pi}][${parti}] должен быть непустой строкой либо объектом { b: непустая строка }`);
+              }
+            });
+          });
+        }
+      }
+    }
+
     if (block.items !== undefined && !Array.isArray(block.items)) {
       problems.push(`${where}: items должен быть массивом`);
       continue;

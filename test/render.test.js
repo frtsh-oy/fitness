@@ -1,8 +1,25 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { makeDom } from './setup.js';
 import { renderWorkout, renderIntro, markId, videoUrl } from '../render.js';
 import legsMwf from '../workouts/legs-mwf.js';
+
+// Достаёт текст вставки pairRules прямо из src-original/app.js (а не из
+// константы, набранной руками) — так тест сверяет наш рендер с оригиналом,
+// а не с чьим-то пересказом оригинала.
+function extractOriginalPairRulesParagraphs() {
+  const appPath = fileURLToPath(new URL('../src-original/app.js', import.meta.url));
+  const appSrc = fs.readFileSync(appPath, 'utf8');
+  const m = appSrc.match(/const pairRules=(['"])((?:\\.|(?!\1)[\s\S])*)\1;/);
+  assert.ok(m, 'pairRules не найден в src-original/app.js');
+  const literal = m[0].replace(/^const pairRules=/, '').replace(/;$/, '');
+  // eslint-disable-next-line no-new-func
+  const html = Function(`"use strict"; return (${literal});`)();
+  const { document } = makeDom(`<!doctype html><html><body>${html}</body></html>`);
+  return [...document.querySelectorAll('.pair-rules p')].map(p => p.textContent);
+}
 
 test('markId собирает идентификатор из блока, индекса и круга', () => {
   assert.equal(markId('legs1', 0, 1), 'legs1-0-1');
@@ -70,6 +87,39 @@ test('упражнение без видео не получает ссылку'
   // независимо от того, как отрендерилось именно проверяемое упражнение.
   const first = fragment.querySelector('#start .exercise');
   assert.equal(first.querySelector('a.video'), null);
+});
+
+test('вставка «как выполнять силовые пары» стоит между блоками circuit и legs1', () => {
+  const { document } = makeDom();
+  const fragment = renderWorkout(legsMwf, document);
+  const order = [...fragment.children].map(n => (n.classList.contains('pair-rules') ? 'pair-rules' : n.id));
+  const circuitIndex = order.indexOf('circuit');
+  const pairIndex = order.indexOf('pair-rules');
+  const legs1Index = order.indexOf('legs1');
+  assert.equal(pairIndex, circuitIndex + 1, 'preamble должен идти сразу после circuit');
+  assert.equal(legs1Index, pairIndex + 1, 'legs1 должен идти сразу после preamble');
+});
+
+test('в preamble ровно два элемента strong — с длительностями отдыха', () => {
+  const { document } = makeDom();
+  const fragment = renderWorkout(legsMwf, document);
+  const strongs = [...fragment.querySelectorAll('.pair-rules strong')];
+  assert.deepEqual(strongs.map(s => s.textContent), ['30–45 с отдыха', '60–90 с отдыха']);
+});
+
+test('текст preamble совпадает с оригиналом из src-original/app.js', () => {
+  const original = extractOriginalPairRulesParagraphs();
+  const { document } = makeDom();
+  const fragment = renderWorkout(legsMwf, document);
+  const ours = [...fragment.querySelectorAll('.pair-rules p')].map(p => p.textContent);
+  assert.deepEqual(ours, original);
+});
+
+test('блок без preamble не порождает секцию pair-rules', () => {
+  const { document } = makeDom();
+  const fragment = renderWorkout(legsMwf, document);
+  // preamble задан только у одного из восьми блоков — секция должна быть ровно одна.
+  assert.equal(fragment.querySelectorAll('.pair-rules').length, 1);
 });
 
 test('renderIntro заполняет шапку из данных, а не из статики HTML', () => {

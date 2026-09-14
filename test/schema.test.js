@@ -148,3 +148,56 @@ test('item.load = null попадает в отчёт', () => {
   w.blocks[0].items[0].load = null;
   assert.match(validateWorkout(w).join('\n'), /load/);
 });
+
+// preamble: вставка перед блоком (title + paragraphs из строк/{b: строка})
+
+test('корректный preamble проходит проверку', () => {
+  const w = minimalWorkout();
+  w.blocks[0].preamble = {
+    title: 'Заголовок вставки',
+    paragraphs: [['Обычный текст, ', { b: 'жирный кусок' }, ' и снова обычный.'], ['Второй абзац.']],
+  };
+  assert.deepEqual(validateWorkout(w), []);
+});
+
+test('пустой title в preamble попадает в отчёт', () => {
+  const w = minimalWorkout();
+  w.blocks[0].preamble = { title: '', paragraphs: [['текст']] };
+  assert.match(validateWorkout(w).join('\n'), /preamble\.title/);
+});
+
+test('часть абзаца preamble с пустой строкой попадает в отчёт', () => {
+  const w = minimalWorkout();
+  w.blocks[0].preamble = { title: 'Заголовок', paragraphs: [['', { b: 'жирный' }]] };
+  assert.match(validateWorkout(w).join('\n'), /preamble\.paragraphs\[0\]\[0\]/);
+});
+
+test('объект-часть preamble с лишним ключом попадает в отчёт', () => {
+  const w = minimalWorkout();
+  w.blocks[0].preamble = { title: 'Заголовок', paragraphs: [[{ b: 'жирный', extra: 'лишнее' }]] };
+  assert.match(validateWorkout(w).join('\n'), /preamble\.paragraphs\[0\]\[0\]/);
+});
+
+test('пустой paragraphs в preamble попадает в отчёт', () => {
+  const w = minimalWorkout();
+  w.blocks[0].preamble = { title: 'Заголовок', paragraphs: [] };
+  assert.match(validateWorkout(w).join('\n'), /preamble\.paragraphs/);
+});
+
+test('пустой абзац (пустой массив частей) в preamble попадает в отчёт', () => {
+  const w = minimalWorkout();
+  w.blocks[0].preamble = { title: 'Заголовок', paragraphs: [[]] };
+  assert.match(validateWorkout(w).join('\n'), /preamble\.paragraphs\[0\]/);
+});
+
+test('preamble не объект попадает в отчёт', () => {
+  const w = minimalWorkout();
+  w.blocks[0].preamble = 'строка';
+  assert.match(validateWorkout(w).join('\n'), /preamble/);
+});
+
+test('блок без preamble по-прежнему проходит проверку', () => {
+  const w = minimalWorkout();
+  assert.equal(w.blocks[0].preamble, undefined);
+  assert.deepEqual(validateWorkout(w), []);
+});

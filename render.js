@@ -81,10 +81,28 @@ function renderItem(document, block, item, itemIndex) {
   return article;
 }
 
+// Вставка перед блоком (например «Как выполнять силовые пары») — как
+// в src-original/app.js (pairRules), но по данным блока, а не по его индексу:
+// рендерер не знает, какой блок по счёту у какой тренировки первый силовой.
+function renderPreamble(document, preamble) {
+  const section = el(document, 'section', 'pair-rules');
+  section.append(el(document, 'h2', null, preamble.title));
+  for (const paragraph of preamble.paragraphs) {
+    const p = document.createElement('p');
+    for (const part of paragraph) {
+      p.append(typeof part === 'string' ? document.createTextNode(part) : el(document, 'strong', null, part.b));
+    }
+    section.append(p);
+  }
+  return section;
+}
+
 export function renderWorkout(workout, document) {
   const fragment = document.createDocumentFragment();
 
   for (const block of workout.blocks) {
+    if (block.preamble) fragment.append(renderPreamble(document, block.preamble));
+
     const section = el(document, 'section', 'workout-block');
     section.id = block.id;
 
