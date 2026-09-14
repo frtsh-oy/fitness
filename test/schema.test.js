@@ -134,3 +134,17 @@ test('stats не как массив попадает в отчёт', () => {
   const w = minimalWorkout({ stats: 'строка' });
   assert.match(validateWorkout(w).join('\n'), /stats/);
 });
+
+// Раунд 3: Остаточные пробелы
+
+test('block.items = null попадает в отчёт', () => {
+  const w = minimalWorkout();
+  w.blocks[0].items = null;
+  assert.match(validateWorkout(w).join('\n'), /items.*массив|items/);
+});
+
+test('item.load = null попадает в отчёт', () => {
+  const w = minimalWorkout();
+  w.blocks[0].items[0].load = null;
+  assert.match(validateWorkout(w).join('\n'), /load/);
+});

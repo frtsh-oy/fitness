@@ -66,6 +66,10 @@ export function validateWorkout(workout) {
     if (!Number.isInteger(block.rounds) || block.rounds < 1) {
       problems.push(`${where}: rounds должен быть целым числом не меньше 1, получено ${block.rounds}`);
     }
+    if (block.items !== undefined && !Array.isArray(block.items)) {
+      problems.push(`${where}: items должен быть массивом`);
+      continue;
+    }
     if (!Array.isArray(block.items)) continue;
     if (block.items.length === 0) {
       problems.push(`${where}: items не может быть пустым массивом`);
@@ -92,6 +96,10 @@ export function validateWorkout(workout) {
         }
       }
 
+      if (item.load !== undefined && (typeof item.load !== 'object' || item.load === null || Array.isArray(item.load))) {
+        problems.push(`${at}: load должен быть объектом`);
+        continue;
+      }
       const load = item.load ?? {};
       const entries = Object.entries(load);
       if (item.kind === 'strength' && entries.length === 0) {
