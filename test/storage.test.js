@@ -112,14 +112,15 @@ test('НАХОДКА C: save и clear для одного ключа сериа�
   assert.deepEqual(completions, ['set', 'remove']);
 });
 
-test('НАХОДКА D: при ошибке CloudStorage не теряем старые данные', async () => {
+test('НАХОДКА D: ошибка CloudStorage отбрасывает недоверчивые данные', async () => {
   const cloud = {
-    getItem: (k, cb) => cb(new Error('нет сети'), '["старая-отметка"]'),
+    getItem: (k, cb) => cb(new Error('нет сети'), '["недоверчивые-данные"]'),
     setItem: (k, v, cb) => cb?.(null, true),
   };
   const s = createStorage({ cloud, local: fakeLocal(), today });
-  // При ошибке, если есть старые данные, вернуть их — это лучше чем потеря
-  assert.deepEqual([...(await s.load('legs-mwf'))], ['старая-отметка']);
+  // При ошибке getItem значение отбрасывается — оно может быть обрезанным или чужим
+  // Лучше показать пустое множество, чем неверный прогресс
+  assert.deepEqual([...(await s.load('legs-mwf'))], []);
 });
 
 test('НАХОДКА E: clear работает с CloudStorage и удаляет ключ', async () => {

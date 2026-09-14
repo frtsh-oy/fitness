@@ -32,8 +32,8 @@ export function createStorage({ cloud = null, local = null, today = () => new Da
       cloud.getItem(key, (err, value) => {
         clearTimeout(timer);
         if (!timedOut) {
-          // При ошибке возвращаем старые данные, если они есть
-          resolve(err ? (value ?? '') : (value ?? ''));
+          // При ошибке отбрасываем значение — оно не заслуживает доверия
+          resolve(err ? '' : (value ?? ''));
         }
       });
     } catch {
