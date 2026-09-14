@@ -67,7 +67,7 @@ Expected: `app.js`, `player.js`, `player.css`, `style.css` совпадают т
     "test": "node --test test/"
   },
   "devDependencies": {
-    "jsdom": "^26.0.0"
+    "jsdom": "^30.0.0"
   }
 }
 ```
@@ -272,13 +272,14 @@ function minimalWorkout(overrides = {}) {
   return {
     id: 'test',
     kicker: 'ДОМА',
-    title: 'Тест',
+    title: 'Тест один. Тест два.',
+    titleLines: ['Тест один.', 'Тест два.'],
     lead: 'Описание',
     schedule: 'ПН · СР · ПТ',
     stats: [{ v: '10', l: 'минут' }],
     gear: 'Коврик',
     blocks: [{
-      id: 'b1', n: '01', title: 'Блок', sub: 'Подзаголовок', rounds: 2,
+      id: 'b1', n: '01', nav: 'Блок', title: 'Блок', sub: 'Подзаголовок', rounds: 2,
       items: [{
         name: 'Упражнение', muscles: 'Ягодицы', reps: '10 раз', text: 'Описание',
         load: { glutes: 1 }, pattern: 'hinge', gear: ['band_long'],
@@ -301,6 +302,17 @@ test('отсутствие обязательного поля верхнего 
   const problems = validateWorkout(w);
   assert.equal(problems.length, 1);
   assert.match(problems[0], /title/);
+});
+
+test('titleLines из трёх строк попадает в отчёт', () => {
+  const w = minimalWorkout({ titleLines: ['раз', 'два', 'три'] });
+  assert.match(validateWorkout(w).join('\n'), /titleLines/);
+});
+
+test('блок без короткой подписи nav попадает в отчёт', () => {
+  const w = minimalWorkout();
+  delete w.blocks[0].nav;
+  assert.match(validateWorkout(w).join('\n'), /nav/);
 });
 
 test('неизвестная группа мышц в load попадает в отчёт', () => {
@@ -343,7 +355,7 @@ test('силовому упражнению пустой load запрещён',
 test('countMarks считает rounds умножить на число упражнений по всем блокам', () => {
   const w = minimalWorkout();
   w.blocks.push({
-    id: 'b2', n: '02', title: 'Второй', sub: '', rounds: 3,
+    id: 'b2', n: '02', nav: 'Второй', title: 'Второй', sub: '', rounds: 3,
     items: [w.blocks[0].items[0], w.blocks[0].items[0]],
   });
   // блок 1: 2 круга * 1 упражнение = 2; блок 2: 3 круга * 2 упражнения = 6
@@ -366,8 +378,8 @@ export const GEAR = ['band_long', 'loop_short', 'none'];
 export const KINDS = ['warmup', 'strength', 'cooldown'];
 export const LOAD_VALUES = [0.5, 1];
 
-const WORKOUT_FIELDS = ['id', 'kicker', 'title', 'lead', 'schedule', 'stats', 'gear', 'blocks', 'progression', 'caution'];
-const BLOCK_FIELDS = ['id', 'n', 'title', 'sub', 'rounds', 'items'];
+const WORKOUT_FIELDS = ['id', 'kicker', 'title', 'titleLines', 'lead', 'schedule', 'stats', 'gear', 'blocks', 'progression', 'caution'];
+const BLOCK_FIELDS = ['id', 'n', 'nav', 'title', 'sub', 'rounds', 'items'];
 const ITEM_FIELDS = ['name', 'muscles', 'reps', 'text', 'load', 'pattern', 'gear', 'unilateral', 'kind'];
 
 export function validateWorkout(workout) {
@@ -375,6 +387,10 @@ export function validateWorkout(workout) {
 
   for (const field of WORKOUT_FIELDS) {
     if (workout[field] === undefined) problems.push(`Тренировка: нет поля ${field}`);
+  }
+  if (!Array.isArray(workout.titleLines) || workout.titleLines.length < 1 || workout.titleLines.length > 2
+      || workout.titleLines.some(line => typeof line !== 'string' || line.length === 0)) {
+    problems.push('Тренировка: titleLines должен быть массивом из одной или двух непустых строк');
   }
   if (!Array.isArray(workout.blocks)) return problems;
 
@@ -492,6 +508,17 @@ test('приводящие и средняя ягодичная размечен
   assert.ok(load.some(l => l.glutes_med === 1), 'нет упражнения с целевой средней ягодичной');
 });
 
+test('у каждого блока есть короткая подпись nav, отличная от заголовка', () => {
+  assert.deepEqual(
+    legsMwf.blocks.map(b => b.nav),
+    ['Старт', 'Разогрев', 'Ноги 1', 'Ноги 2', 'Ноги 3', 'Верх 1', 'Верх 2', 'Финиш'],
+  );
+});
+
+test('заголовок разбит на две строки как в оригинальной вёрстке', () => {
+  assert.deepEqual(legsMwf.titleLines, ['Всё тело.', 'Акцент на ноги.']);
+});
+
 test('реестр отдаёт тренировку по id и падает на дефолт при неизвестном', () => {
   assert.equal(getWorkout('legs-mwf').id, 'legs-mwf');
   assert.equal(getWorkout('нет-такой').id, DEFAULT_WORKOUT_ID);
@@ -508,7 +535,15 @@ Expected: FAIL — `Cannot find module '../workouts/legs-mwf.js'`.
 
 Открыть `src-original/app.js`. В нём объявлен `const blocks=[…]` — восемь блоков с полями `id, n, title, sub, rounds, note?, items`, каждый item с `name, reps, muscles, text, detail?, extra?, v?, links?, key?`.
 
-Перенести всё содержимое дословно в `workouts/legs-mwf.js`, обернув в объект тренировки. Тексты верхнего уровня (`kicker`, `title`, `lead`, `stats`, `gear`, `progression`, `caution`, `schedule`) взять из `src-original/index.html` — они там в разметке, а не в JS.
+Перенести всё содержимое дословно в `workouts/legs-mwf.js`, обернув в объект тренировки.
+
+Добавить каждому блоку короткую подпись `nav` — она идёт в навигацию и не равна `title`:
+`start` → `Старт`, `circuit` → `Разогрев`, `legs1` → `Ноги 1`, `legs2` → `Ноги 2`,
+`legs3` → `Ноги 3`, `upper1` → `Верх 1`, `upper2` → `Верх 2`, `finish` → `Финиш`.
+
+На верхнем уровне задать `title: 'Всё тело. Акцент на ноги.'` и
+`titleLines: ['Всё тело.', 'Акцент на ноги.']` — вторая строка уходит в `<span>`,
+как в оригинальной вёрстке. Тексты верхнего уровня (`kicker`, `title`, `lead`, `stats`, `gear`, `progression`, `caution`, `schedule`) взять из `src-original/index.html` — они там в разметке, а не в JS.
 
 Поле `v` остаётся в исходном виде `[youtubeId, стартСек, подпись]`. Ссылка на YouTube собирается в рендерере, а не хранится в данных.
 
@@ -616,7 +651,7 @@ git commit -m "Данные тренировки legs-mwf с разметкой 
   - `createStorage({ cloud, local, today }) -> { load(workoutId), save(workoutId, marks), clear(workoutId) }`
   - `load` возвращает `Promise<Set<string>>` — множество идентификаторов отметок
   - `save` и `clear` возвращают `Promise<void>`
-  - `pickBackend(win) -> 'cloud' | 'local'` — выбор бэкенда по наличию `win.Telegram.WebApp.CloudStorage`
+  - `storageKey(workoutId, date) -> string`
   - Ключ хранения: `w:<workoutId>:<YYYY-MM-DD>`
 
 - [ ] **Step 1: Написать падающие тесты**
@@ -625,7 +660,7 @@ git commit -m "Данные тренировки legs-mwf с разметкой 
 // test/storage.test.js
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createStorage, pickBackend, storageKey } from '../storage.js';
+import { createStorage, storageKey } from '../storage.js';
 
 function fakeLocal() {
   const map = new Map();
@@ -697,11 +732,6 @@ test('ошибка CloudStorage не роняет загрузку', async () =>
   assert.deepEqual([...(await s.load('legs-mwf'))], []);
 });
 
-test('pickBackend выбирает cloud только при наличии CloudStorage', () => {
-  assert.equal(pickBackend({ Telegram: { WebApp: { CloudStorage: {} } } }), 'cloud');
-  assert.equal(pickBackend({ Telegram: { WebApp: {} } }), 'local');
-  assert.equal(pickBackend({}), 'local');
-});
 ```
 
 - [ ] **Step 2: Запустить и убедиться, что тесты падают**
@@ -716,10 +746,6 @@ Expected: FAIL — `Cannot find module '../storage.js'`.
 // Ключ включает дату, поэтому отметки сами сбрасываются на следующий день.
 export function storageKey(workoutId, date) {
   return `w:${workoutId}:${date}`;
-}
-
-export function pickBackend(win) {
-  return win?.Telegram?.WebApp?.CloudStorage ? 'cloud' : 'local';
 }
 
 function parseMarks(raw) {
@@ -886,7 +912,8 @@ test('renderIntro заполняет шапку из данных, а не из 
   </body></html>`);
   renderIntro(legsMwf, document);
   assert.equal(document.querySelector('.eyebrow').textContent, legsMwf.kicker);
-  assert.match(document.querySelector('h1').textContent, /Акцент на ноги/);
+  assert.equal(document.querySelector('h1').childNodes[0].textContent, 'Всё тело.');
+  assert.equal(document.querySelector('h1').querySelector('span').textContent, 'Акцент на ноги.');
   assert.equal(document.querySelector('.intro-copy').textContent, legsMwf.lead);
   assert.equal(document.querySelectorAll('.facts > div').length, legsMwf.stats.length);
   assert.equal(document.querySelector('.equipment').textContent, legsMwf.gear);
@@ -903,6 +930,7 @@ test('renderIntro строит навигацию по реальным блок
   const links = [...document.querySelectorAll('.block-nav a')];
   assert.equal(links.length, 8);
   assert.deepEqual(links.map(a => a.getAttribute('href')), legsMwf.blocks.map(b => `#${b.id}`));
+  assert.deepEqual(links.map(a => a.textContent), ['Старт', 'Разогрев', 'Ноги 1', 'Ноги 2', 'Ноги 3', 'Верх 1', 'Верх 2', 'Финиш']);
 });
 
 test('тексты упражнения попадают в разметку', () => {
@@ -1010,10 +1038,13 @@ export function renderWorkout(workout, document) {
 export function renderIntro(workout, document) {
   document.querySelector('.eyebrow').textContent = workout.kicker;
 
-  const [first, ...rest] = workout.title.split(' ');
+  // Разбиение заголовка на строки задаётся данными, а не угадывается по пробелам.
+  const [firstLine, ...restLines] = workout.titleLines;
   const h1 = document.querySelector('h1');
-  h1.replaceChildren(document.createTextNode(first), document.createElement('br'));
-  h1.append(el(document, 'span', null, rest.join(' ')));
+  h1.replaceChildren(document.createTextNode(firstLine));
+  for (const line of restLines) {
+    h1.append(document.createElement('br'), el(document, 'span', null, line));
+  }
 
   document.querySelector('.intro-copy').textContent = workout.lead;
 
@@ -1026,7 +1057,7 @@ export function renderIntro(workout, document) {
 
   const nav = document.querySelector('.block-nav');
   nav.replaceChildren(...workout.blocks.map(block => {
-    const link = el(document, 'a', null, block.title);
+    const link = el(document, 'a', null, block.nav);
     link.href = `#${block.id}`;
     return link;
   }));
