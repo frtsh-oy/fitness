@@ -134,7 +134,10 @@ export function renderWorkout(workout, document) {
 // Тексты верхнего уровня тоже живут в данных: держать их ещё и в index.html
 // значит рано или поздно получить расхождение между сайтом и тренировкой.
 export function renderIntro(workout, document) {
-  document.querySelector('.eyebrow').textContent = workout.kicker;
+  // По id, а не по классу: .eyebrow на странице не один — тем же классом набран
+  // заголовок блока «ДАЛЬШЕ — СИЛЬНЕЕ» в .guide, и выборка по классу работала бы
+  // только потому, что интро стоит выше по документу.
+  document.getElementById('kicker').textContent = workout.kicker;
 
   // Разбиение заголовка на строки задаётся данными, а не угадывается по пробелам.
   const [firstLine, ...restLines] = workout.titleLines;

@@ -175,13 +175,17 @@ test('блок без preamble не порождает секцию pair-rules',
 });
 
 test('renderIntro заполняет шапку из данных, а не из статики HTML', () => {
+  // Первым стоит чужой .eyebrow — на реальной странице тем же классом набран
+  // заголовок «ДАЛЬШЕ — СИЛЬНЕЕ» в .guide. Выборка по классу взяла бы его.
   const { document } = makeDom(`<!doctype html><html><body>
-    <p class="eyebrow"></p><h1></h1><p class="intro-copy"></p>
+    <p class="eyebrow">ДАЛЬШЕ — СИЛЬНЕЕ</p>
+    <p class="eyebrow" id="kicker"></p><h1></h1><p class="intro-copy"></p>
     <div class="facts"></div><nav class="block-nav"></nav>
     <div class="equipment"></div><ol id="progression-list"></ol><div id="care"></div>
   </body></html>`);
   renderIntro(legsMwf, document);
-  assert.equal(document.querySelector('.eyebrow').textContent, legsMwf.kicker);
+  assert.equal(document.getElementById('kicker').textContent, legsMwf.kicker);
+  assert.equal(document.querySelector('.eyebrow').textContent, 'ДАЛЬШЕ — СИЛЬНЕЕ', 'чужой .eyebrow не тронут');
   assert.equal(document.querySelector('h1').childNodes[0].textContent, 'Всё тело.');
   assert.equal(document.querySelector('h1').querySelector('span').textContent, 'Акцент на ноги.');
   assert.equal(document.querySelector('.intro-copy').textContent, legsMwf.lead);
@@ -192,7 +196,7 @@ test('renderIntro заполняет шапку из данных, а не из 
 
 test('renderIntro строит навигацию по реальным блокам', () => {
   const { document } = makeDom(`<!doctype html><html><body>
-    <p class="eyebrow"></p><h1></h1><p class="intro-copy"></p>
+    <p class="eyebrow" id="kicker"></p><h1></h1><p class="intro-copy"></p>
     <div class="facts"></div><nav class="block-nav"></nav>
     <div class="equipment"></div><ol id="progression-list"></ol><div id="care"></div>
   </body></html>`);

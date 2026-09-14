@@ -8,8 +8,10 @@ export function formatTime(seconds) {
 }
 
 export function createTimer({ onTick = () => {}, onDone = () => {} } = {}) {
-  let duration = 60;
-  const state = { remaining: 60, running: false };
+  // Длительность приходит только снаружи, через setDuration: своего значения
+  // по умолчанию у таймера нет, чтобы оно не спорило с разметкой страницы.
+  let duration = 0;
+  const state = { remaining: 0, running: false };
 
   return {
     get remaining() { return state.remaining; },
@@ -25,8 +27,10 @@ export function createTimer({ onTick = () => {}, onDone = () => {} } = {}) {
     toggle() {
       // Отработавший таймер запускается заново от выбранной длительности:
       // иначе первый же tick снова упёрся бы в ноль и позвал onDone второй раз,
-      // а на экране осталось бы 00:00.
-      if (!state.running && state.remaining === 0) state.remaining = duration;
+      // а на экране осталось бы 00:00. Состояния «ноль и идёт» не бывает —
+      // tick останавливает таймер ровно в ноль, — поэтому про running здесь
+      // спрашивать нечего.
+      if (state.remaining === 0) state.remaining = duration;
       state.running = !state.running;
       onTick(state.remaining);
     },

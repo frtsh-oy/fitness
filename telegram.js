@@ -50,6 +50,35 @@ export function initTelegram(win = globalThis) {
       else safely(() => h.impactOccurred('light'));
     },
 
+    // Подтверждение опасного действия. Всегда обещание: вызывающий код не должен
+    // зависеть от того, какой из путей сработал.
+    //
+    // Проверка версии здесь обязательна и не заменяется на safely: на клиенте
+    // старше 6.2 showConfirm существует как функция, но ничего не делает и не
+    // бросает — колбэк не придёт никогда, и обещание зависло бы навсегда,
+    // а вместе с ним и действие, которого ждёт человек. Проверено на живом SDK:
+    // неподдерживаемые методы только пишут предупреждение в консоль.
+    confirm(message) {
+      return new Promise(resolve => {
+        if (available && webApp.isVersionAtLeast?.('6.2') && typeof webApp.showConfirm === 'function') {
+          try {
+            webApp.showConfirm(message, ok => resolve(ok === true));
+            return;
+          } catch {
+            /* спросить у клиента не вышло — спрашиваем окном ниже */
+          }
+        }
+        try {
+          // Отказом считаем только явное «нет». undefined отдаёт окружение без
+          // рабочего диалога — там спросить нечем, и выполнить действие человека
+          // лучше, чем молча его проглотить.
+          resolve(win?.confirm?.(message) !== false);
+        } catch {
+          resolve(true);
+        }
+      });
+    },
+
     onBack(handler) {
       safely(() => webApp.BackButton.onClick(handler));
     },
