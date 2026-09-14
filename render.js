@@ -13,27 +13,46 @@ const el = (document, tag, className, text) => {
   return node;
 };
 
-function renderItem(document, block, item, itemIndex) {
-  const wrap = el(document, 'article', 'exercise');
-  wrap.append(el(document, 'p', 'muscles', item.muscles));
-  wrap.append(el(document, 'h3', null, item.name));
-  wrap.append(el(document, 'p', 'reps', item.reps));
-  wrap.append(el(document, 'p', 'howto', item.text));
+// Значок play внутри ссылки на видео — как в src-original/app.js (переменная play).
+function renderPlayIcon(document) {
+  const NS = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(NS, 'svg');
+  svg.setAttribute('viewBox', '0 0 24 24');
+  svg.setAttribute('aria-hidden', 'true');
+  const path = document.createElementNS(NS, 'path');
+  path.setAttribute('d', 'M8 5v14l12-7z');
+  svg.append(path);
+  return svg;
+}
 
-  if (item.detail) {
+function renderItem(document, block, item, itemIndex) {
+  const article = el(document, 'article', 'exercise');
+
+  const top = el(document, 'div', 'exercise-top');
+  top.append(el(document, 'span', 'exercise-index', String(itemIndex + 1).padStart(2, '0')));
+  top.append(el(document, 'span', 'muscles', item.muscles));
+  article.append(top);
+
+  article.append(el(document, 'h3', null, item.name));
+  article.append(el(document, 'p', 'reps', item.reps));
+  article.append(el(document, 'p', 'technique', item.text));
+
+  if (item.detail || item.extra) {
     const details = document.createElement('details');
     details.append(el(document, 'summary', null, item.extra ? 'Техника и прогрессия' : 'Техника'));
-    details.append(el(document, 'p', null, item.detail));
+    if (item.detail) details.append(el(document, 'p', null, item.detail));
     if (item.extra) details.append(el(document, 'p', null, item.extra));
-    wrap.append(details);
+    article.append(details);
   }
 
   if (item.v) {
-    const link = el(document, 'a', 'video', `Видео · ${item.v[2]}`);
+    const link = el(document, 'a', 'video');
     link.href = videoUrl(item.v);
     link.target = '_blank';
     link.rel = 'noopener noreferrer';
-    wrap.append(link);
+    link.setAttribute('aria-label', `Видео: ${item.name}, ${item.v[2]}`);
+    link.append(renderPlayIcon(document), document.createTextNode(` Видео · ${item.v[2]}`));
+    article.append(link);
   }
 
   for (const extra of item.links ?? []) {
@@ -44,37 +63,46 @@ function renderItem(document, block, item, itemIndex) {
     link.href = videoUrl(extra);
     link.target = '_blank';
     link.rel = 'noopener noreferrer';
-    wrap.append(link);
+    article.append(link);
   }
 
-  const marks = el(document, 'div', 'marks');
+  const checks = el(document, 'div', 'checks');
   for (let round = 1; round <= block.rounds; round += 1) {
-    const button = document.createElement('button');
-    button.type = 'button';
-    button.dataset.mark = markId(block.id, itemIndex, round);
-    button.setAttribute('aria-pressed', 'false');
-    button.textContent = block.rounds === 1 ? 'Готово' : `Круг ${round}`;
-    marks.append(button);
+    const label = el(document, 'label', 'check');
+    const input = document.createElement('input');
+    input.type = 'checkbox';
+    input.dataset.mark = markId(block.id, itemIndex, round);
+    input.setAttribute('aria-label', `${item.name}: ${block.rounds === 1 ? 'выполнено' : `круг ${round}`}`);
+    label.append(input, el(document, 'span', null, block.rounds === 1 ? 'Готово' : `Круг ${round}`));
+    checks.append(label);
   }
-  wrap.append(marks);
-  return wrap;
+  article.append(checks);
+
+  return article;
 }
 
 export function renderWorkout(workout, document) {
   const fragment = document.createDocumentFragment();
 
   for (const block of workout.blocks) {
-    const section = el(document, 'section', 'block');
+    const section = el(document, 'section', 'workout-block');
     section.id = block.id;
-    const head = el(document, 'header', 'block-head');
-    head.append(el(document, 'p', 'block-n', block.n));
-    head.append(el(document, 'h2', null, block.title));
-    head.append(el(document, 'p', 'block-sub', block.sub));
-    head.append(el(document, 'p', 'block-rounds', block.rounds === 1 ? '1 круг' : `${block.rounds} круга`));
-    if (block.note) head.append(el(document, 'p', 'block-note', block.note));
-    section.append(head);
 
-    block.items.forEach((item, index) => section.append(renderItem(document, block, item, index)));
+    const heading = el(document, 'div', 'block-heading');
+    heading.append(el(document, 'span', 'block-number', block.n));
+    const titleBox = document.createElement('div');
+    titleBox.append(el(document, 'h2', null, block.title));
+    titleBox.append(el(document, 'p', null, block.sub));
+    heading.append(titleBox);
+    heading.append(el(document, 'span', 'round-tag', block.rounds === 1 ? '1 круг' : `${block.rounds} круга`));
+    section.append(heading);
+
+    if (block.note) section.append(el(document, 'p', 'block-note', block.note));
+
+    const cards = el(document, 'div', 'cards');
+    block.items.forEach((item, index) => cards.append(renderItem(document, block, item, index)));
+    section.append(cards);
+
     fragment.append(section);
   }
 

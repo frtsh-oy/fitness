@@ -16,7 +16,7 @@ test('videoUrl собирает ссылку с таймкодом', () => {
 test('рендерятся все восемь блоков с якорями', () => {
   const { document } = makeDom();
   const fragment = renderWorkout(legsMwf, document);
-  const sections = fragment.querySelectorAll('section.block');
+  const sections = fragment.querySelectorAll('section.workout-block');
   assert.equal(sections.length, 8);
   assert.deepEqual(
     [...sections].map(s => s.id),
@@ -33,23 +33,23 @@ test('рендерятся все 19 упражнений', () => {
 test('число кнопок отметок совпадает с countMarks', () => {
   const { document } = makeDom();
   const fragment = renderWorkout(legsMwf, document);
-  assert.equal(fragment.querySelectorAll('button[data-mark]').length, 37);
+  assert.equal(fragment.querySelectorAll('input[data-mark]').length, 37);
 });
 
 test('идентификаторы отметок уникальны', () => {
   const { document } = makeDom();
   const fragment = renderWorkout(legsMwf, document);
-  const ids = [...fragment.querySelectorAll('button[data-mark]')].map(b => b.dataset.mark);
+  const ids = [...fragment.querySelectorAll('input[data-mark]')].map(b => b.dataset.mark);
   assert.equal(new Set(ids).size, ids.length);
 });
 
-test('у блока с одним кругом кнопка подписана «Готово», у многокруговых — «Круг N»', () => {
+test('у блока с одним кругом отметка подписана «Готово», у многокруговых — «Круг N»', () => {
   const { document } = makeDom();
   const fragment = renderWorkout(legsMwf, document);
   const start = fragment.querySelector('#start');
-  assert.equal(start.querySelector('button[data-mark]').textContent, 'Готово');
+  assert.equal(start.querySelector('label.check').textContent, 'Готово');
   const circuit = fragment.querySelector('#circuit');
-  const labels = [...circuit.querySelectorAll('.exercise')[0].querySelectorAll('button[data-mark]')].map(b => b.textContent);
+  const labels = [...circuit.querySelectorAll('.exercise')[0].querySelectorAll('label.check')].map(b => b.textContent);
   assert.deepEqual(labels, ['Круг 1', 'Круг 2', 'Круг 3']);
 });
 
