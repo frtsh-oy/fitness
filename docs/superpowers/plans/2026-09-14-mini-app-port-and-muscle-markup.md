@@ -856,6 +856,15 @@ git commit -m "Адаптер прогресса CloudStorage и localStorage"
 
 Примечание к спеке: спека называет рендерер `app.js`. Здесь он разделён на `render.js` (чистое построение DOM, тестируемое) и `app.js` (связывание, Task 8). Это следует принципу спеки «один файл — одна ответственность».
 
+> Код и тесты Task 6 ниже — исходная версия, она разошлась с репозиторием.
+> Контракт имён классов в ней ошибочен: `section.block` и `button[data-mark]`
+> заменены на `section.workout-block` и `input[type=checkbox][data-mark]`
+> внутри `label.check`, потому что копируемый без изменений `style.css` ждёт
+> структуру оригинала (Ruling R21). Идентификатор отметки строится по
+> `item.key ?? itemIndex`, а не по индексу (Ruling R23). Добавлено поле
+> `preamble` на блоке и рендер вставки «Как выполнять силовые пары»,
+> потерянной при переносе на Task 4 (Ruling R22). Актуальный код — `render.js`.
+
 - [ ] **Step 1: Написать падающие тесты**
 
 ```js
@@ -976,7 +985,7 @@ Expected: FAIL — `Cannot find module '../render.js'`.
 
 - [ ] **Step 3: Написать render.js**
 
-Разметку и имена классов взять из `src-original/app.js`, чтобы существующий `style.css` подошёл без правок. Обязательные точки сцепления с CSS и с `player.js`: секция блока — `section.block` с `id` равным `block.id`; упражнение — элемент с классом `exercise`, внутри `h3` с названием; ссылка на видео — `a.video`; дополнительные ссылки — `a.extra-link`; кнопки отметок — `button[data-mark="<markId>"]`.
+Разметку и имена классов взять из `src-original/app.js` — это эталон, а не источник вдохновения. Приведённый ниже код был написан до сверки с оригиналом и задавал собственные имена классов; по итогам ревью контракт отменён (Ruling R21). Структура должна совпадать с исходной: `section.workout-block`, `.block-heading`, `.block-number`, `.round-tag`, `.cards`, `.exercise`, `.exercise-top`, `.exercise-index`, `.muscles`, `.reps`, `.technique`, `a.video`, `a.extra-link`, `.checks` с `label.check`, внутри которого `input[type=checkbox][data-mark]`. Состояние выполненного упражнения — класс `completed` на самом `.exercise`. Актуальная реализация — в `render.js`.
 
 ```js
 export function markId(blockId, itemIndex, round) {
@@ -1519,14 +1528,18 @@ setupPlayers(host, url => tg.openLink(url));
 const marks = new Set();
 const progress = document.getElementById('progress');
 const progressText = document.getElementById('progress-text');
-const total = host.querySelectorAll('button[data-mark]').length;
+const total = host.querySelectorAll('input[data-mark]').length;
 progress.max = total;
 
 function paint() {
-  for (const button of host.querySelectorAll('button[data-mark]')) {
-    const on = marks.has(button.dataset.mark);
-    button.setAttribute('aria-pressed', String(on));
-    button.classList.toggle('done', on);
+  for (const box of host.querySelectorAll('input[data-mark]')) {
+    box.checked = marks.has(box.dataset.mark);
+  }
+  // Класс completed висит на самом упражнении и загорается, когда закрыты
+  // все его круги — так это устроено в style.css.
+  for (const exercise of host.querySelectorAll('.exercise')) {
+    const boxes = [...exercise.querySelectorAll('input[data-mark]')];
+    exercise.classList.toggle('completed', boxes.length > 0 && boxes.every(b => b.checked));
   }
   progress.value = marks.size;
   progressText.textContent = `Сегодня: ${marks.size} из ${total} отметок`;
@@ -1538,16 +1551,18 @@ storage.load(workout.id).then(saved => {
 });
 paint();
 
-host.addEventListener('click', event => {
-  const button = event.target.closest('button[data-mark]');
-  if (!button) return;
-  const id = button.dataset.mark;
-  if (marks.has(id)) marks.delete(id); else marks.add(id);
+// Отметка — чекбокс, поэтому слушаем change, а не click: клик по подписи
+// label тоже переключает его, и обработчик click такое пропустил бы.
+host.addEventListener('change', event => {
+  const box = event.target.closest('input[data-mark]');
+  if (!box) return;
+  const id = box.dataset.mark;
+  if (box.checked) marks.add(id); else marks.delete(id);
   paint();
   storage.save(workout.id, marks);
 
-  const section = button.closest('section.block');
-  const all = [...section.querySelectorAll('button[data-mark]')];
+  const section = box.closest('section.workout-block');
+  const all = [...section.querySelectorAll('input[data-mark]')];
   tg.haptic(all.every(b => marks.has(b.dataset.mark)) ? 'done' : 'mark');
 });
 
