@@ -52,8 +52,8 @@ test('MUSCLES не позволяет изменить регион сущест
   }, TypeError);
 });
 
-test('toRegions работает с замороженным MUSCLES', () => {
-  const regions = toRegions({ abs: 1, obliques: 0.5 });
-  assert.equal(regions.get('abs'), 1);
-  assert.equal(regions.get('obliques'), 0.5);
+test('MUSCLES не позволяет удалить существующую группу', () => {
+  assert.throws(() => {
+    delete MUSCLES.abs;
+  }, TypeError);
 });
