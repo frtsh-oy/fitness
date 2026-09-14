@@ -46,14 +46,24 @@
 
 В конце `src-original/index.html` есть инлайновый скрипт, начинающийся с `(function(){function c(){var b=a.contentDocument`. Это челлендж хостинга, к приложению отношения не имеет. Удалить весь тег `<script>…</script>` вместе с содержимым.
 
-- [ ] **Step 3: Проверить, что архив совпал с оригиналом по размеру**
+- [ ] **Step 3: Проверить, что архив совпал с оригиналом побайтово**
 
-Ожидаемые размеры оригинала в байтах: `app.js` 16024, `index.html` 5159 (до вырезания Cloudflare-скрипта), `player.css` 1130, `player.js` 3003, `style.css` 8364.
+Сравнивать надо хеши, а не размеры: файлы кириллические, и число символов в JS не равно числу байт в UTF-8.
 
-Run: `wc -c src-original/*`
-Expected: `app.js`, `player.js`, `player.css`, `style.css` совпадают точно. `index.html` меньше 5159 — это ожидаемо после Step 2.
+Снять эталон на живом сайте через браузер:
 
-Если какой-то файл не совпал — забрать его заново, передав из браузера `btoa(unescape(encodeURIComponent(text)))` и раскодировав через `base64 -d`.
+```js
+const sha = async p => {
+  const buf = await (await fetch(p)).arrayBuffer();
+  const h = await crypto.subtle.digest('SHA-256', buf);
+  return [...new Uint8Array(h)].map(b => b.toString(16).padStart(2, '0')).join('');
+};
+```
+
+Run: `shasum -a 256 src-original/*`
+Expected: все пять хешей совпадают с эталоном.
+
+Если файл не совпал — забрать его заново в base64 (`btoa(unescape(encodeURIComponent(text)))`) и раскодировать через `base64 -d`. Перенос длинного кириллического текста через буфер портит символы незаметно, поэтому сверка хешей обязательна.
 
 - [ ] **Step 4: Создать package.json**
 
@@ -64,7 +74,7 @@ Expected: `app.js`, `player.js`, `player.css`, `style.css` совпадают т
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node --test test/"
+    "test": "node --test test/*.test.js"
   },
   "devDependencies": {
     "jsdom": "^30.0.0"
