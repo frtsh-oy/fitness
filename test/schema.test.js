@@ -95,3 +95,42 @@ test('countMarks считает rounds умножить на число упра
   // блок 1: 2 круга * 1 упражнение = 2; блок 2: 3 круга * 2 упражнения = 6
   assert.equal(countMarks(w), 8);
 });
+
+// Раунд исправлений: закрытие дыр в валидаторе
+
+test('пустая строка в обязательном текстовом поле попадает в отчёт', () => {
+  const w = minimalWorkout({ title: '' });
+  assert.match(validateWorkout(w).join('\n'), /title/);
+});
+
+test('пустой name в упражнении попадает в отчёт', () => {
+  const w = minimalWorkout();
+  w.blocks[0].items[0].name = '';
+  assert.match(validateWorkout(w).join('\n'), /name/);
+});
+
+test('дубликат block.id попадает в отчёт', () => {
+  const w = minimalWorkout();
+  w.blocks.push({
+    id: 'b1', n: '02', nav: 'Второй', title: 'Второй', sub: '', rounds: 1,
+    items: [w.blocks[0].items[0]],
+  });
+  assert.match(validateWorkout(w).join('\n'), /id/);
+});
+
+test('пустой массив items в блоке попадает в отчёт', () => {
+  const w = minimalWorkout();
+  w.blocks[0].items = [];
+  assert.match(validateWorkout(w).join('\n'), /items/);
+});
+
+test('gear не как массив попадает в отчёт', () => {
+  const w = minimalWorkout();
+  w.blocks[0].items[0].gear = 'none';
+  assert.match(validateWorkout(w).join('\n'), /gear.*массив|gear/);
+});
+
+test('stats не как массив попадает в отчёт', () => {
+  const w = minimalWorkout({ stats: 'строка' });
+  assert.match(validateWorkout(w).join('\n'), /stats/);
+});
