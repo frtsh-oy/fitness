@@ -2,7 +2,18 @@
 // region — идентификатор области на картинке тела; несколько наших групп
 // могут указывать на один регион. Значения region сверяются с библиотекой
 // карты тела на этапе S2 и живут только здесь.
-export const MUSCLES = {
+
+function deepFreeze(obj) {
+  Object.freeze(obj);
+  for (const value of Object.values(obj)) {
+    if (typeof value === 'object' && value !== null && !Object.isFrozen(value)) {
+      deepFreeze(value);
+    }
+  }
+  return obj;
+}
+
+export const MUSCLES = deepFreeze({
   glutes:      { ru: 'Ягодичные',                  region: 'gluteal' },
   glutes_med:  { ru: 'Средняя и малая ягодичные',  region: 'gluteal' },
   quads:       { ru: 'Квадрицепсы',                region: 'quadriceps' },
@@ -23,7 +34,7 @@ export const MUSCLES = {
   biceps:      { ru: 'Бицепс',                     region: 'biceps' },
   triceps:     { ru: 'Трицепс',                    region: 'triceps' },
   forearms:    { ru: 'Предплечья',                 region: 'forearm' },
-};
+});
 
 export function isMuscleId(id) {
   return Object.hasOwn(MUSCLES, id);

@@ -33,3 +33,27 @@ test('toRegions складывает группы, указывающие на �
 test('toRegions бросает ошибку на неизвестной группе', () => {
   assert.throws(() => toRegions({ nope: 1 }), /nope/);
 });
+
+test('MUSCLES не позволяет добавить новую группу', () => {
+  assert.throws(() => {
+    MUSCLES.new_muscle = { ru: 'Новая', region: 'new' };
+  }, TypeError);
+});
+
+test('MUSCLES не позволяет изменить подпись существующей группы', () => {
+  assert.throws(() => {
+    MUSCLES.abs.ru = 'Изменённый текст';
+  }, TypeError);
+});
+
+test('MUSCLES не позволяет изменить регион существующей группы', () => {
+  assert.throws(() => {
+    MUSCLES.abs.region = 'new-region';
+  }, TypeError);
+});
+
+test('toRegions работает с замороженным MUSCLES', () => {
+  const regions = toRegions({ abs: 1, obliques: 0.5 });
+  assert.equal(regions.get('abs'), 1);
+  assert.equal(regions.get('obliques'), 0.5);
+});
