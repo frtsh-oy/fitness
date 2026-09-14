@@ -25,28 +25,36 @@ export function initTelegram(win = globalThis) {
     workoutId: fromStart || fromQuery || null,
 
     openLink(url) {
+      // webApp.openLink — единственный путь, который Task 8 использует для видео
+      // в WebView, где встроенный плеер YouTube заблокирован: это ровно тот
+      // случай, когда сам openLink чаще всего и бросает. Поэтому его исключение
+      // не глушится молча (safely здесь не годится) — при отказе откатываемся
+      // на обычное окно, а не оставляем кнопку немой.
       if (available && typeof webApp.openLink === 'function') {
-        safely(() => webApp.openLink(url));
-        return;
+        try {
+          webApp.openLink(url);
+          return;
+        } catch {
+          /* новый путь недоступен — открываем обычным окном ниже */
+        }
       }
       win.open?.(url, '_blank', 'noopener');
     },
 
     haptic(kind) {
+      // Эта проверка обязательна: webApp === null вне safely, обращение к
+      // webApp.HapticFeedback ниже бросило бы прямо здесь.
       if (!available) return;
       const h = webApp.HapticFeedback;
-      if (!h) return;
       if (kind === 'done') safely(() => h.notificationOccurred('success'));
       else safely(() => h.impactOccurred('light'));
     },
 
     onBack(handler) {
-      if (!available || !webApp.BackButton) return;
       safely(() => webApp.BackButton.onClick(handler));
     },
 
     setBackVisible(visible) {
-      if (!available || !webApp.BackButton) return;
       safely(() => (visible ? webApp.BackButton.show() : webApp.BackButton.hide()));
     },
   };

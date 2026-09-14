@@ -86,13 +86,54 @@ test('openLink вне Telegram открывает новое окно', () => {
   assert.equal(opened, 'https://youtu.be/x');
 });
 
-test('haptic различает отметку и завершение блока', () => {
-  const webApp = fakeWebApp();
-  const tg = initTelegram(fakeWin(webApp));
-  tg.haptic('mark');
-  tg.haptic('done');
-  assert.ok(webApp.calls.includes('impact:light'));
-  assert.ok(webApp.calls.includes('notify:success'));
+test('openLink откатывается на win.open, если webApp.openLink присутствует, но бросает исключение', () => {
+  // Именно этот путь Task 8 использует для видео, когда встроенный плеер
+  // YouTube заблокирован в WebView — то есть openLink бросает ровно тогда,
+  // когда запасной вариант и нужен. Молча проглоченное исключение оставило бы
+  // кнопку «смотреть видео» немой, без какой-либо реакции на нажатие.
+  let opened = null;
+  const webApp = fakeWebApp({ openLink: () => { throw new Error('WebView заблокировал переход'); } });
+  const win = fakeWin(webApp);
+  win.open = url => { opened = url; };
+  initTelegram(win).openLink('https://youtu.be/x');
+  assert.equal(opened, 'https://youtu.be/x');
+});
+
+// Тест на haptic проверяет каждый вызов ИЗОЛИРОВАННО (отдельный webApp на
+// mark и на done, отдельные счётчики impact/notification), а не общий массив
+// calls на "оба вызова вперемешку". Это намеренно: версия с общим массивом
+// и .includes(...) — тест-плацебо, который остаётся зелёным при реализации
+// "звонить в оба метода при любом kind" (различение потеряно) и при полном
+// свопе семантики (mark вызывает success, done вызывает light) — ни один из
+// этих двух дефектов не меняет содержимое объединённого массива вызовов
+// настолько, чтобы .includes() перестал находить ожидаемые строки. Разбор в
+// отчёте Task 7 (раунд правок 1) подтверждает это экспериментально.
+test('haptic для отметки вызывает ровно impact и не вызывает notification', () => {
+  const impacts = [];
+  const notifications = [];
+  const webApp = fakeWebApp({
+    HapticFeedback: {
+      impactOccurred: s => impacts.push(s),
+      notificationOccurred: t => notifications.push(t),
+    },
+  });
+  initTelegram(fakeWin(webApp)).haptic('mark');
+  assert.deepEqual(impacts, ['light']);
+  assert.deepEqual(notifications, []);
+});
+
+test('haptic для завершения блока вызывает ровно notification и не вызывает impact', () => {
+  const impacts = [];
+  const notifications = [];
+  const webApp = fakeWebApp({
+    HapticFeedback: {
+      impactOccurred: s => impacts.push(s),
+      notificationOccurred: t => notifications.push(t),
+    },
+  });
+  initTelegram(fakeWin(webApp)).haptic('done');
+  assert.deepEqual(notifications, ['success']);
+  assert.deepEqual(impacts, []);
 });
 
 // Дополнительное покрытие: ненадёжность настоящего Telegram WebApp API.
