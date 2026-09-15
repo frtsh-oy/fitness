@@ -6,7 +6,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { makeDom } from './setup.js';
 import { startApp } from '../app.js';
-import { storageKey } from '../storage.js';
+import { storageKey, currentDay } from '../storage.js';
 import { getWorkout } from '../workouts/index.js';
 import { countMarks } from '../workouts/schema.js';
 
@@ -14,8 +14,10 @@ const PAGE = readFileSync(fileURLToPath(new URL('../index.html', import.meta.url
 const WORKOUT = getWorkout(null);
 const TOTAL = countMarks(WORKOUT);
 
-// Та же дата, что подставит storage.js по умолчанию.
-const todayKey = () => storageKey(WORKOUT.id, new Date().toISOString().slice(0, 10));
+// Тот же ключ, что построит storage.js по умолчанию: день берётся у него же,
+// а не пересчитывается здесь заново — иначе тест разошёлся бы с приложением
+// молча, ключами, которые просто не совпали.
+const todayKey = () => storageKey(WORKOUT.id, currentDay());
 
 // Запись отметок отложена на SAVE_DELAY_MS, а отсчёт таймера идёт по настоящим
 // часам — эти тесты ждут реального времени, а не фальшивого.
@@ -468,6 +470,23 @@ test('pagehide дописывает отложенную отметку так �
   await settle(0);
   assert.deepEqual(cloud.calls.filter(call => call.startsWith('set:')),
     [`set:${JSON.stringify([box.dataset.mark])}`]);
+});
+
+// ФИНАЛЬНОЕ РЕВЬЮ, пункт 1: дописка на выгрузке — это обращение к облаку,
+// ответа которого страница уже не дождётся. Пока localStorage писался только в
+// ветке отказа облака, отметка не доживала до следующего открытия: приложение
+// убивали раньше, чем облако успевало отказать. Проверка нарочно синхронная,
+// без единого await после pagehide: это и есть «страницы больше нет».
+test('выгрузка страницы сразу после отметки оставляет её в localStorage', async t => {
+  const cloud = fakeCloud({ delay: 30 });   // облако исправно, но ответит уже некому
+  const { window, document, app } = mount(t, { webApp: fakeWebApp({ cloud }) });
+  await app.ready;
+
+  const box = boxes(document)[0];
+  box.click();
+  window.dispatchEvent(new window.Event('pagehide'));
+
+  assert.deepEqual(JSON.parse(window.localStorage.getItem(todayKey())), [box.dataset.mark]);
 });
 
 // Уход с глаз — это не повод писать: каждое сворачивание мини-аппа без единого

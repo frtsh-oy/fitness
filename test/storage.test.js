@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createStorage, storageKey } from '../storage.js';
+import { createStorage, storageKey, currentDay } from '../storage.js';
 
 function fakeLocal() {
   const map = new Map();
@@ -409,9 +409,9 @@ test('НАХОДКА 2G: удачная запись после неудачно
   assert.equal(local.getItem(PENDING), '1', 'признак не поставлен');
 
   cloudUp = true;
-  // Вторая отметка уходит в облако успешно. localStorage при успехе не пишется,
-  // значит там осталась старая копия из одной отметки — признак обязан сняться,
-  // иначе следующее чтение отдаст её вместо свежей облачной.
+  // Вторая отметка уходит в облако успешно. Локальная копия и облако сошлись —
+  // признак обязан сняться, иначе следующее чтение навсегда предпочтёт кэш
+  // облаку и перестанет замечать сброс с другого устройства.
   await s.save('legs-mwf', new Set(['squat', 'lunge']));
   assert.equal(local.getItem(PENDING), null, 'признак не снят после удачной записи');
   assert.deepEqual([...(await createStorage({ cloud, local, today }).load('legs-mwf'))].sort(), ['lunge', 'squat']);
@@ -448,7 +448,8 @@ test('РАУНД 6 A: чтение не встаёт в очередь запи�
   await s.save('legs-mwf', new Set(['squat']));
   assert.equal(local.getItem(PENDING), '1', 'признак не поставлен');
 
-  // Пользователь быстро тапает ещё дважды — обе записи висят в очереди ключа
+  // Пользователь быстро тапает ещё дважды — обе записи висят в очереди ключа,
+  // но в localStorage уже легли: он сквозной кэш и пишется синхронно.
   s.save('legs-mwf', new Set(['squat', 'lunge']));
   s.save('legs-mwf', new Set(['squat', 'lunge', 'plank']));
 
@@ -456,7 +457,7 @@ test('РАУНД 6 A: чтение не встаёт в очередь запи�
   const marks = await s.load('legs-mwf');
   const elapsed = Date.now() - start;
 
-  assert.deepEqual([...marks], ['squat']);
+  assert.deepEqual([...marks], ['squat', 'lunge', 'plank'], 'чтение отдало не последний набор');
   assert.ok(elapsed < 40, `load ждал ${elapsed}ms — чтение снова встало в очередь записей`);
 });
 
@@ -541,4 +542,148 @@ test('РАУНД 6 D: опоздавший и повторный ответ об
     late(null, '["и-ещё-раз"]');
   });
   assert.deepEqual([...(await s.load('legs-mwf'))], ['локальная-отметка']);
+});
+
+// ФИНАЛЬНОЕ РЕВЬЮ, пункт 2: день считается по местному времени, а не по UTC.
+// Западнее Гринвича UTC-дата переворачивается посреди вечера, и отметки
+// обнуляются прямо во время тренировки.
+
+test('день по умолчанию берётся по местному времени, а не по UTC', async t => {
+  const realTZ = process.env.TZ;
+  const RealDate = Date;
+  // 2026-09-15 00:30 UTC — это 2026-09-14, 20:30 в Нью-Йорке: вечер, разгар
+  // тренировки. По UTC день уже сменился, по местному времени — ещё нет.
+  const fixed = RealDate.UTC(2026, 8, 15, 0, 30);
+  process.env.TZ = 'America/New_York';
+  globalThis.Date = class extends RealDate {
+    constructor(...args) { super(...(args.length ? args : [fixed])); }
+  };
+  t.after(() => {
+    globalThis.Date = RealDate;
+    if (realTZ === undefined) delete process.env.TZ; else process.env.TZ = realTZ;
+  });
+
+  assert.equal(currentDay(), '2026-09-14');
+  assert.equal(new RealDate(fixed).toISOString().slice(0, 10), '2026-09-15',
+    'фикстура бесполезна: UTC-дата совпала с местной, переворот дня не воспроизводится');
+
+  const local = fakeLocal();
+  await createStorage({ local }).save('legs-mwf', new Set(['вечерняя-отметка']));
+  assert.deepEqual([...local._map.keys()], ['w:legs-mwf:2026-09-14']);
+});
+
+// ФИНАЛЬНОЕ РЕВЬЮ, пункт 1: localStorage — сквозной кэш, а не запасной выход.
+// Пока запись шла только в ветку отказа облака, локальная копия при работающем
+// облаке оставалась пустой, и один открытый без сети день стирал предыдущую
+// работу целиком.
+
+test('СКВОЗНОЙ КЭШ: обрыв связи при открытии не теряет день, сохранённый в облако', async () => {
+  const local = fakeLocal();
+  const store = new Map();
+  const online = {
+    setItem: (k, v, cb) => { store.set(k, v); cb(null, true); },
+    getItem: (k, cb) => cb(null, store.get(k) ?? ''),
+    removeItem: (k, cb) => { store.delete(k); cb(null, true); },
+  };
+
+  // Обычная тренировка при работающем облаке: двадцать отметок, все записи удачны
+  const marked = Array.from({ length: 20 }, (_, i) => `mark-${i}`);
+  const s = createStorage({ cloud: online, local, today });
+  for (let i = 0; i < marked.length; i += 1) await s.save('legs-mwf', new Set(marked.slice(0, i + 1)));
+  assert.equal(local.getItem(PENDING), null, 'после удачных записей признак не снят');
+
+  // На следующем открытии сети нет: getItem отказывает
+  const offline = { ...online, getItem: (k, cb) => cb(new Error('нет сети')) };
+  const reopened = createStorage({ cloud: offline, local, today });
+  assert.deepEqual([...(await reopened.load('legs-mwf'))], marked,
+    'localStorage не был сквозным кэшем — день пропал с экрана');
+});
+
+test('СКВОЗНОЙ КЭШ: запись в localStorage синхронна — выгрузка страницы сразу после отметки её не теряет', () => {
+  const local = fakeLocal();
+  // Облако принимает вызов и не отвечает никогда: страницу закрыли раньше ответа
+  const cloud = { setItem: () => {}, getItem: () => {}, removeItem: () => {} };
+  const s = createStorage({ cloud, local, today });
+
+  s.save('legs-mwf', new Set(['squat']));   // намеренно без await: страницы уже нет
+
+  assert.equal(local.getItem(KEY), '["squat"]', 'отметка не легла в localStorage синхронно');
+  assert.equal(local.getItem(PENDING), '1', 'запись без ответа облака не помечена неподтверждённой');
+});
+
+test('СКВОЗНОЙ КЭШ: неподтверждённая запись переживает закрытие приложения', async () => {
+  const local = fakeLocal();
+  const store = new Map([[KEY, '["старое-из-облака"]']]);
+  // Запись уходит в облако, но ответа на неё уже никто не дождётся
+  const cloud = {
+    setItem: () => {},
+    getItem: (k, cb) => cb(null, store.get(k) ?? ''),
+    removeItem: (k, cb) => { store.delete(k); cb(null, true); },
+  };
+  createStorage({ cloud, local, today, cloudTimeout: 10 }).save('legs-mwf', new Set(['squat']));
+
+  // Приложение открыли заново: облако отвечает успешно, но устаревшим значением
+  const reopened = createStorage({ cloud, local, today, cloudTimeout: 10 });
+  assert.deepEqual([...(await reopened.load('legs-mwf'))], ['squat']);
+});
+
+test('СКВОЗНОЙ КЭШ: удачная запись поверх кэша не мешает увидеть сброс с другого устройства', async () => {
+  const local = fakeLocal();
+  const store = new Map();
+  const cloud = {
+    setItem: (k, v, cb) => { store.set(k, v); cb(null, true); },
+    getItem: (k, cb) => cb(null, store.get(k) ?? ''),
+    removeItem: (k, cb) => { store.delete(k); cb(null, true); },
+  };
+  await createStorage({ cloud, local, today }).save('legs-mwf', new Set(['squat', 'lunge']));
+  assert.equal(local.getItem(KEY), '["squat","lunge"]', 'кэш не заполнился при удачной записи');
+
+  // Другое устройство сбросило отметки: в общем облаке пусто
+  store.delete(KEY);
+
+  // Локальная копия есть, но она подтверждена — а значит не новее облака.
+  // Сброс обязан доехать, иначе отметки воскресают из кэша сами собой.
+  assert.deepEqual([...(await createStorage({ cloud, local, today }).load('legs-mwf'))], []);
+});
+
+test('СКВОЗНОЙ КЭШ: признак не снимается, пока в очереди стоит более свежая запись', async () => {
+  const local = fakeLocal();
+  const answered = [];
+  const cloud = {
+    // Первая запись подтверждается, вторая уходит в никуда
+    setItem: (k, v, cb) => {
+      answered.push(v);
+      if (answered.length === 1) cb(null, true);
+    },
+    getItem: (k, cb) => cb(null, '["только-первая"]'),
+    removeItem: (k, cb) => cb(null, true),
+  };
+  const s = createStorage({ cloud, local, today, cloudTimeout: 20 });
+
+  const first = s.save('legs-mwf', new Set(['squat']));
+  s.save('legs-mwf', new Set(['squat', 'lunge']));   // второй тап, пока первый ещё в пути
+  await first;
+
+  assert.equal(local.getItem(KEY), '["squat","lunge"]');
+  assert.equal(local.getItem(PENDING), '1',
+    'признак снят по подтверждению первой записи, хотя вторая облаком не подтверждена');
+  assert.deepEqual([...(await s.load('legs-mwf'))], ['squat', 'lunge'],
+    'чтение отдало облачное значение вместо более свежего локального');
+});
+
+test('СКВОЗНОЙ КЭШ: сброс стирает локальную копию сразу, не дожидаясь ответа облака', async () => {
+  const local = fakeLocal();
+  const cloud = {
+    setItem: (k, v, cb) => cb(null, true),
+    getItem: (k, cb) => cb(null, '["в-облаке"]'),
+    removeItem: () => { /* никогда не ответит: сеть умерла на самом сбросе */ },
+  };
+  const s = createStorage({ cloud, local, today, cloudTimeout: 20 });
+  await s.save('legs-mwf', new Set(['squat']));
+  assert.equal(local.getItem(KEY), '["squat"]', 'кэш не заполнился');
+
+  s.clear('legs-mwf');   // намеренно без await: приложение закрывают сразу после сброса
+
+  assert.equal(local.getItem(KEY), null, 'сброшенный день остался в кэше и воскреснет при следующем открытии');
+  assert.equal(local.getItem(PENDING), null, 'признак пережил сброс');
 });
