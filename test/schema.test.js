@@ -9,9 +9,9 @@ function minimalWorkout(overrides = {}) {
     title: 'Тест один. Тест два.',
     titleLines: ['Тест один.', 'Тест два.'],
     lead: 'Описание',
-    schedule: 'ПН · СР · ПТ',
+    days: [1, 3, 5],
     stats: [{ v: '10', l: 'минут' }],
-    gear: 'Коврик',
+    equipment: 'Коврик',
     blocks: [{
       id: 'b1', n: '01', nav: 'Блок', title: 'Блок', sub: 'Подзаголовок', rounds: 2,
       items: [{
@@ -123,6 +123,31 @@ test('одинаковый key в разных блоках разрешён', (
     items: [{ ...w.blocks[0].items[0] }],
   });
   assert.deepEqual(validateWorkout(w), []);
+});
+
+// days — машиночитаемое расписание: из него строятся обе строки на странице,
+// и оно же будущая недельная частота.
+
+test('тренировка без days попадает в отчёт', () => {
+  const w = minimalWorkout();
+  delete w.days;
+  assert.match(validateWorkout(w).join('\n'), /days/);
+});
+
+test('пустой массив days попадает в отчёт', () => {
+  assert.match(validateWorkout(minimalWorkout({ days: [] })).join('\n'), /days/);
+});
+
+test('день недели вне 1–7 попадает в отчёт', () => {
+  assert.match(validateWorkout(minimalWorkout({ days: [1, 8] })).join('\n'), /8/);
+});
+
+test('день недели не целым числом попадает в отчёт', () => {
+  assert.match(validateWorkout(minimalWorkout({ days: [1, '3'] })).join('\n'), /день недели/);
+});
+
+test('повторённый день недели попадает в отчёт', () => {
+  assert.match(validateWorkout(minimalWorkout({ days: [1, 1] })).join('\n'), /дважды/);
 });
 
 test('countMarks считает rounds умножить на число упражнений по всем блокам', () => {

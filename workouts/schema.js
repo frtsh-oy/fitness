@@ -5,11 +5,11 @@ export const GEAR = ['band_long', 'loop_short', 'none'];
 export const KINDS = ['warmup', 'strength', 'cooldown'];
 export const LOAD_VALUES = [0.5, 1];
 
-const WORKOUT_FIELDS = ['id', 'kicker', 'title', 'titleLines', 'lead', 'schedule', 'stats', 'gear', 'blocks', 'progression', 'caution'];
+const WORKOUT_FIELDS = ['id', 'kicker', 'title', 'titleLines', 'lead', 'days', 'stats', 'equipment', 'blocks', 'progression', 'caution'];
 const BLOCK_FIELDS = ['id', 'n', 'nav', 'title', 'sub', 'rounds', 'items'];
 const ITEM_FIELDS = ['key', 'name', 'muscles', 'reps', 'text', 'load', 'pattern', 'gear', 'unilateral', 'kind'];
 
-const WORKOUT_TEXT_FIELDS = ['id', 'kicker', 'title', 'lead', 'schedule', 'gear', 'caution'];
+const WORKOUT_TEXT_FIELDS = ['id', 'kicker', 'title', 'lead', 'equipment', 'caution'];
 const BLOCK_TEXT_FIELDS = ['id', 'n', 'nav', 'title', 'sub'];
 const ITEM_TEXT_FIELDS = ['name', 'muscles', 'reps', 'text'];
 
@@ -40,6 +40,24 @@ export function validateWorkout(workout) {
   if (!Array.isArray(workout.titleLines) || workout.titleLines.length < 1 || workout.titleLines.length > 2
       || workout.titleLines.some(line => typeof line !== 'string' || line.length === 0)) {
     problems.push('Тренировка: titleLines должен быть массивом из одной или двух непустых строк');
+  }
+  // days — дни недели по ISO-8601 (1 — понедельник, 7 — воскресенье). Это
+  // единственный источник расписания: строки «ПН · СР · ПТ» в шапке и
+  // «Понедельник · Среда · Пятница» в подвале строит render.js. Заодно это
+  // машиночитаемая частота для будущей оценки недельной нагрузки, которую
+  // из строки было не достать.
+  if (!Array.isArray(workout.days) || workout.days.length === 0) {
+    problems.push('Тренировка: days должен быть непустым массивом');
+  } else {
+    const seenDays = new Set();
+    for (const day of workout.days) {
+      if (!Number.isInteger(day) || day < 1 || day > 7) {
+        problems.push(`Тренировка: день недели должен быть целым числом от 1 до 7, получено ${day}`);
+      } else if (seenDays.has(day)) {
+        problems.push(`Тренировка: день недели ${day} указан дважды`);
+      }
+      seenDays.add(day);
+    }
   }
   if (!Array.isArray(workout.stats)) {
     problems.push('Тренировка: stats должен быть массивом');

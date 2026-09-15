@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { makeDom } from './setup.js';
 import { startApp } from '../app.js';
 import { storageKey, currentDay } from '../storage.js';
-import { markId } from '../render.js';
+import { markId, scheduleShort, scheduleLong } from '../render.js';
 import { getWorkout } from '../workouts/index.js';
 import { countMarks } from '../workouts/schema.js';
 
@@ -158,6 +158,16 @@ test('страница собирается: блоки, упражнения, �
   assert.equal(document.getElementById('progress').value, 0);
   assert.equal(document.getElementById('kicker').textContent, WORKOUT.kicker);
   assert.equal(document.querySelectorAll('#progression-list li').length, WORKOUT.progression.length);
+});
+
+// Расписание на настоящей странице: оба места заполняются из данных. Заодно
+// сторожит структуру подвала — расписание там ведущий текстовый узел, и если
+// его переставить местами с примечанием, renderIntro затрёт примечание.
+test('расписание в шапке и в подвале совпадает с днями тренировки', t => {
+  const { document } = mount(t);
+  assert.equal(document.querySelector('.masthead .schedule').textContent, scheduleShort(WORKOUT.days));
+  assert.equal(document.querySelector('footer').textContent,
+    `${scheduleLong(WORKOUT.days)}Между тренировками — день восстановления.`);
 });
 
 // Начальная длительность живёт в одном месте — в разметке, на пресете

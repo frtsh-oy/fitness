@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { makeDom } from './setup.js';
-import { renderWorkout, renderIntro, markId, videoUrl } from '../render.js';
+import { renderWorkout, renderIntro, markId, videoUrl, scheduleShort, scheduleLong } from '../render.js';
 import { countMarks } from '../workouts/schema.js';
 import legsMwf from '../workouts/legs-mwf.js';
 
@@ -24,6 +24,19 @@ function extractOriginalPairRules() {
     paragraphs: [...document.querySelectorAll('.pair-rules p')].map(p => p.textContent),
   };
 }
+
+// Страница для renderIntro — те же узлы, что в index.html, включая оба места
+// с расписанием. Первым стоит чужой .eyebrow: на реальной странице тем же
+// классом набран заголовок «ДАЛЬШЕ — СИЛЬНЕЕ» в .guide, и выборка по классу
+// взяла бы его.
+const INTRO_PAGE = `<!doctype html><html><body>
+  <header class="masthead"><span class="schedule">ПН · СР · ПТ</span></header>
+  <p class="eyebrow">ДАЛЬШЕ — СИЛЬНЕЕ</p>
+  <p class="eyebrow" id="kicker"></p><h1></h1><p class="intro-copy"></p>
+  <div class="facts"></div><nav class="block-nav"></nav>
+  <div class="equipment"></div><ol id="progression-list"></ol><div id="care"></div>
+  <footer>Понедельник · Среда · Пятница<span>Между тренировками — день восстановления.</span></footer>
+</body></html>`;
 
 test('markId собирает идентификатор из блока, ключа упражнения и круга', () => {
   assert.equal(markId('legs1', 'rdl', 1), 'legs1-rdl-1');
@@ -200,12 +213,7 @@ test('блок без preamble не порождает секцию pair-rules',
 test('renderIntro заполняет шапку из данных, а не из статики HTML', () => {
   // Первым стоит чужой .eyebrow — на реальной странице тем же классом набран
   // заголовок «ДАЛЬШЕ — СИЛЬНЕЕ» в .guide. Выборка по классу взяла бы его.
-  const { document } = makeDom(`<!doctype html><html><body>
-    <p class="eyebrow">ДАЛЬШЕ — СИЛЬНЕЕ</p>
-    <p class="eyebrow" id="kicker"></p><h1></h1><p class="intro-copy"></p>
-    <div class="facts"></div><nav class="block-nav"></nav>
-    <div class="equipment"></div><ol id="progression-list"></ol><div id="care"></div>
-  </body></html>`);
+  const { document } = makeDom(INTRO_PAGE);
   renderIntro(legsMwf, document);
   assert.equal(document.getElementById('kicker').textContent, legsMwf.kicker);
   assert.equal(document.querySelector('.eyebrow').textContent, 'ДАЛЬШЕ — СИЛЬНЕЕ', 'чужой .eyebrow не тронут');
@@ -213,16 +221,12 @@ test('renderIntro заполняет шапку из данных, а не из 
   assert.equal(document.querySelector('h1').querySelector('span').textContent, 'Акцент на ноги.');
   assert.equal(document.querySelector('.intro-copy').textContent, legsMwf.lead);
   assert.equal(document.querySelectorAll('.facts > div').length, legsMwf.stats.length);
-  assert.equal(document.querySelector('.equipment').textContent, legsMwf.gear);
+  assert.equal(document.querySelector('.equipment').textContent, legsMwf.equipment);
   assert.equal(document.querySelectorAll('#progression-list li').length, legsMwf.progression.length);
 });
 
 test('renderIntro строит навигацию по реальным блокам', () => {
-  const { document } = makeDom(`<!doctype html><html><body>
-    <p class="eyebrow" id="kicker"></p><h1></h1><p class="intro-copy"></p>
-    <div class="facts"></div><nav class="block-nav"></nav>
-    <div class="equipment"></div><ol id="progression-list"></ol><div id="care"></div>
-  </body></html>`);
+  const { document } = makeDom(INTRO_PAGE);
   renderIntro(legsMwf, document);
   const links = [...document.querySelectorAll('.block-nav a')];
   assert.equal(links.length, 8);
@@ -237,4 +241,38 @@ test('тексты упражнения попадают в разметку', (
   assert.equal(first.querySelector('h3').textContent, 'Подкручивание таза лёжа');
   assert.match(first.textContent, /8–10 раз/);
   assert.match(first.textContent, /Ляг на спину/);
+});
+
+// ФИНАЛЬНОЕ РЕВЬЮ, пункты 4 и 7: расписание было зашито в index.html дважды и
+// не рендерилось ниоткуда. Тренировка с другими днями получала бы чужое
+// расписание в обоих местах, и ни один тест бы этого не заметил.
+
+test('scheduleShort и scheduleLong строят обе формы расписания из дней недели', () => {
+  assert.equal(scheduleShort([1, 3, 5]), 'ПН · СР · ПТ');
+  assert.equal(scheduleLong([1, 3, 5]), 'Понедельник · Среда · Пятница');
+  assert.equal(scheduleShort([2, 4]), 'ВТ · ЧТ');
+  assert.equal(scheduleLong([6, 7]), 'Суббота · Воскресенье');
+});
+
+test('неизвестный день недели роняет рендер, а не печатает undefined', () => {
+  assert.throws(() => scheduleShort([8]), /8/);
+});
+
+test('renderIntro ставит расписание и в шапку, и в подвал — из дней тренировки', () => {
+  const { document } = makeDom(INTRO_PAGE);
+  renderIntro(legsMwf, document);
+  assert.equal(document.querySelector('.masthead .schedule').textContent, 'ПН · СР · ПТ');
+  assert.equal(document.querySelector('footer').textContent,
+    'Понедельник · Среда · ПятницаМежду тренировками — день восстановления.');
+});
+
+// Та же страница и другая тренировка: если бы расписание бралось из разметки,
+// оба места остались бы понедельничными и тест бы этого не показал.
+test('тренировка с другими днями получает своё расписание в обоих местах', () => {
+  const { document } = makeDom(INTRO_PAGE);
+  renderIntro({ ...legsMwf, days: [2, 4] }, document);
+  assert.equal(document.querySelector('.masthead .schedule').textContent, 'ВТ · ЧТ');
+  assert.match(document.querySelector('footer').textContent, /^Вторник · Четверг/);
+  assert.match(document.querySelector('footer').textContent,
+    /Между тренировками — день восстановления\.$/, 'примечание в подвале потерялось');
 });

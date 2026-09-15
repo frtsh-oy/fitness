@@ -10,6 +10,36 @@ export function videoUrl([id, start = 0]) {
   return `https://www.youtube.com/watch?v=${id}&t=${start}s`;
 }
 
+// Дни недели по ISO-8601: 1 — понедельник, 7 — воскресенье. Подписи живут
+// здесь, а не в данных: в данных лежат номера дней, а как их назвать — вопрос
+// показа. Две формы, потому что на странице два разных места: короткая в шапке
+// (рядом с названием сайта, где место в одну строку) и полная в подвале.
+const WEEKDAYS = {
+  1: { short: 'ПН', long: 'Понедельник' },
+  2: { short: 'ВТ', long: 'Вторник' },
+  3: { short: 'СР', long: 'Среда' },
+  4: { short: 'ЧТ', long: 'Четверг' },
+  5: { short: 'ПТ', long: 'Пятница' },
+  6: { short: 'СБ', long: 'Суббота' },
+  7: { short: 'ВС', long: 'Воскресенье' },
+};
+
+// Неизвестный день — повод упасть, а не напечатать «undefined · СР · ПТ»:
+// номера дней проверяет валидатор, и молчаливая подмена скрыла бы его отказ.
+function weekday(day) {
+  const label = WEEKDAYS[day];
+  if (!label) throw new Error(`Неизвестный день недели: ${day}`);
+  return label;
+}
+
+export function scheduleShort(days) {
+  return days.map(day => weekday(day).short).join(' · ');
+}
+
+export function scheduleLong(days) {
+  return days.map(day => weekday(day).long).join(' · ');
+}
+
 const el = (document, tag, className, text) => {
   const node = document.createElement(tag);
   if (className) node.className = className;
@@ -163,7 +193,16 @@ export function renderIntro(workout, document) {
     return link;
   }));
 
-  document.querySelector('.equipment').textContent = workout.gear;
+  // Расписание на странице в двух местах, и оба — из данных. Пока эти строки
+  // были зашиты в index.html, вторая тренировка (например, ВТ/ЧТ) отрендерилась
+  // бы с чужим расписанием сразу в двух местах, и ни один тест бы не заметил.
+  document.querySelector('.masthead .schedule').textContent = scheduleShort(workout.days);
+  // В подвале расписание — ведущий текстовый узел. Примечание рядом с ним
+  // («Между тренировками — день восстановления») остаётся в разметке: оно не
+  // про расписание и от дней недели не зависит.
+  document.querySelector('footer').firstChild.textContent = scheduleLong(workout.days);
+
+  document.querySelector('.equipment').textContent = workout.equipment;
   document.getElementById('progression-list')
     .replaceChildren(...workout.progression.map(step => el(document, 'li', null, step)));
   document.getElementById('care')
