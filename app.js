@@ -9,6 +9,20 @@ import { initTelegram } from './telegram.js';
 import { createTimer, formatTime } from './timer.js';
 import { setupPlayers } from './player.js';
 
+// Отсчёт сверяется с часами часто, чтобы экран не отставал от них больше чем
+// на глаз: на границе секунды подпись меняется в пределах пятой доли.
+const TIMER_PERIOD_MS = 200;
+
+// Задержка перед записью набора отметок. Полсекунды длиннее промежутка между
+// двумя подряд тапами (человек, закрывающий круги один за другим, укладывается
+// в 200–400 мс) и короче любой паузы, после которой он откладывает телефон.
+// Склейка безопасна ровно потому, что save получает набор целиком, а не разницу:
+// промежуточные состояния никому не нужны, важно только последнее.
+const SAVE_DELAY_MS = 500;
+
+// Вопрос перед сбросом — дословно из src-original/app.js.
+const RESET_QUESTION = 'Сбросить все отметки за сегодня?';
+
 // Обращение к localStorage может бросить ещё до первого getItem: урезанный
 // WebView или запрет на данные сайтов. storage.js умеет работать с local = null,
 // так что здесь достаточно не дать исключению обрушить старт приложения.
@@ -27,6 +41,20 @@ function localStore(win) {
 // умеет; иначе остаётся localStorage, ради которого storage.js и принимает null.
 function cloudStorage(webApp) {
   return webApp?.isVersionAtLeast?.('6.9') ? webApp.CloudStorage : null;
+}
+
+// Конец отдыха там, где клиент отклика не дал: человек на отдыхе смотрит не в
+// экран. navigator.vibrate есть не везде (в Safari его нет вовсе) и может
+// бросить — например, когда вкладка не на виду.
+function vibrate(win) {
+  try {
+    win.navigator.vibrate?.([120, 80, 120]);
+  } catch { /* устройство без вибромотора или запрет политикой */ }
+}
+
+// Плавность прокрутки просят не все — ровно та же проверка есть в player.js.
+function scrollBehavior(win) {
+  return win.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth';
 }
 
 export function startApp(win = globalThis.window) {
@@ -67,15 +95,50 @@ export function startApp(win = globalThis.window) {
     progressText.textContent = `Сегодня: ${marks.size} из ${total} отметок`;
   }
 
+  // Каждый тап — не отдельная запись. За CloudStorage стоит запрос к клиенту
+  // Telegram, и при мёртвой сети каждая запись ждёт свой таймаут в очереди:
+  // пятнадцать тапов подряд растянули бы сохранение последнего на минуту.
+  // Поэтому частые изменения склеиваются и уходят одним актуальным набором.
+  let saveTimer = null;
+
+  function cancelSave() {
+    if (saveTimer === null) return;
+    win.clearTimeout(saveTimer);
+    saveTimer = null;
+  }
+
+  function queueSave() {
+    cancelSave();
+    saveTimer = win.setTimeout(() => {
+      saveTimer = null;
+      storage.save(workout.id, marks);
+    }, SAVE_DELAY_MS);
+  }
+
+  // Отложенную запись нельзя оставлять «на потом», когда приложение убирают
+  // с глаз: свёрнутый мини-апп клиент вправе выгрузить вместе с таймерами.
+  function flushSave() {
+    if (saveTimer === null) return;
+    cancelSave();
+    storage.save(workout.id, marks);
+  }
+
   // Разметка уже на экране, отметки приезжают следом: load асинхронный, потому
-  // что за CloudStorage стоит запрос к клиенту Telegram. Пустого экрана при этом
-  // не бывает — рисуем сразу, проставляем по готовности.
-  let touched = false;
+  // что за CloudStorage стоит запрос к клиенту Telegram — до пяти секунд.
+  // Приехавшее ОБЪЕДИНЯЕТСЯ с тем, что человек успел отметить, а не спорит с ним:
+  // до ответа хранилища на экране пусто, значит единственное возможное действие —
+  // поставить отметку, и объединение не теряет ни её, ни сохранённых.
+  //
+  // Сброс — единственное исключение: он и означает «забыть сохранённое».
+  // Признак отдельный, потому что обычная отметка приехавшего не отменяет.
+  let resetBeforeLoad = false;
   const ready = storage.load(workout.id).then(saved => {
-    // Пользователь успел нажать раньше, чем ответило хранилище — его действие
-    // главнее. Иначе сохранённые отметки отменили бы только что сделанный сброс.
-    if (touched) return;
+    if (resetBeforeLoad) return;
     for (const id of saved) marks.add(id);
+    // Ранняя отметка уже ушла в хранилище одна, без сохранённых: save пишет
+    // набор целиком. Возвращаем туда объединённый набор, иначе старые отметки
+    // пропадут из хранилища, даже оставшись на экране.
+    if (marks.size > saved.size) queueSave();
     paint();
   });
   paint();
@@ -85,26 +148,38 @@ export function startApp(win = globalThis.window) {
   // квадратику браузер, конечно, тоже показал бы, но click — событие про нажатие,
   // а не про состояние, и на нём обработчик зависел бы от способа ввода.
   host.addEventListener('change', event => {
-    const box = event.target.closest('input[data-mark]');
-    if (!box) return;
-    touched = true;
+    // Цель change от чекбокса — сам чекбокс, вложенности тут не бывает.
+    const box = event.target;
+    if (!box.matches('input[data-mark]')) return;
     const id = box.dataset.mark;
     if (box.checked) marks.add(id); else marks.delete(id);
     paint();
-    // save принимает весь набор целиком, а не разницу, поэтому актуальный Set
-    // держим здесь и отдаём его снимок на каждое изменение.
-    storage.save(workout.id, marks);
+    queueSave();
 
     const section = box.closest('section.workout-block');
     const all = [...section.querySelectorAll('input[data-mark]')];
     tg.haptic(all.every(b => marks.has(b.dataset.mark)) ? 'done' : 'mark');
   });
 
-  document.getElementById('reset').addEventListener('click', () => {
-    touched = true;
+  function resetMarks() {
+    resetBeforeLoad = true;
+    // Отложенная запись больше не нужна: её набор устарел, а очистка идёт следом.
+    cancelSave();
     marks.clear();
     paint();
     storage.clear(workout.id);
+  }
+
+  document.getElementById('reset').addEventListener('click', () => {
+    // Спрашиваем, только когда есть что терять, — как в оригинале.
+    // Ответ асинхронный: внутри Telegram это окно самого клиента.
+    if (marks.size === 0) {
+      resetMarks();
+      return;
+    }
+    tg.confirm(RESET_QUESTION).then(confirmed => {
+      if (confirmed) resetMarks();
+    });
   });
 
   // Таймер отдыха
@@ -122,26 +197,83 @@ export function startApp(win = globalThis.window) {
     },
     onDone: () => {
       status.textContent = 'Отдых закончен';
-      tg.haptic('done');
+      // Спрашивать «мы внутри Telegram?» тут нельзя: SDK подключён со страницы
+      // всегда и в обычном браузере тоже отдаёт объект WebApp — просто версии
+      // 6.0, в которой HapticFeedback ничего не делает. Поэтому решает не факт
+      // наличия клиента, а ответ самого haptic: был отклик или не было.
+      if (!tg.haptic('done')) vibrate(win);
     },
   });
 
-  win.setInterval(() => timer.tick(), 1000);
-  toggle.addEventListener('click', () => timer.toggle());
-  document.getElementById('timer-reset').addEventListener('click', () => timer.reset());
+  // Интервалом владеет связывание, а не таймер. Отсчёт ведётся по настенным
+  // часам: в фоне браузер прореживает интервалы, а WebView Telegram у свёрнутого
+  // приложения останавливает их совсем — человек убирает телефон в карман на
+  // полторы минуты и возвращается к экрану, застрявшему на середине отдыха.
+  // Поэтому запоминается момент конца отдыха, а срабатывание интервала лишь
+  // спрашивает часы, сколько целых секунд уже прошло.
+  let ticker = null;
+  let endAt = 0;
 
-  for (const preset of document.querySelectorAll('.presets button')) {
+  function stopTicking() {
+    if (ticker === null) return;
+    win.clearInterval(ticker);
+    ticker = null;
+  }
+
+  function catchUp() {
+    const shouldRemain = Math.max(0, Math.ceil((endAt - Date.now()) / 1000));
+    // Догоняем часы ровно на столько секунд, сколько они ушли вперёд: после сна
+    // вкладки это может быть сразу вся оставшаяся минута. Цикл ограничен самим
+    // остатком — в ноль таймер останавливается и tick() перестаёт что-то менять.
+    while (timer.running && timer.remaining > shouldRemain) timer.tick();
+    if (!timer.running) stopTicking();
+  }
+
+  function startTicking() {
+    endAt = Date.now() + timer.remaining * 1000;
+    ticker = win.setInterval(catchUp, TIMER_PERIOD_MS);
+  }
+
+  toggle.addEventListener('click', () => {
+    timer.toggle();
+    // Пауза и конец отдыха гасят интервал: незачем будить процессор телефона,
+    // пока человек делает подход.
+    if (timer.running) startTicking(); else stopTicking();
+  });
+
+  document.getElementById('timer-reset').addEventListener('click', () => {
+    timer.reset();
+    stopTicking();
+  });
+
+  const presets = [...document.querySelectorAll('.presets button')];
+  for (const preset of presets) {
     preset.addEventListener('click', () => {
-      for (const other of document.querySelectorAll('.presets button')) other.setAttribute('aria-pressed', 'false');
+      for (const other of presets) other.setAttribute('aria-pressed', 'false');
       preset.setAttribute('aria-pressed', 'true');
       timer.setDuration(Number(preset.dataset.time));
+      stopTicking();
     });
   }
+
+  // Начальная длительность — из разметки, из пресета с aria-pressed. Другого
+  // источника нет: ни в index.html текстом, ни в timer.js по умолчанию. Что
+  // отмеченный пресет на странице есть, сторожит тест стартового экрана, а не
+  // ветка в коде: без него приложению всё равно нечего показать на табло.
+  const chosen = presets.find(preset => preset.getAttribute('aria-pressed') === 'true');
+  timer.setDuration(Number(chosen.dataset.time));
+
+  // Возвращение к приложению — второй источник правды о времени, кроме интервала:
+  // пока вкладка была скрыта, он мог не сработать ни разу. Уход, наоборот, —
+  // последний момент, когда можно дописать отметки.
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) flushSave(); else catchUp();
+  });
 
   // Кнопка «назад» показывается, когда пользователь ушёл ниже первого экрана.
   // Вешаем обработчик ровно один раз: у настоящего BackButton.onClick
   // обработчики накапливаются, а не заменяют друг друга.
-  tg.onBack(() => win.scrollTo({ top: 0, behavior: 'smooth' }));
+  tg.onBack(() => win.scrollTo({ top: 0, behavior: scrollBehavior(win) }));
 
   // setBackVisible каждый раз ходит в клиент Telegram, а событий прокрутки за
   // один жест десятки. Зовём его только когда ответ меняется.
@@ -154,18 +286,15 @@ export function startApp(win = globalThis.window) {
   }, { passive: true });
 
   // Подсветка текущего блока в навигации — как в src-original/app.js.
-  // В jsdom наблюдателя нет, поэтому проверка не декоративная.
-  if ('IntersectionObserver' in win) {
-    const observer = new win.IntersectionObserver(entries => {
-      for (const entry of entries) {
-        if (!entry.isIntersecting) continue;
-        for (const link of document.querySelectorAll('.block-nav a')) {
-          link.classList.toggle('active', link.hash === `#${entry.target.id}`);
-        }
+  const observer = new win.IntersectionObserver(entries => {
+    for (const entry of entries) {
+      if (!entry.isIntersecting) continue;
+      for (const link of document.querySelectorAll('.block-nav a')) {
+        link.classList.toggle('active', link.hash === `#${entry.target.id}`);
       }
-    }, { rootMargin: '-70px 0px -65% 0px', threshold: 0 });
-    for (const section of host.querySelectorAll('.workout-block')) observer.observe(section);
-  }
+    }
+  }, { rootMargin: '-70px 0px -65% 0px', threshold: 0 });
+  for (const section of host.querySelectorAll('.workout-block')) observer.observe(section);
 
   return { workout, marks, timer, total, ready };
 }

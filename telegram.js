@@ -2,7 +2,9 @@
 // работать в обычном браузере, где window.Telegram отсутствует.
 const BRAND_BG = '#152d4a';
 
-const safely = fn => { try { fn(); } catch { /* старый клиент — метода может не быть */ } };
+// Отвечает, удалось ли позвать клиента: большинству вызовов ответ не нужен,
+// но haptic по нему решает, был ли отклик вообще.
+const safely = fn => { try { fn(); return true; } catch { return false; } };
 
 export function initTelegram(win = globalThis) {
   const webApp = win?.Telegram?.WebApp ?? null;
@@ -41,13 +43,24 @@ export function initTelegram(win = globalThis) {
       win.open?.(url, '_blank', 'noopener');
     },
 
+    // Отвечает, получил ли человек отклик. Ответ нужен вызывающему: по «нет» он
+    // сигналит сам, вибромотором устройства.
+    //
+    // Версию спрашиваем отдельно и до вызова. HapticFeedback появился в Bot API
+    // 6.1, а на клиенте постарше — и в обычном браузере, где подключённый со
+    // страницы SDK всё равно отдаёт объект WebApp и представляется версией 6.0, —
+    // метод существует и молча пишет предупреждение в консоль. Ни исключения,
+    // ни возвращаемого значения, по которым можно было бы узнать отказ, нет:
+    // без проверки версии слой отвечал бы «отклик был» там, где его не было.
+    //
+    // Проверка available тоже обязательна: webApp === null вне safely, обращение
+    // к его полям бросило бы прямо здесь.
     haptic(kind) {
-      // Эта проверка обязательна: webApp === null вне safely, обращение к
-      // webApp.HapticFeedback ниже бросило бы прямо здесь.
-      if (!available) return;
+      if (!available || !webApp.isVersionAtLeast?.('6.1')) return false;
       const h = webApp.HapticFeedback;
-      if (kind === 'done') safely(() => h.notificationOccurred('success'));
-      else safely(() => h.impactOccurred('light'));
+      return kind === 'done'
+        ? safely(() => h.notificationOccurred('success'))
+        : safely(() => h.impactOccurred('light'));
     },
 
     // Подтверждение опасного действия. Всегда обещание: вызывающий код не должен

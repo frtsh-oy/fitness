@@ -17,12 +17,60 @@ const TOTAL = countMarks(WORKOUT);
 // Та же дата, что подставит storage.js по умолчанию.
 const todayKey = () => storageKey(WORKOUT.id, new Date().toISOString().slice(0, 10));
 
-// startApp заводит setInterval для таймера, поэтому окно закрываем: иначе
-// таймеры jsdom удержат процесс тестов после последней проверки.
-function mount(t, seedMarks = null) {
+// Запись отметок отложена на SAVE_DELAY_MS, а отсчёт таймера идёт по настоящим
+// часам — эти тесты ждут реального времени, а не фальшивого.
+const settle = ms => new Promise(resolve => setTimeout(resolve, ms));
+
+// Клиент Telegram ровно в том объёме, в каком его трогает telegram.js.
+function fakeWebApp({ version = '6.9', cloud = null } = {}) {
+  const calls = [];
+  const backHandlers = [];
+  return {
+    calls,
+    backHandlers,
+    initDataUnsafe: {},
+    CloudStorage: cloud,
+    isVersionAtLeast: asked => Number.parseFloat(version) >= Number.parseFloat(asked),
+    ready() {},
+    expand() {},
+    disableVerticalSwipes() {},
+    setHeaderColor() {},
+    setBackgroundColor() {},
+    openLink(url) { calls.push(`open:${url}`); },
+    HapticFeedback: {
+      impactOccurred: style => calls.push(`impact:${style}`),
+      notificationOccurred: type => calls.push(`notify:${type}`),
+    },
+    BackButton: {
+      onClick(handler) { backHandlers.push(handler); calls.push('back:onClick'); },
+      show: () => calls.push('back:show'),
+      hide: () => calls.push('back:hide'),
+    },
+  };
+}
+
+// CloudStorage отвечает не сразу — за ним запрос к клиенту Telegram.
+// Задержка здесь и есть то окно, в которое человек успевает нажать чекбокс.
+function fakeCloud({ data = {}, delay = 0 } = {}) {
+  const calls = [];
+  const answer = (callback, ...args) => setTimeout(() => callback(...args), delay);
+  return {
+    calls,
+    data,
+    getItem(key, callback) { calls.push(`get:${key}`); answer(callback, null, data[key] ?? ''); },
+    setItem(key, value, callback) { calls.push(`set:${value}`); data[key] = value; answer(callback, null, true); },
+    removeItem(key, callback) { calls.push(`remove:${key}`); delete data[key]; answer(callback, null, true); },
+  };
+}
+
+function mount(t, { marks = null, webApp = null, freezeTimers = false } = {}) {
   const { window, document } = makeDom(PAGE);
   t.after(() => window.close());
-  if (seedMarks) window.localStorage.setItem(todayKey(), JSON.stringify(seedMarks));
+  if (marks) window.localStorage.setItem(todayKey(), JSON.stringify(marks));
+  if (webApp) window.Telegram = { WebApp: webApp };
+  // Обезвреженный setInterval — это свёрнутый мини-апп: клиент Telegram
+  // морозит таймеры целиком, а фоновая вкладка браузера их прореживает.
+  if (freezeTimers) window.setInterval = () => 0;
   return { window, document, app: startApp(window) };
 }
 
@@ -44,8 +92,20 @@ test('страница собирается: блоки, упражнения, �
   assert.equal(document.getElementById('progress-text').textContent, `Сегодня: 0 из ${TOTAL} отметок`);
   assert.equal(document.getElementById('progress').max, TOTAL);
   assert.equal(document.getElementById('progress').value, 0);
-  assert.equal(document.querySelector('.eyebrow').textContent, WORKOUT.kicker);
+  assert.equal(document.getElementById('kicker').textContent, WORKOUT.kicker);
   assert.equal(document.querySelectorAll('#progression-list li').length, WORKOUT.progression.length);
+});
+
+// Начальная длительность живёт в одном месте — в разметке, на пресете
+// с aria-pressed. Если её оттуда уберут, приложению нечего показать на табло,
+// и узнать об этом надо здесь, а не на телефоне.
+test('таймер стартует с длительности, отмеченной в разметке', t => {
+  const { document, app } = mount(t);
+
+  assert.equal(document.getElementById('timer-value').textContent, '01:00');
+  assert.equal(app.timer.remaining, 60);
+  assert.equal(document.querySelector('.presets button[aria-pressed="true"]').dataset.time, '60');
+  assert.equal(document.getElementById('timer-toggle').textContent, 'Старт');
 });
 
 test('отметка добавляется в набор, красит упражнение и двигает счётчик', t => {
@@ -115,12 +175,13 @@ test('отметка доезжает до хранилища', async t => {
 
   const box = boxes(document)[0];
   box.click();
+  await settle(700);
   assert.deepEqual(JSON.parse(window.localStorage.getItem(todayKey())), [box.dataset.mark]);
 });
 
 test('сохранённые отметки проставляются, когда хранилище ответило', async t => {
   const saved = ['start-0-1', 'start-1-1'];
-  const { document, app } = mount(t, saved);
+  const { document, app } = mount(t, { marks: saved });
 
   assert.equal(app.marks.size, 0, 'до ответа хранилища разметка уже на экране, но пустая');
   assert.equal(boxes(document).length, TOTAL, 'экран не пустой ещё до загрузки отметок');
@@ -131,12 +192,57 @@ test('сохранённые отметки проставляются, когд
   assert.equal(document.querySelector('#start .exercise').classList.contains('completed'), true);
 });
 
+// Гонка, из-за которой отметки исчезали: человек открывает мини-апп посреди
+// тренировки и отмечает только что закрытый круг, пока CloudStorage ещё думает.
+// Приехавшее обязано объединиться с нажатым — и в наборе, и в хранилище,
+// потому что ранняя запись успела сохранить набор без старых отметок.
+test('ранняя отметка не стирает приехавшие из хранилища', async t => {
+  const saved = ['start-0-1', 'start-1-1', 'circuit-0-1', 'circuit-1-1', 'circuit-2-1'];
+  // Ответ облака отстаёт от склейки записей: к моменту, когда старые отметки
+  // приедут, ранняя уже успеет сохраниться — одна, без них. Настоящий
+  // CloudStorage отвечает и дольше: его таймаут — пять секунд.
+  const cloud = fakeCloud({ data: { [todayKey()]: JSON.stringify(saved) }, delay: 700 });
+  const { document, app } = mount(t, { webApp: fakeWebApp({ cloud }) });
+
+  const box = document.querySelector('#legs1 input[data-mark]');
+  box.click();
+  assert.equal(app.marks.size, 1, 'пока хранилище молчит, на экране только своя отметка');
+
+  await app.ready;
+  const expected = [...saved, box.dataset.mark].sort();
+  assert.deepEqual([...app.marks].sort(), expected);
+  assert.equal(document.getElementById('progress').value, 6);
+  assert.equal(box.checked, true);
+  assert.ok(cloud.calls.includes(`get:${todayKey()}`), 'облако у клиента 6.9 действительно спрашивают');
+  assert.deepEqual(JSON.parse(cloud.data[todayKey()]), [box.dataset.mark],
+    'ранняя запись и правда затёрла в хранилище всё остальное');
+
+  // Значит, объединённый набор обязан уехать туда следом — иначе пять отметок
+  // останутся на экране, но пропадут из хранилища.
+  await settle(700);
+  assert.deepEqual(JSON.parse(cloud.data[todayKey()]).sort(), expected);
+});
+
+// Обратная сторона той же дописки: открыть тренировку и ничего не трогать —
+// не повод лезть в CloudStorage с записью.
+test('открытие без единого касания ничего не пишет в хранилище', async t => {
+  const cloud = fakeCloud({ data: { [todayKey()]: JSON.stringify(['start-0-1', 'start-1-1']) } });
+  const { app } = mount(t, { webApp: fakeWebApp({ cloud }) });
+
+  await app.ready;
+  await settle(700);
+  assert.equal(app.marks.size, 2);
+  assert.deepEqual(cloud.calls.filter(call => !call.startsWith('get:')), []);
+});
+
 test('сброс очищает набор, экран и хранилище', async t => {
-  const { window, document, app } = mount(t, ['start-0-1']);
+  const { window, document, app } = mount(t, { marks: ['start-0-1'] });
   await app.ready;
   assert.equal(app.marks.size, 1);
+  window.confirm = () => true;
 
   document.getElementById('reset').click();
+  await settle(0);
 
   assert.equal(app.marks.size, 0);
   assert.equal(boxes(document).some(box => box.checked), false);
@@ -146,10 +252,40 @@ test('сброс очищает набор, экран и хранилище', a
   assert.equal(window.localStorage.getItem(todayKey()), null);
 });
 
+// Сброс стирает работу целиком, поэтому его переспрашивают — как в оригинале.
+test('сброс спрашивает подтверждение, и отказ оставляет отметки на месте', async t => {
+  const { window, document, app } = mount(t, { marks: ['start-0-1'] });
+  await app.ready;
+  const asked = [];
+  window.confirm = message => { asked.push(message); return false; };
+
+  document.getElementById('reset').click();
+  await settle(0);
+
+  assert.deepEqual(asked, ['Сбросить все отметки за сегодня?']);
+  assert.equal(app.marks.size, 1);
+  assert.equal(boxes(document).filter(box => box.checked).length, 1);
+  assert.deepEqual(JSON.parse(window.localStorage.getItem(todayKey())), ['start-0-1']);
+});
+
+test('пустой список сбрасывается без вопроса', async t => {
+  const { window, document, app } = mount(t);
+  await app.ready;
+  let asked = 0;
+  window.confirm = () => { asked += 1; return true; };
+
+  document.getElementById('reset').click();
+  await settle(0);
+
+  assert.equal(asked, 0);
+  assert.equal(app.marks.size, 0);
+});
+
 // load асинхронный, и пользователь успевает нажать раньше ответа хранилища.
-// Тогда главнее его действие: иначе приехавшие отметки молча отменили бы сброс.
+// Сброс — единственное действие, которое приехавшее отменяет: он ровно про
+// то, чтобы забыть сохранённое.
 test('сброс, сделанный до ответа хранилища, не отменяется приехавшими отметками', async t => {
-  const { document, app } = mount(t, ['start-0-1', 'start-1-1']);
+  const { document, app } = mount(t, { marks: ['start-0-1', 'start-1-1'] });
 
   document.getElementById('reset').click();
   await app.ready;
@@ -157,6 +293,59 @@ test('сброс, сделанный до ответа хранилища, не 
   assert.equal(app.marks.size, 0);
   assert.equal(boxes(document).some(box => box.checked), false);
   assert.equal(document.getElementById('progress').value, 0);
+});
+
+// Пятнадцать тапов подряд — это не пятнадцать записей: при мёртвой сети каждая
+// ждала бы свой таймаут в очереди. Склейка безопасна, потому что сохраняется
+// набор целиком, и последнее изменение в неё обязано попасть.
+test('частые отметки склеиваются в одну запись с актуальным набором', async t => {
+  const cloud = fakeCloud();
+  const { document, app } = mount(t, { webApp: fakeWebApp({ cloud }) });
+  await app.ready;
+
+  const marked = boxes(document).slice(0, 3);
+  for (const box of marked) box.click();
+  assert.deepEqual(cloud.calls.filter(call => call.startsWith('set:')), [], 'сразу не пишем');
+
+  await settle(700);
+  const writes = cloud.calls.filter(call => call.startsWith('set:'));
+  assert.equal(writes.length, 1, 'три тапа — одна запись');
+  assert.deepEqual(JSON.parse(cloud.data[todayKey()]).sort(), marked.map(box => box.dataset.mark).sort());
+});
+
+test('уход в фон дописывает отметку, не дожидаясь склейки', async t => {
+  const cloud = fakeCloud();
+  const { window, document, app } = mount(t, { webApp: fakeWebApp({ cloud }) });
+  await app.ready;
+
+  const box = boxes(document)[0];
+  box.click();
+  Object.defineProperty(window.document, 'hidden', { value: true, configurable: true });
+  window.document.dispatchEvent(new window.Event('visibilitychange'));
+
+  // Ждём микрозадачу очереди записей в storage.js, а не задержку склейки:
+  // она втрое длиннее и к этому моменту ещё не истекла.
+  await settle(0);
+  assert.deepEqual(cloud.calls.filter(call => call.startsWith('set:')),
+    [`set:${JSON.stringify([box.dataset.mark])}`]);
+});
+
+// CloudStorage появился в Bot API 6.9. В клиенте постарше (и в обычном браузере,
+// где SDK представляется версией 6.0) каждый его вызов пишет ошибку в консоль
+// и бросает — поэтому облако там не берут вовсе.
+test('клиент старше 6.9 не получает ни одного обращения в CloudStorage', async t => {
+  const cloud = fakeCloud({ data: { [todayKey()]: JSON.stringify(['start-0-1']) } });
+  const { window, document, app } = mount(t, { webApp: fakeWebApp({ version: '6.0', cloud }) });
+  await app.ready;
+
+  assert.deepEqual(cloud.calls, [], 'даже читать не пробуем');
+  assert.equal(app.marks.size, 0, 'отметки взяты из localStorage, а он пуст');
+
+  const box = boxes(document)[0];
+  box.click();
+  await settle(700);
+  assert.deepEqual(cloud.calls, []);
+  assert.deepEqual(JSON.parse(window.localStorage.getItem(todayKey())), [box.dataset.mark]);
 });
 
 test('таймер на странице: пресет, старт, шаг, сброс', t => {
@@ -202,10 +391,193 @@ test('конец отдыха: панель гаснет в ноль и кноп
   assert.equal(document.querySelector('.timer').classList.contains('done'), false);
 });
 
+// Отсчёт идёт по настоящим часам, а не по числу срабатываний интервала:
+// первая секунда отдыха обязана быть секундой, а не остатком чужого периода.
+test('таймер отсчитывает настоящее время', async t => {
+  const { document, app } = mount(t);
+  const value = document.getElementById('timer-value');
+
+  document.querySelector('.presets button[data-time="20"]').click();
+  document.getElementById('timer-toggle').click();
+  assert.equal(value.textContent, '00:20');
+
+  await settle(300);
+  assert.equal(value.textContent, '00:20', 'за треть секунды не уходит целая');
+  await settle(900);
+  assert.equal(value.textContent, '00:19', 'через 1,2 с прошла ровно одна секунда');
+  await settle(1000);
+  assert.equal(value.textContent, '00:18', 'через 2,2 с — ровно две');
+  assert.equal(app.timer.running, true);
+});
+
+// Телефон в кармане: клиент Telegram останавливает таймеры свёрнутого мини-аппа,
+// браузер прореживает их в фоновой вкладке. Вернувшись, человек обязан увидеть
+// настоящее оставшееся время, а не то, на котором экран заснул.
+test('время, пока приложение было свёрнуто, досчитывается при возвращении', async t => {
+  const { window, document, app } = mount(t, { freezeTimers: true });
+  const value = document.getElementById('timer-value');
+
+  document.querySelector('.presets button[data-time="20"]').click();
+  document.getElementById('timer-toggle').click();
+
+  await settle(2200);
+  assert.equal(value.textContent, '00:20', 'пока интервал мёртв, экран стоит');
+
+  window.document.dispatchEvent(new window.Event('visibilitychange'));
+  assert.equal(value.textContent, '00:18', 'вернулись — и остаток пересчитан по часам');
+  assert.equal(app.timer.running, true);
+});
+
+// Человек на отдыхе смотрит не в экран, поэтому конец отдыха обязан быть
+// слышен. Отдыхаем до конца через таймер напрямую: ждать двадцать секунд
+// в тесте незачем, а путь onDone тот же самый.
+function restToTheEnd({ window, document, app }) {
+  const buzz = [];
+  Object.defineProperty(window.navigator, 'vibrate', { value: pattern => buzz.push(pattern), configurable: true });
+  document.querySelector('.presets button[data-time="20"]').click();
+  document.getElementById('timer-toggle').click();
+  for (let i = 0; i < 20; i += 1) app.timer.tick();
+  assert.equal(document.getElementById('timer-status').textContent, 'Отдых закончен');
+  return buzz;
+}
+
+test('конец отдыха без клиента Telegram отзывается вибрацией устройства', t => {
+  assert.deepEqual(restToTheEnd(mount(t)), [[120, 80, 120]]);
+});
+
+// Главный случай: страница в обычном браузере. SDK подключён всегда и объект
+// WebApp отдаёт даже там — но версии 6.0, в которой HapticFeedback только пишет
+// предупреждение в консоль. Проверка «мы внутри Telegram?» тут отвечает «да»
+// и оставила бы человека вообще без сигнала.
+test('конец отдыха на клиенте без HapticFeedback всё равно отзывается вибрацией', t => {
+  const webApp = fakeWebApp({ version: '6.0' });
+  const buzz = restToTheEnd(mount(t, { webApp }));
+
+  assert.deepEqual(buzz, [[120, 80, 120]]);
+  assert.deepEqual(webApp.calls.filter(call => call.startsWith('notify:')), [], 'клиент отклика не давал');
+});
+
+test('на современном клиенте отзывается он сам, а не вибромотор', t => {
+  const webApp = fakeWebApp();
+  const buzz = restToTheEnd(mount(t, { webApp }));
+
+  assert.deepEqual(buzz, [], 'двойного отклика быть не должно');
+  assert.equal(webApp.calls.at(-1), 'notify:success');
+});
+
+// Отклик на отметку и на закрытый блок — разный: последний круг блока
+// подтверждается заметнее, чем каждый промежуточный.
+test('каждая отметка отзывается, а закрытый блок — отдельным откликом', t => {
+  const webApp = fakeWebApp();
+  const { document } = mount(t, { webApp });
+  const block = [...document.querySelectorAll('#legs1 input[data-mark]')];
+
+  for (const box of block) box.click();
+
+  const haptics = webApp.calls.filter(call => call.startsWith('impact:') || call.startsWith('notify:'));
+  assert.equal(haptics.length, block.length, 'отзывается каждая отметка');
+  assert.deepEqual(haptics.slice(0, -1), Array(block.length - 1).fill('impact:light'));
+  assert.equal(haptics.at(-1), 'notify:success', 'последний круг блока — другой отклик');
+});
+
+// BackButton.onClick у настоящего клиента накапливает обработчики, а не
+// заменяет их, поэтому вешаем ровно один раз.
+test('кнопка «назад» получает один обработчик и увозит страницу наверх', t => {
+  const webApp = fakeWebApp();
+  const { window } = mount(t, { webApp });
+  const scrolls = [];
+  window.scrollTo = options => scrolls.push(options);
+
+  assert.equal(webApp.backHandlers.length, 1);
+  webApp.backHandlers[0]();
+  assert.deepEqual(scrolls, [{ top: 0, behavior: 'smooth' }]);
+});
+
+test('кнопка «назад» не прокручивает плавно, когда плавность просили выключить', t => {
+  const webApp = fakeWebApp();
+  const { window } = mount(t, { webApp });
+  const scrolls = [];
+  window.scrollTo = options => scrolls.push(options);
+  window.matchMedia = query => ({ media: query, matches: query.includes('prefers-reduced-motion') });
+
+  webApp.backHandlers[0]();
+  assert.deepEqual(scrolls, [{ top: 0, behavior: 'instant' }]);
+});
+
+// setBackVisible каждый раз ходит в клиент Telegram, а событий прокрутки за один
+// жест десятки: зовём его только когда ответ меняется.
+test('кнопка «назад» показывается один раз на весь уход вниз', t => {
+  const webApp = fakeWebApp();
+  const { window } = mount(t, { webApp });
+  const scrollTo = y => {
+    Object.defineProperty(window, 'scrollY', { value: y, configurable: true });
+    window.dispatchEvent(new window.Event('scroll'));
+  };
+
+  scrollTo(window.innerHeight * 2);
+  scrollTo(window.innerHeight * 3);
+  scrollTo(window.innerHeight * 4);
+  assert.deepEqual(webApp.calls.filter(call => call.startsWith('back:')), ['back:onClick', 'back:show']);
+
+  scrollTo(0);
+  scrollTo(10);
+  assert.deepEqual(webApp.calls.filter(call => call.startsWith('back:')),
+    ['back:onClick', 'back:show', 'back:hide']);
+});
+
 test('плеер подменяет ссылки на видео кнопками', t => {
   const { document } = mount(t);
   assert.equal(document.querySelectorAll('#workout a.video').length, 0);
   assert.ok(document.querySelectorAll('#workout button.video').length > 0);
   const button = document.querySelector('#workout button.video');
   assert.equal(button.getAttribute('aria-expanded'), 'false');
+});
+
+test('Escape закрывает открытый плеер', t => {
+  const { window, document } = mount(t);
+  const button = document.querySelector('#workout button.video');
+
+  button.click();
+  assert.ok(document.querySelector('.player-shell'), 'плеер открылся');
+  assert.equal(button.getAttribute('aria-expanded'), 'true');
+
+  document.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape' }));
+  assert.equal(document.querySelector('.player-shell'), null);
+  assert.equal(button.getAttribute('aria-expanded'), 'false');
+});
+
+// Видео смотрят с телефона в руке: без полноэкранного режима упражнение
+// приходится разглядывать в полоске между карточками.
+test('встроенному плееру разрешён полный экран', t => {
+  const { document } = mount(t);
+  document.querySelector('#workout button.video').click();
+
+  const frame = document.querySelector('.player-shell iframe');
+  assert.equal(frame.allowFullscreen, true);
+  assert.match(frame.allow, /fullscreen/);
+});
+
+// Внутри Telegram target="_blank" не работает — внешняя ссылка обязана уходить
+// через слой клиента, ради чего openLink и передаётся в setupPlayers.
+test('«Открыть в YouTube» уходит через слой Telegram', t => {
+  const webApp = fakeWebApp();
+  const { document } = mount(t, { webApp });
+  document.querySelector('#workout button.video').click();
+
+  document.querySelector('.player-shell .player-external').click();
+
+  const opened = webApp.calls.filter(call => call.startsWith('open:'));
+  assert.equal(opened.length, 1);
+  assert.match(opened[0], /^open:https:\/\/www\.youtube\.com\/watch\?v=/);
+});
+
+test('навигация подсвечивает блок, о котором сообщил наблюдатель', t => {
+  const { window, document } = mount(t);
+  const [observer] = window.intersectionObservers;
+
+  assert.equal(observer.targets.length, WORKOUT.blocks.length, 'наблюдают за всеми блоками');
+  observer.intersect(document.getElementById('legs1'));
+
+  const active = [...document.querySelectorAll('.block-nav a.active')];
+  assert.deepEqual(active.map(link => link.hash), ['#legs1']);
 });

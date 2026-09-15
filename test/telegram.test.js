@@ -7,6 +7,8 @@ function fakeWebApp(overrides = {}) {
   return {
     calls,
     initDataUnsafe: {},
+    // Современный клиент: версию спрашивают и у haptic (6.1), и у confirm (6.2).
+    isVersionAtLeast: () => true,
     ready: () => calls.push('ready'),
     expand: () => calls.push('expand'),
     disableVerticalSwipes: () => calls.push('disableVerticalSwipes'),
@@ -134,6 +136,46 @@ test('haptic для завершения блока вызывает ровно 
   initTelegram(fakeWin(webApp)).haptic('done');
   assert.deepEqual(notifications, ['success']);
   assert.deepEqual(impacts, []);
+});
+
+// HapticFeedback появился в Bot API 6.1. На клиенте постарше — и в обычном
+// браузере, где подключённый со страницы SDK всё равно отдаёт объект WebApp и
+// представляется версией 6.0, — метод существует, но только пишет предупреждение
+// в консоль. Слой обязан сказать об этом честно: по «нет» вызывающий сигналит
+// сам, вибромотором устройства, иначе конец отдыха не отмечается ничем.
+test('haptic отвечает, был ли отклик на самом деле', () => {
+  const worked = [];
+  const modern = fakeWebApp({
+    HapticFeedback: {
+      impactOccurred: () => worked.push('impact'),
+      notificationOccurred: () => worked.push('notify'),
+    },
+  });
+  assert.equal(initTelegram(fakeWin(modern)).haptic('done'), true);
+  assert.deepEqual(worked, ['notify']);
+
+  const broken = fakeWebApp({
+    HapticFeedback: { notificationOccurred: () => { throw new Error('boom'); } },
+  });
+  assert.equal(initTelegram(fakeWin(broken)).haptic('done'), false);
+
+  assert.equal(initTelegram({ location: { search: '' } }).haptic('done'), false, 'вне Telegram отклика нет');
+});
+
+test('на клиенте старше 6.1 haptic не трогает HapticFeedback и отвечает «не было»', () => {
+  const touched = [];
+  const old = fakeWebApp({
+    isVersionAtLeast: asked => asked === '6.0',
+    HapticFeedback: {
+      impactOccurred: () => touched.push('impact'),
+      notificationOccurred: () => touched.push('notify'),
+    },
+  });
+  const tg = initTelegram(fakeWin(old));
+
+  assert.equal(tg.haptic('mark'), false);
+  assert.equal(tg.haptic('done'), false);
+  assert.deepEqual(touched, []);
 });
 
 // Дополнительное покрытие: ненадёжность настоящего Telegram WebApp API.
