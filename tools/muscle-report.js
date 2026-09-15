@@ -1,0 +1,129 @@
+// Генерирует docs/muscle-map.md — сводку разметки мышц (поле load в
+// workouts/*.js) для вычитки человеком. Разметка составлена по описаниям
+// упражнений, это инженерное суждение, а не заключение тренера: ошибка в ней
+// ничего не ломает и нигде не падает, а тихо искажает будущую оценку нагрузки.
+// Отсюда и требование к этому файлу: то, что он печатает, должно быть
+// дословно верно — вычитывающий человек не увидит исходных данных, только текст.
+//
+// Запуск: node tools/muscle-report.js
+import { writeFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { MUSCLES, muscleLabel } from '../muscles.js';
+import { WORKOUTS } from '../workouts/index.js';
+
+const KIND_LABELS = { warmup: 'Разминка', strength: 'Силовое', cooldown: 'Заминка' };
+
+// Как muscleLabel в muscles.js: неизвестное значение — это повод упасть, а не
+// молча протащить английский идентификатор в русский текст отчёта. Тихий
+// фолбэк на item.kind был бы решением, которое ничего не решает: на
+// провалидированных данных он недостижим, а если всё-таки сработает —
+// испортит документ незаметно для читателя.
+function kindLabel(kind) {
+  const label = KIND_LABELS[kind];
+  if (!label) throw new Error(`Неизвестный kind: ${kind}`);
+  return label;
+}
+
+// Порядок и заголовки сводных таблиц подходов. Силовая идёт первой: именно на
+// ней построена прогрессия программы (progression в workouts/*.js говорит
+// только про силовые пары). Разминка и заминка — с примечанием, почему их
+// нельзя складывать с силовой в одно число: резинка там лёгкая, без роста
+// нагрузки, и это качественно другое усилие, а не тот же «подход».
+const KIND_SECTIONS = [
+  { kind: 'strength', heading: 'Силовые подходы за одну тренировку', note: null },
+  {
+    kind: 'warmup', heading: 'Дополнительно нагружаются в разминке',
+    note: 'Разминочные раунды идут с лёгкой резинкой и не растут по программе — это не силовой подход.',
+  },
+  {
+    kind: 'cooldown', heading: 'Дополнительно нагружаются в заминке',
+    note: 'Заминка — это удержание на растяжку, а не подход на повторения.',
+  },
+];
+
+function muscleColumns(load) {
+  const primary = Object.entries(load).filter(([, v]) => v === 1).map(([id]) => muscleLabel(id));
+  const secondary = Object.entries(load).filter(([, v]) => v === 0.5).map(([id]) => muscleLabel(id));
+  return [primary.join(', ') || '—', secondary.join(', ') || '—'];
+}
+
+function reportForWorkout(workout) {
+  const lines = [`## ${workout.title}`, '', '| Блок | Упражнение | Целевые | Вспомогательные | Тип |', '|---|---|---|---|---|'];
+
+  // Подходы по группам мышц, раздельно по типу упражнения:
+  // totalsByKind.get(kind) → Map(id группы -> сумма value * rounds блока).
+  // Раздельно намеренно — см. комментарий у KIND_SECTIONS.
+  const totalsByKind = new Map();
+  for (const block of workout.blocks) {
+    for (const item of block.items) {
+      const [primary, secondary] = muscleColumns(item.load);
+      lines.push(`| ${block.nav} | ${item.name} | ${primary} | ${secondary} | ${kindLabel(item.kind)} |`);
+
+      const kindTotals = totalsByKind.get(item.kind) ?? new Map();
+      for (const [id, value] of Object.entries(item.load)) {
+        kindTotals.set(id, (kindTotals.get(id) ?? 0) + value * block.rounds);
+      }
+      totalsByKind.set(item.kind, kindTotals);
+    }
+  }
+
+  for (const { kind, heading, note } of KIND_SECTIONS) {
+    const totals = totalsByKind.get(kind);
+    if (!totals || totals.size === 0) continue; // нечего показывать — не рисуем пустую таблицу
+    lines.push('', `### ${heading}`, '');
+    if (note) lines.push(note, '');
+    lines.push('| Группа | Подходов |', '|---|---|');
+    for (const [id, sum] of [...totals].sort((a, b) => b[1] - a[1])) {
+      lines.push(`| ${muscleLabel(id)} | ${sum} |`);
+    }
+  }
+
+  // «Не задействованы» обязана учитывать упражнения ЛЮБОГО типа, а не только
+  // силовые. Раньше эта строка считалась от одних силовых totals и поэтому
+  // могла назвать «не задействованной» группу, которая на деле грузится в
+  // разминке несколько кругов за тренировку, — то есть прямо соврать
+  // читателю, который как раз и вычитывает эту разметку. Здесь — объединение
+  // всех totalsByKind, поэтому в списке остаются только группы, не тронутые
+  // вообще ничем.
+  const touchedAnywhere = new Set();
+  for (const totals of totalsByKind.values()) {
+    for (const id of totals.keys()) touchedAnywhere.add(id);
+  }
+  const untouched = Object.keys(MUSCLES).filter(id => !touchedAnywhere.has(id)).map(muscleLabel);
+  lines.push('', `Не задействованы ни в одном упражнении: ${untouched.join(', ') || '—'}`, '');
+
+  return lines;
+}
+
+export function buildReportLines(workouts = WORKOUTS) {
+  const lines = [
+    '# Разметка групп мышц', '',
+    'Файл сгенерирован `node tools/muscle-report.js`. Правьте не его, а `workouts/*.js`,',
+    'затем перегенерируйте.', '',
+    'Разметка (поле `load` в `workouts/*.js`) составлена по описаниям упражнений и',
+    'нуждается в вычитке: ошибка здесь ничего не ломает и нигде не падает — она тихо',
+    'исказит будущую оценку тренировочной нагрузки.', '',
+    'Подходы ниже посчитаны раздельно для силовых, разминочных и заминочных',
+    'упражнений — это разная по характеру нагрузка, и складывать её в одно число',
+    'означало бы уравнять лёгкую разминку с рабочим силовым подходом. Число в',
+    'таблице — это вклад упражнения (1 для целевой группы, 0.5 для вспомогательной),',
+    'умноженный на число кругов блока и просуммированный по упражнениям; отсюда',
+    'дробные значения вроде 1.5. Строка «Не задействованы» — про упражнения всех',
+    'типов сразу: единственное место в этом отчёте, где утверждается, что группа',
+    'не работает вообще.', '',
+  ];
+  for (const workout of Object.values(workouts)) {
+    lines.push(...reportForWorkout(workout));
+  }
+  return lines;
+}
+
+function isMainModule() {
+  return process.argv[1] === fileURLToPath(import.meta.url);
+}
+
+if (isMainModule()) {
+  const target = new URL('../docs/muscle-map.md', import.meta.url);
+  writeFileSync(target, buildReportLines().join('\n') + '\n');
+  console.log('docs/muscle-map.md обновлён');
+}

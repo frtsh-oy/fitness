@@ -2,10 +2,26 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { validateWorkout, countMarks } from '../workouts/schema.js';
 import legsMwf from '../workouts/legs-mwf.js';
-import { getWorkout, DEFAULT_WORKOUT_ID } from '../workouts/index.js';
+import { getWorkout, DEFAULT_WORKOUT_ID, WORKOUTS } from '../workouts/index.js';
 
 test('тренировка проходит валидацию схемы', () => {
   assert.deepEqual(validateWorkout(legsMwf), []);
+});
+
+// README обещает: «добавили workouts/<id>.js, зарегистрировали в WORKOUTS,
+// npm test проверит форму разметки». Это правда только если что-то в наборе
+// тестов действительно проходит по ВСЕМУ реестру, а не только по legs-mwf,
+// импортированному выше напрямую, — иначе новая тренировка со сломанной
+// схемой прошла бы npm test молча.
+test('каждая тренировка в реестре WORKOUTS проходит валидацию схемы', () => {
+  const entries = Object.entries(WORKOUTS);
+  // Пустой реестр дал бы пустой цикл и молчаливый зелёный тест, который на
+  // самом деле ничего не проверил, — ровно та ситуация, которую этот тест
+  // должен ловить, если регистрация тренировки где-то потеряется.
+  assert.ok(entries.length > 0, 'реестр WORKOUTS пуст — тест ничего не проверяет');
+  for (const [id, workout] of entries) {
+    assert.deepEqual(validateWorkout(workout), [], `${id}: схема не прошла валидацию`);
+  }
 });
 
 test('в тренировке 8 блоков и 19 упражнений', () => {
