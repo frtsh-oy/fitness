@@ -143,7 +143,8 @@ export default {
 
 ## Прогресс
 
-Единый интерфейс: `get()`, `set(key, value)`, `reset()`.
+Единый интерфейс: `load(workoutId)`, `save(workoutId, marks)`, `clear(workoutId)`.
+Возвращают обещания; `load` отдаёт множество идентификаторов отметок.
 
 Бэкенд выбирается при старте: `CloudStorage`, если доступен (Bot API 6.9+),
 иначе `localStorage`. Ключ включает id тренировки и дату — поведение
