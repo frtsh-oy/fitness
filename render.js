@@ -1,9 +1,9 @@
-// itemId — это НЕ обязательно индекс: если у упражнения есть свой key
-// (устойчивый идентификатор в данных), вызывающий код обязан передать его
-// сюда вместо индекса, чтобы отметка не «переезжала» на другое упражнение
-// при изменении порядка items в блоке — см. renderItem.
-export function markId(blockId, itemId, round) {
-  return `${blockId}-${itemId}-${round}`;
+// Идентификатор отметки строится из устойчивых частей данных: id блока и key
+// упражнения. Индекса здесь нет намеренно — по индексу отметки «переезжали» бы
+// на соседей при любой вставке упражнения в середину блока. key обязателен
+// у каждого упражнения, это сторожит валидатор (workouts/schema.js).
+export function markId(blockId, itemKey, round) {
+  return `${blockId}-${itemKey}-${round}`;
 }
 
 export function videoUrl([id, start = 0]) {
@@ -75,7 +75,7 @@ function renderItem(document, block, item, itemIndex) {
     const label = el(document, 'label', 'check');
     const input = document.createElement('input');
     input.type = 'checkbox';
-    input.dataset.mark = markId(block.id, item.key ?? itemIndex, round);
+    input.dataset.mark = markId(block.id, item.key, round);
     input.setAttribute('aria-label', `${item.name}: ${block.rounds === 1 ? 'выполнено' : `круг ${round}`}`);
     label.append(input, el(document, 'span', null, block.rounds === 1 ? 'Готово' : `Круг ${round}`));
     checks.append(label);

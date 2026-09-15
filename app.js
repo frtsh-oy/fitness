@@ -77,7 +77,11 @@ export function startApp(win = globalThis.window) {
   const marks = new Set();
   const progress = document.getElementById('progress');
   const progressText = document.getElementById('progress-text');
-  const total = host.querySelectorAll('input[data-mark]').length;
+  // Отметки, которые есть на экране: сколько их всего и какие именно. Второе
+  // нужно на слияние с хранилищем — см. ready ниже.
+  const onScreen = [...host.querySelectorAll('input[data-mark]')].map(box => box.dataset.mark);
+  const known = new Set(onScreen);
+  const total = onScreen.length;
   progress.max = total;
 
   function paint() {
@@ -139,7 +143,16 @@ export function startApp(win = globalThis.window) {
   let touchedBeforeLoad = false;
   const ready = storage.load(workout.id).then(saved => {
     if (resetBeforeLoad) return;
-    for (const id of saved) marks.add(id);
+    // Приехавшее сверяется с экраном. В хранилище за сегодня могут лежать
+    // идентификаторы, которых на странице уже нет: упражнению сменили key,
+    // упражнение убрали, блок переименовали. Без сверки такая отметка попадает
+    // в marks, и счётчик показывает «Сегодня: 4 из 37» при одном отмеченном
+    // чекбоксе, а при достатке мусора перевалит и за 37 — потому что и текст,
+    // и полоса прогресса считаются по размеру набора. Из набора они уходят
+    // насовсем: сохраняется он целиком, поэтому первая же запись вычистит их
+    // и из хранилища. В оригинале ровно для этого была явная чистка
+    // (src-original/app.js: удаление ключей по маске при переименовании).
+    for (const id of saved) if (known.has(id)) marks.add(id);
     // Ранняя отметка уже уехала в хранилище — одна, без сохранённых, потому что
     // save пишет набор целиком. Возвращаем туда объединённый набор, иначе старые
     // отметки пропадут из хранилища, даже оставшись на экране.

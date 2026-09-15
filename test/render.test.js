@@ -25,9 +25,9 @@ function extractOriginalPairRules() {
   };
 }
 
-test('markId собирает идентификатор из блока, идентификатора упражнения и круга', () => {
-  assert.equal(markId('legs1', 0, 1), 'legs1-0-1');
-  assert.equal(markId('circuit', 3, 2), 'circuit-3-2');
+test('markId собирает идентификатор из блока, ключа упражнения и круга', () => {
+  assert.equal(markId('legs1', 'rdl', 1), 'legs1-rdl-1');
+  assert.equal(markId('circuit', 'knee-raise', 2), 'circuit-knee-raise-2');
   assert.equal(markId('legs3', 'bird-dog', 2), 'legs3-bird-dog-2');
 });
 
@@ -65,43 +65,66 @@ test('идентификаторы отметок уникальны', () => {
   assert.equal(new Set(ids).size, ids.length);
 });
 
-test('идентификатор отметки строится по item.key, если он есть, иначе по индексу упражнения', () => {
+test('идентификатор отметки строится по item.key, а не по позиции упражнения', () => {
   const { document } = makeDom();
   const fragment = renderWorkout(legsMwf, document);
   const legs3 = fragment.querySelector('#legs3');
   const exercises = [...legs3.querySelectorAll('.exercise')];
   const idsOf = article => [...article.querySelectorAll('input[data-mark]')].map(i => i.dataset.mark);
 
-  // item[0] «Подъём верхней ноги лёжа на боку» — key не задан, id по индексу (0).
-  assert.deepEqual(idsOf(exercises[0]), ['legs3-0-1', 'legs3-0-2']);
-  // item[1] «Птица-собака» — key: 'bird-dog', id по key, а не по индексу (1).
+  // Ни один идентификатор не содержит позиции: оба упражнения блока — по ключу.
+  assert.deepEqual(idsOf(exercises[0]), ['legs3-side-leg-raise-1', 'legs3-side-leg-raise-2']);
   assert.deepEqual(idsOf(exercises[1]), ['legs3-bird-dog-1', 'legs3-bird-dog-2']);
 });
 
-test('перестановка упражнений внутри блока не меняет идентификатор отметки у упражнения с key', () => {
+// key обязателен у каждого упражнения — это проверяет валидатор. Рендерер
+// на его отсутствие не рассчитывает, и подстраховки «взять индекс» у него нет:
+// такая подстраховка тихо вернула бы переезжающие отметки.
+test('идентификаторы всех отметок построены по ключам упражнений', () => {
+  const { document } = makeDom();
+  const fragment = renderWorkout(legsMwf, document);
+  const expected = legsMwf.blocks.flatMap(block => block.items.flatMap(
+    item => Array.from({ length: block.rounds }, (_, r) => `${block.id}-${item.key}-${r + 1}`)));
+  const actual = [...fragment.querySelectorAll('input[data-mark]')].map(i => i.dataset.mark);
+  assert.deepEqual(actual, expected);
+});
+
+// Ради чего key вообще нужен: вставка или перестановка упражнений не должна
+// переносить чужие отметки. Раньше этим свойством обладали три упражнения из
+// девятнадцати, у остальных идентификатор строился по позиции.
+test('перестановка упражнений внутри блока не меняет ни одного идентификатора отметки', () => {
   const { document: doc1 } = makeDom();
   const before = renderWorkout(legsMwf, doc1);
-  const beforeAll = [...before.querySelector('#legs3').querySelectorAll('input[data-mark]')].map(i => i.dataset.mark);
+  const idsOf = fragment => [...fragment.querySelector('#legs3').querySelectorAll('input[data-mark]')]
+    .map(i => i.dataset.mark).sort();
 
   const reordered = structuredClone(legsMwf);
   reordered.blocks.find(b => b.id === 'legs3').items.reverse();
   const { document: doc2 } = makeDom();
   const after = renderWorkout(reordered, doc2);
-  const afterAll = [...after.querySelector('#legs3').querySelectorAll('input[data-mark]')].map(i => i.dataset.mark);
 
-  // Суть находки: у упражнения с key ('bird-dog') идентификатор не меняется,
-  // хотя оно переехало с позиции 1 на позицию 0.
-  const keyedBefore = beforeAll.filter(id => id.includes('bird-dog'));
-  const keyedAfter = afterAll.filter(id => id.includes('bird-dog'));
-  assert.deepEqual(keyedAfter, keyedBefore);
-  assert.deepEqual(keyedBefore, ['legs3-bird-dog-1', 'legs3-bird-dog-2']);
+  assert.deepEqual(idsOf(after), idsOf(before));
+  assert.deepEqual(idsOf(before),
+    ['legs3-bird-dog-1', 'legs3-bird-dog-2', 'legs3-side-leg-raise-1', 'legs3-side-leg-raise-2']);
+});
 
-  // Контраст: у упражнения без key идентификатор строится по индексу и поэтому
-  // меняется вместе с позицией (было legs3-0-*, стало legs3-1-*).
-  const indexedBefore = beforeAll.filter(id => id.startsWith('legs3-0-'));
-  const indexedAfter = afterAll.filter(id => id.startsWith('legs3-1-'));
-  assert.deepEqual(indexedBefore, ['legs3-0-1', 'legs3-0-2']);
-  assert.deepEqual(indexedAfter, ['legs3-1-1', 'legs3-1-2']);
+// Та же проверка для вставки нового упражнения в начало блока: именно этот
+// случай ломал отметки шестнадцати упражнений из девятнадцати.
+test('вставка упражнения в начало блока не трогает идентификаторы соседей', () => {
+  const { document: doc1 } = makeDom();
+  const before = renderWorkout(legsMwf, doc1);
+  const idsOf = fragment => [...fragment.querySelector('#legs2').querySelectorAll('input[data-mark]')]
+    .map(i => i.dataset.mark);
+
+  const withNew = structuredClone(legsMwf);
+  const block = withNew.blocks.find(b => b.id === 'legs2');
+  block.items.unshift({ ...block.items[0], key: 'новое', name: 'Новое упражнение' });
+  const { document: doc2 } = makeDom();
+  const after = renderWorkout(withNew, doc2);
+
+  const newIds = idsOf(after).filter(id => id.includes('новое'));
+  assert.equal(newIds.length, block.rounds, 'новое упражнение не получило своих отметок');
+  assert.deepEqual(idsOf(after).filter(id => !id.includes('новое')), idsOf(before));
 });
 
 test('у блока с одним кругом отметка подписана «Готово», у многокруговых — «Круг N»', () => {

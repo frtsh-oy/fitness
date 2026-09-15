@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { makeDom } from './setup.js';
 import { startApp } from '../app.js';
 import { storageKey, currentDay } from '../storage.js';
+import { markId } from '../render.js';
 import { getWorkout } from '../workouts/index.js';
 import { countMarks } from '../workouts/schema.js';
 
@@ -18,6 +19,14 @@ const TOTAL = countMarks(WORKOUT);
 // а не пересчитывается здесь заново — иначе тест разошёлся бы с приложением
 // молча, ключами, которые просто не совпали.
 const todayKey = () => storageKey(WORKOUT.id, currentDay());
+
+// Идентификатор отметки строится из id блока и key упражнения (render.js).
+// Берём его из данных, а не набираем руками: набранный руками разошёлся бы с
+// приложением молча — такие отметки теперь просто не попадают на экран.
+const markOf = (blockIndex, itemIndex, round = 1) => {
+  const block = WORKOUT.blocks[blockIndex];
+  return markId(block.id, block.items[itemIndex].key, round);
+};
 
 // Запись отметок отложена на SAVE_DELAY_MS, а отсчёт таймера идёт по настоящим
 // часам — эти тесты ждут реального времени, а не фальшивого.
@@ -266,7 +275,7 @@ test('отметка доезжает до хранилища', async t => {
 });
 
 test('сохранённые отметки проставляются, когда хранилище ответило', async t => {
-  const saved = ['start-0-1', 'start-1-1'];
+  const saved = [markOf(0, 0), markOf(0, 1)];
   const { document, app } = mount(t, { marks: saved });
 
   assert.equal(app.marks.size, 0, 'до ответа хранилища разметка уже на экране, но пустая');
@@ -278,12 +287,35 @@ test('сохранённые отметки проставляются, когд
   assert.equal(document.querySelector('#start .exercise').classList.contains('completed'), true);
 });
 
+// ФИНАЛЬНОЕ РЕВЬЮ, пункт 3: в хранилище за сегодня могут лежать отметки, для
+// которых на экране нет чекбокса — упражнению сменили key, упражнение убрали.
+// Счётчик и полоса прогресса считаются по размеру набора, поэтому такой мусор
+// показывал «Сегодня: 4 из 37» при одном отмеченном чекбоксе, а при достатке
+// мусора перевалил бы и за 37.
+test('устаревшие отметки из хранилища не попадают ни в набор, ни в счётчик', async t => {
+  const alive = markOf(0, 0);
+  const stale = ['start-0-1', 'legs1-старый-ключ-2', 'нет-такого-блока-x-1'];
+  const { window, document, app } = mount(t, { marks: [alive, ...stale] });
+  await app.ready;
+
+  assert.deepEqual([...app.marks], [alive], 'в наборе оказалось лишнее');
+  assert.equal(document.getElementById('progress').value, 1);
+  assert.equal(document.getElementById('progress-text').textContent, `Сегодня: 1 из ${TOTAL} отметок`);
+  assert.equal(boxes(document).filter(box => box.checked).length, 1);
+
+  // И из хранилища они уходят при первой же записи: сохраняется весь набор.
+  boxes(document)[1].click();
+  await settle(700);
+  assert.deepEqual(JSON.parse(window.localStorage.getItem(todayKey())).sort(),
+    [alive, boxes(document)[1].dataset.mark].sort());
+});
+
 // Гонка, из-за которой отметки исчезали: человек открывает мини-апп посреди
 // тренировки и отмечает только что закрытый круг, пока CloudStorage ещё думает.
 // Приехавшее обязано объединиться с нажатым — и в наборе, и в хранилище,
 // потому что ранняя запись успела сохранить набор без старых отметок.
 test('ранняя отметка не стирает приехавшие из хранилища', async t => {
-  const saved = ['start-0-1', 'start-1-1', 'circuit-0-1', 'circuit-1-1', 'circuit-2-1'];
+  const saved = [markOf(0, 0), markOf(0, 1), markOf(1, 0), markOf(1, 1), markOf(1, 2)];
   // Ответ облака отстаёт от склейки записей: к моменту, когда старые отметки
   // приедут, ранняя уже успеет сохраниться — одна, без них. Настоящий
   // CloudStorage отвечает и дольше: его таймаут — пять секунд.
@@ -313,16 +345,16 @@ test('ранняя отметка не стирает приехавшие из 
 // набора его не видно. Человек открыл мини-апп и отметил круг, который уже
 // отмечен: на экране всё честно, а в хранилище остался бы один круг из пяти.
 test('ранний тап по уже сохранённой отметке не обрезает хранилище', async t => {
-  const saved = ['start-0-1', 'start-1-1', 'circuit-0-1', 'circuit-1-1', 'circuit-2-1'];
+  const saved = [markOf(0, 0), markOf(0, 1), markOf(1, 0), markOf(1, 1), markOf(1, 2)];
   const cloud = fakeCloud({ data: { [todayKey()]: JSON.stringify(saved) }, delay: 700 });
   const { document, app } = mount(t, { webApp: fakeWebApp({ cloud }) });
 
-  const box = document.querySelector('input[data-mark="start-0-1"]');
+  const box = document.querySelector(`input[data-mark="${markOf(0, 0)}"]`);
   box.click();
 
   await app.ready;
   assert.deepEqual([...app.marks].sort(), [...saved].sort(), 'на экране все пять');
-  assert.deepEqual(JSON.parse(cloud.data[todayKey()]), ['start-0-1'],
+  assert.deepEqual(JSON.parse(cloud.data[todayKey()]), [markOf(0, 0)],
     'ранняя запись оставила в хранилище одну отметку');
 
   await settle(700);
@@ -333,7 +365,7 @@ test('ранний тап по уже сохранённой отметке не
 // различить вовсе, а в хранилище уезжает пустота. День стирается целиком от
 // одного исправленного промаха, и на экране это никак не видно.
 test('ранний тап со снятием не стирает день из хранилища', async t => {
-  const saved = ['start-0-1', 'start-1-1', 'circuit-0-1', 'circuit-1-1', 'circuit-2-1'];
+  const saved = [markOf(0, 0), markOf(0, 1), markOf(1, 0), markOf(1, 1), markOf(1, 2)];
   const cloud = fakeCloud({ data: { [todayKey()]: JSON.stringify(saved) }, delay: 700 });
   const { document, app } = mount(t, { webApp: fakeWebApp({ cloud }) });
 
@@ -353,7 +385,7 @@ test('ранний тап со снятием не стирает день из 
 // Обратная сторона той же дописки: открыть тренировку и ничего не трогать —
 // не повод лезть в CloudStorage с записью.
 test('открытие без единого касания ничего не пишет в хранилище', async t => {
-  const cloud = fakeCloud({ data: { [todayKey()]: JSON.stringify(['start-0-1', 'start-1-1']) } });
+  const cloud = fakeCloud({ data: { [todayKey()]: JSON.stringify([markOf(0, 0), markOf(0, 1)]) } });
   const { app } = mount(t, { webApp: fakeWebApp({ cloud }) });
 
   await app.ready;
@@ -363,7 +395,7 @@ test('открытие без единого касания ничего не п
 });
 
 test('сброс очищает набор, экран и хранилище', async t => {
-  const { window, document, app } = mount(t, { marks: ['start-0-1'] });
+  const { window, document, app } = mount(t, { marks: [markOf(0, 0)] });
   await app.ready;
   assert.equal(app.marks.size, 1);
   window.confirm = () => true;
@@ -381,7 +413,7 @@ test('сброс очищает набор, экран и хранилище', a
 
 // Сброс стирает работу целиком, поэтому его переспрашивают — как в оригинале.
 test('сброс спрашивает подтверждение, и отказ оставляет отметки на месте', async t => {
-  const { window, document, app } = mount(t, { marks: ['start-0-1'] });
+  const { window, document, app } = mount(t, { marks: [markOf(0, 0)] });
   await app.ready;
   const asked = [];
   window.confirm = message => { asked.push(message); return false; };
@@ -392,7 +424,7 @@ test('сброс спрашивает подтверждение, и отказ 
   assert.deepEqual(asked, ['Сбросить все отметки за сегодня?']);
   assert.equal(app.marks.size, 1);
   assert.equal(boxes(document).filter(box => box.checked).length, 1);
-  assert.deepEqual(JSON.parse(window.localStorage.getItem(todayKey())), ['start-0-1']);
+  assert.deepEqual(JSON.parse(window.localStorage.getItem(todayKey())), [markOf(0, 0)]);
 });
 
 test('пустой список сбрасывается без вопроса', async t => {
@@ -412,7 +444,7 @@ test('пустой список сбрасывается без вопроса',
 // Сброс — единственное действие, которое приехавшее отменяет: он ровно про
 // то, чтобы забыть сохранённое.
 test('сброс, сделанный до ответа хранилища, не отменяется приехавшими отметками', async t => {
-  const { document, app } = mount(t, { marks: ['start-0-1', 'start-1-1'] });
+  const { document, app } = mount(t, { marks: [markOf(0, 0), markOf(0, 1)] });
 
   document.getElementById('reset').click();
   await app.ready;
@@ -492,7 +524,7 @@ test('выгрузка страницы сразу после отметки о�
 // Уход с глаз — это не повод писать: каждое сворачивание мини-аппа без единого
 // изменения тратило бы обращение к облаку впустую.
 test('уход со страницы без несохранённых изменений ничего не пишет', async t => {
-  const cloud = fakeCloud({ data: { [todayKey()]: JSON.stringify(['start-0-1']) } });
+  const cloud = fakeCloud({ data: { [todayKey()]: JSON.stringify([markOf(0, 0)]) } });
   const { window, document, app } = mount(t, { webApp: fakeWebApp({ cloud }) });
   await app.ready;
 
@@ -514,7 +546,7 @@ test('уход со страницы без несохранённых изме�
 // где SDK представляется версией 6.0) каждый его вызов пишет ошибку в консоль
 // и бросает — поэтому облако там не берут вовсе.
 test('клиент старше 6.9 не получает ни одного обращения в CloudStorage', async t => {
-  const cloud = fakeCloud({ data: { [todayKey()]: JSON.stringify(['start-0-1']) } });
+  const cloud = fakeCloud({ data: { [todayKey()]: JSON.stringify([markOf(0, 0)]) } });
   const { window, document, app } = mount(t, { webApp: fakeWebApp({ version: '6.0', cloud }) });
   await app.ready;
 
@@ -702,7 +734,7 @@ test('отдых, доигравший до конца сам, гасит инт
 
 // Сброс и загрузка встречаются в одном окне времени: подтверждение
 // асинхронное, а хранилище ещё не ответило. Ниже — все четыре порядка.
-const RACE_SAVED = ['start-0-1', 'start-1-1', 'circuit-0-1', 'circuit-1-1', 'circuit-2-1'];
+const RACE_SAVED = [markOf(0, 0), markOf(0, 1), markOf(1, 0), markOf(1, 1), markOf(1, 2)];
 
 function mountRace(t) {
   const cloud = fakeCloud({ data: { [todayKey()]: JSON.stringify(RACE_SAVED) }, delay: 700 });

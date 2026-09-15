@@ -35,6 +35,7 @@ export default {
       rounds: 1,
       items: [
         {
+          key: 'pelvic-tilt',
           name: 'Подкручивание таза лёжа',
           reps: '8–10 раз',
           muscles: 'Таз и поясница',
@@ -47,6 +48,7 @@ export default {
           kind: 'warmup',
         },
         {
+          key: 'thoracic-rotation',
           name: 'Разворот грудного отдела у стены',
           reps: '5–6 раз на сторону',
           muscles: 'Подвижность грудного отдела',
@@ -70,6 +72,7 @@ export default {
       note: '10–20 с между упражнениями · 30–45 с между кругами · 60–90 с после третьего круга. Резинки лёгкие, без работы до отказа.',
       items: [
         {
+          key: 'chinese-squat',
           name: '«Китайское» приседание с подъёмом таза и разворотом',
           reps: '8 раз на сторону',
           muscles: 'Ноги и подвижность корпуса',
@@ -83,6 +86,7 @@ export default {
           kind: 'warmup',
         },
         {
+          key: 'knee-raise',
           name: 'Подъём колена с лёгкой резинкой',
           reps: '10 раз каждой ногой',
           muscles: 'Сгибатели бедра и корпус',
@@ -95,6 +99,7 @@ export default {
           kind: 'warmup',
         },
         {
+          key: 'overhead-pull-apart',
           name: 'Разведение резинки над головой',
           reps: '12 раз',
           muscles: 'Плечевой пояс',
@@ -107,6 +112,7 @@ export default {
           kind: 'warmup',
         },
         {
+          key: 'leg-raise',
           name: 'Подъём и опускание вытянутых ног лёжа',
           reps: '6–10 раз',
           muscles: 'Пресс и сгибатели бедра',
@@ -137,6 +143,7 @@ export default {
       rounds: 2,
       items: [
         {
+          key: 'rdl',
           name: 'Румынская тяга с длинной резинкой',
           reps: '10–15 раз',
           muscles: 'Ягодицы и задняя поверхность бедра',
@@ -150,6 +157,7 @@ export default {
           kind: 'strength',
         },
         {
+          key: 'adduction',
           name: 'Приведение ноги перед собой с резинкой',
           reps: '12–20 раз на сторону',
           muscles: 'Внутренняя поверхность бедра',
@@ -174,6 +182,7 @@ export default {
       rounds: 2,
       items: [
         {
+          key: 'glute-bridge',
           name: 'Ягодичный мост',
           reps: '12–20 раз',
           muscles: 'Ягодицы',
@@ -192,6 +201,7 @@ export default {
           kind: 'strength',
         },
         {
+          key: 'leg-press',
           name: 'Жим двумя ногами лёжа',
           reps: '10–15 раз',
           muscles: 'Квадрицепсы и ягодицы',
@@ -215,6 +225,7 @@ export default {
       rounds: 2,
       items: [
         {
+          key: 'side-leg-raise',
           name: 'Подъём верхней ноги лёжа на боку',
           reps: '12–20 раз на сторону',
           muscles: 'Средняя и малая ягодичные',
@@ -253,6 +264,7 @@ export default {
       rounds: 2,
       items: [
         {
+          key: 'seated-row',
           name: 'Тяга резинки сидя к поясу',
           reps: '10–15 раз',
           muscles: 'Спина и бицепс',
@@ -266,6 +278,7 @@ export default {
           kind: 'strength',
         },
         {
+          key: 'chest-press',
           name: 'Жим резинки от груди стоя',
           reps: '10–15 раз',
           muscles: 'Грудь, трицепс, передняя часть плеч',
@@ -304,6 +317,7 @@ export default {
           kind: 'strength',
         },
         {
+          key: 'overhead-extension',
           name: 'Разгибание одной руки вверх',
           reps: '10–15 раз на руку',
           muscles: 'Трицепс',
@@ -341,6 +355,7 @@ export default {
           kind: 'cooldown',
         },
         {
+          key: 'knees-to-chest',
           name: 'Подтягивание бёдер к животу лёжа',
           reps: '20–30 секунд',
           muscles: 'Мягкое расслабление',
@@ -354,6 +369,7 @@ export default {
           kind: 'cooldown',
         },
         {
+          key: 'breathing',
           name: 'Спокойное дыхание',
           reps: '5 вдохов и длинных выдохов',
           muscles: 'Восстановление дыхания',

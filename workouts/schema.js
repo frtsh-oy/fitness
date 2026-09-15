@@ -7,7 +7,7 @@ export const LOAD_VALUES = [0.5, 1];
 
 const WORKOUT_FIELDS = ['id', 'kicker', 'title', 'titleLines', 'lead', 'schedule', 'stats', 'gear', 'blocks', 'progression', 'caution'];
 const BLOCK_FIELDS = ['id', 'n', 'nav', 'title', 'sub', 'rounds', 'items'];
-const ITEM_FIELDS = ['name', 'muscles', 'reps', 'text', 'load', 'pattern', 'gear', 'unilateral', 'kind'];
+const ITEM_FIELDS = ['key', 'name', 'muscles', 'reps', 'text', 'load', 'pattern', 'gear', 'unilateral', 'kind'];
 
 const WORKOUT_TEXT_FIELDS = ['id', 'kicker', 'title', 'lead', 'schedule', 'gear', 'caution'];
 const BLOCK_TEXT_FIELDS = ['id', 'n', 'nav', 'title', 'sub'];
@@ -112,10 +112,23 @@ export function validateWorkout(workout) {
       continue;
     }
 
+    // key — устойчивый идентификатор упражнения: из него строится идентификатор
+    // отметки (см. render.js). Требуется у каждого упражнения и обязан быть
+    // уникальным внутри блока. Без первого отметки «переезжают» на соседей при
+    // любой вставке упражнения, без второго два чекбокса схлопываются в один
+    // идентификатор — и оба раза молча, потому что countMarks по-прежнему
+    // насчитает 37.
+    const seenKeys = new Set();
     for (const item of block.items) {
       const at = `${where}, упражнение «${item.name ?? '?'}»`;
       for (const field of ITEM_FIELDS) {
         if (item[field] === undefined) problems.push(`${at}: нет поля ${field}`);
+      }
+      // Отсутствие key уже названо выше, поэтому здесь только форма и уникальность.
+      if (item.key !== undefined) {
+        if (!isNonEmptyString(item.key)) problems.push(`${at}: key должен быть непустой строкой`);
+        else if (seenKeys.has(item.key)) problems.push(`${at}: дубликат key ${item.key} внутри блока`);
+        seenKeys.add(item.key);
       }
       for (const field of ITEM_TEXT_FIELDS) {
         if (item[field] !== undefined && !isNonEmptyString(item[field])) problems.push(`${at}: поле ${field} должно быть непустой строкой`);

@@ -15,7 +15,7 @@ function minimalWorkout(overrides = {}) {
     blocks: [{
       id: 'b1', n: '01', nav: 'Блок', title: 'Блок', sub: 'Подзаголовок', rounds: 2,
       items: [{
-        name: 'Упражнение', muscles: 'Ягодицы', reps: '10 раз', text: 'Описание',
+        key: 'ex1', name: 'Упражнение', muscles: 'Ягодицы', reps: '10 раз', text: 'Описание',
         load: { glutes: 1 }, pattern: 'hinge', gear: ['band_long'],
         unilateral: false, kind: 'strength',
       }],
@@ -86,11 +86,50 @@ test('силовому упражнению пустой load запрещён',
   assert.match(validateWorkout(w).join('\n'), /load/);
 });
 
+// key: устойчивый идентификатор упражнения, из которого строится идентификатор
+// отметки. Обещан контрактом рендерера, а проверять его было некому.
+
+test('упражнение без key попадает в отчёт', () => {
+  const w = minimalWorkout();
+  delete w.blocks[0].items[0].key;
+  assert.match(validateWorkout(w).join('\n'), /key/);
+});
+
+test('key не строкой попадает в отчёт', () => {
+  const w = minimalWorkout();
+  w.blocks[0].items[0].key = 7;
+  assert.match(validateWorkout(w).join('\n'), /key/);
+});
+
+test('пустая строка в key попадает в отчёт', () => {
+  const w = minimalWorkout();
+  w.blocks[0].items[0].key = '';
+  assert.match(validateWorkout(w).join('\n'), /key/);
+});
+
+test('два одинаковых key внутри блока попадают в отчёт', () => {
+  const w = minimalWorkout();
+  w.blocks[0].items.push({ ...w.blocks[0].items[0], name: 'Второе упражнение' });
+  assert.match(validateWorkout(w).join('\n'), /дубликат key/);
+});
+
+// Уникальность требуется в пределах блока, а не всей тренировки: в
+// идентификатор отметки входит id блока, поэтому одинаковые ключи в разных
+// блоках не сталкиваются.
+test('одинаковый key в разных блоках разрешён', () => {
+  const w = minimalWorkout();
+  w.blocks.push({
+    id: 'b2', n: '02', nav: 'Второй', title: 'Второй', sub: 'Подзаголовок', rounds: 1,
+    items: [{ ...w.blocks[0].items[0] }],
+  });
+  assert.deepEqual(validateWorkout(w), []);
+});
+
 test('countMarks считает rounds умножить на число упражнений по всем блокам', () => {
   const w = minimalWorkout();
   w.blocks.push({
     id: 'b2', n: '02', nav: 'Второй', title: 'Второй', sub: '', rounds: 3,
-    items: [w.blocks[0].items[0], w.blocks[0].items[0]],
+    items: [w.blocks[0].items[0], { ...w.blocks[0].items[0], key: 'ex2' }],
   });
   // блок 1: 2 круга * 1 упражнение = 2; блок 2: 3 круга * 2 упражнения = 6
   assert.equal(countMarks(w), 8);
