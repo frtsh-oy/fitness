@@ -169,8 +169,14 @@ export function validateWorkout(workout) {
       }
       const load = item.load ?? {};
       const entries = Object.entries(load);
-      if (item.kind === 'strength' && entries.length === 0) {
-        problems.push(`${at}: силовому упражнению нужен непустой load`);
+      // Непустой load нужен упражнению ЛЮБОГО типа, а не только силовому.
+      // Пустой load у растяжки выбрасывал информацию без нужды: будущая карта
+      // тела определена как «клик по мышце даёт упражнения на неё», и без
+      // разметки клик по сгибателям бедра не покажет растяжку сгибателей бедра,
+      // потому что данные не знают, что это она. Разминку и заминку от объёма
+      // отделяет kind, а не пустота разметки.
+      if (entries.length === 0) {
+        problems.push(`${at}: нужен непустой load`);
       }
       for (const [id, value] of entries) {
         if (!isMuscleId(id)) problems.push(`${at}: неизвестная группа мышц ${id}`);

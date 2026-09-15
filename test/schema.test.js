@@ -73,11 +73,21 @@ test('неизвестный инвентарь попадает в отчёт',
   assert.match(validateWorkout(w).join('\n'), /kettlebell/);
 });
 
-test('разминочному упражнению разрешён пустой load', () => {
+// Пустой load запрещён любому упражнению, а не только силовому: разметка —
+// это ещё и «какие упражнения есть на эту мышцу» для будущей карты тела,
+// а разминку и заминку от объёма отделяет kind.
+test('разминочному упражнению пустой load запрещён', () => {
   const w = minimalWorkout();
   w.blocks[0].items[0].kind = 'warmup';
   w.blocks[0].items[0].load = {};
-  assert.deepEqual(validateWorkout(w), []);
+  assert.match(validateWorkout(w).join('\n'), /load/);
+});
+
+test('заминочному упражнению пустой load запрещён', () => {
+  const w = minimalWorkout();
+  w.blocks[0].items[0].kind = 'cooldown';
+  w.blocks[0].items[0].load = {};
+  assert.match(validateWorkout(w).join('\n'), /load/);
 });
 
 test('силовому упражнению пустой load запрещён', () => {

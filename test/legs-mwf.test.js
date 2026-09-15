@@ -40,6 +40,14 @@ test('всего 37 отметок, как на исходном сайте', ()
   assert.equal(countMarks(legsMwf), 37);
 });
 
+// Разметка есть у КАЖДОГО упражнения, включая растяжки и подвижность: иначе
+// клик по мышце на будущей карте тела не покажет растяжку на неё.
+test('у каждого упражнения непустая разметка мышц', () => {
+  for (const item of legsMwf.blocks.flatMap(b => b.items)) {
+    assert.ok(Object.keys(item.load).length > 0, `«${item.name}»: пустой load`);
+  }
+});
+
 test('каждое силовое упражнение имеет хотя бы одну целевую группу', () => {
   for (const item of legsMwf.blocks.flatMap(b => b.items)) {
     if (item.kind !== 'strength') continue;
