@@ -44,11 +44,13 @@ function cloudStorage(webApp) {
 }
 
 // Конец отдыха там, где клиент отклика не дал: человек на отдыхе смотрит не в
-// экран. navigator.vibrate есть не везде (в Safari его нет вовсе) и может
-// бросить — например, когда вкладка не на виду.
+// экран. Оба способа отказа — метода нет вовсе (в Safari его не бывает) или он
+// бросает (например, без жеста пользователя) — для нас одно и то же событие
+// «сигнала не будет», поэтому и обрабатываются они одним catch. Отдельная
+// проверка на существование метода ничего к этому не добавляла бы.
 function vibrate(win) {
   try {
-    win.navigator.vibrate?.([120, 80, 120]);
+    win.navigator.vibrate([120, 80, 120]);
   } catch { /* устройство без вибромотора или запрет политикой */ }
 }
 
@@ -99,7 +101,6 @@ export function startApp(win = globalThis.window) {
   let saveTimer = null;
 
   function cancelSave() {
-    if (saveTimer === null) return;
     win.clearTimeout(saveTimer);
     saveTimer = null;
   }

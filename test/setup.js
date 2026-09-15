@@ -30,7 +30,7 @@ function fillBrowserGaps(window) {
     unobserve(target) { this.targets = this.targets.filter(item => item !== target); }
     disconnect() { this.targets = []; }
 
-    intersect(target) { this.callback([{ target, isIntersecting: true }], this); }
+    intersect(target, isIntersecting = true) { this.callback([{ target, isIntersecting }], this); }
   };
 }
 

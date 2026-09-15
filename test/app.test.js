@@ -25,9 +25,14 @@ const settle = ms => new Promise(resolve => setTimeout(resolve, ms));
 function fakeWebApp({ version = '6.9', cloud = null } = {}) {
   const calls = [];
   const backHandlers = [];
+  // Заданные клиентом вопросы: ответ отдаётся тестом, когда тесту нужно, —
+  // именно этим окном и проверяется совпадение сброса с ответом хранилища.
+  const confirms = [];
   return {
     calls,
     backHandlers,
+    confirms,
+    showConfirm(message, callback) { confirms.push({ message, answer: callback }); },
     initDataUnsafe: {},
     CloudStorage: cloud,
     isVersionAtLeast: asked => Number.parseFloat(version) >= Number.parseFloat(asked),
@@ -63,15 +68,63 @@ function fakeCloud({ data = {}, delay = 0 } = {}) {
   };
 }
 
-function mount(t, { marks = null, webApp = null, freezeTimers = false } = {}) {
+// Подменённые часы и интервалы окна: отдых доходит до конца через настоящий
+// ход времени и настоящий catchUp, но без ожидания двадцати секунд в тесте.
+// Интервалы живут в этой карте, поэтому по ней же видно, погашен ли интервал.
+function installFakeClock(t, window) {
+  const realNow = Date.now;
+  let now = realNow();
+  Date.now = () => now;
+  t.after(() => { Date.now = realNow; });
+
+  const live = new Map();
+  let nextId = 1;
+  window.setInterval = (fn, period) => {
+    const id = nextId;
+    nextId += 1;
+    live.set(id, { fn, period, due: now + period });
+    return id;
+  };
+  window.clearInterval = id => { live.delete(id); };
+
+  return {
+    get liveIntervals() { return live.size; },
+    // Двигаем часы до цели, по дороге давая сработать каждому интервалу,
+    // чьё время пришло, — как это делает браузер.
+    advance(ms) {
+      const target = now + ms;
+      while (now < target) {
+        const pending = [...live.entries()];
+        const nextDue = pending.length ? Math.min(...pending.map(([, entry]) => entry.due)) : target;
+        now = Math.min(nextDue, target);
+        for (const [id, entry] of pending) {
+          if (entry.due > now || !live.has(id)) continue;
+          entry.due = now + entry.period;
+          entry.fn();
+        }
+      }
+    },
+  };
+}
+
+function mount(t, { marks = null, webApp = null, freezeTimers = false, fakeClock = false, denyStorage = false } = {}) {
   const { window, document } = makeDom(PAGE);
   t.after(() => window.close());
   if (marks) window.localStorage.setItem(todayKey(), JSON.stringify(marks));
+  // Приватный режим Safari и урезанный WebView: обращение к localStorage
+  // бросает ещё до первого getItem.
+  if (denyStorage) {
+    Object.defineProperty(window, 'localStorage', {
+      get() { throw new Error('данные сайтов запрещены'); },
+      configurable: true,
+    });
+  }
   if (webApp) window.Telegram = { WebApp: webApp };
   // Обезвреженный setInterval — это свёрнутый мини-апп: клиент Telegram
   // морозит таймеры целиком, а фоновая вкладка браузера их прореживает.
   if (freezeTimers) window.setInterval = () => 0;
-  return { window, document, app: startApp(window) };
+  const clock = fakeClock ? installFakeClock(t, window) : null;
+  return { window, document, clock, app: startApp(window) };
 }
 
 const boxes = document => [...document.querySelectorAll('#workout input[data-mark]')];
@@ -150,6 +203,37 @@ test('приложение реагирует на change, а не только 
   box.dispatchEvent(new window.Event('change', { bubbles: true }));
 
   assert.deepEqual([...app.marks], [box.dataset.mark]);
+  assert.equal(document.getElementById('progress').value, 1);
+});
+
+// Обработчик один на весь контейнер, а содержимое контейнера рисуется из данных:
+// фильтр цели — часть делегирования, а не догадка о будущем. Без него любое
+// чужое change добавило бы в набор отметку-призрак.
+test('делегированный обработчик реагирует только на отметки', t => {
+  const { window, document, app } = mount(t);
+  const foreign = document.createElement('input');
+  foreign.type = 'checkbox';
+  document.querySelector('#legs1 .exercise').append(foreign);
+
+  foreign.checked = true;
+  foreign.dispatchEvent(new window.Event('change', { bubbles: true }));
+
+  assert.equal(app.marks.size, 0);
+  assert.equal(document.getElementById('progress-text').textContent, `Сегодня: 0 из ${TOTAL} отметок`);
+});
+
+// Отметки — не единственное, что может отказать: приватный режим Safari
+// бросает на самом обращении к localStorage. Тренировка обязана открыться.
+test('запрет на данные сайтов не роняет приложение', async t => {
+  const { document, app } = mount(t, { denyStorage: true });
+  await app.ready;
+
+  assert.equal(boxes(document).length, TOTAL, 'страница собралась');
+  const box = boxes(document)[0];
+  box.click();
+  await settle(700);
+
+  assert.deepEqual([...app.marks], [box.dataset.mark], 'отметки живут хотя бы до перезагрузки');
   assert.equal(document.getElementById('progress').value, 1);
 });
 
@@ -571,6 +655,137 @@ test('время, пока приложение было свёрнуто, до�
   assert.equal(app.timer.running, true);
 });
 
+// Отдых, который кончился сам, а не по кнопке: интервал обязан погаснуть.
+// Иначе он до конца сеанса дёргает catchUp каждые 200 мс и сажает батарею —
+// и именно этот путь не проверяли тесты конца отдыха, доводившие таймер до
+// нуля прямыми вызовами tick(), минуя интервал.
+test('отдых, доигравший до конца сам, гасит интервал', t => {
+  const { document, app, clock } = mount(t, { fakeClock: true });
+  const value = document.getElementById('timer-value');
+
+  document.querySelector('.presets button[data-time="20"]').click();
+  document.getElementById('timer-toggle').click();
+  assert.equal(clock.liveIntervals, 1, 'отсчёт идёт по интервалу');
+
+  clock.advance(1000);
+  assert.equal(value.textContent, '00:19', 'секунды снимает именно интервал, а не тест');
+
+  clock.advance(19000);
+  assert.equal(value.textContent, '00:00');
+  assert.equal(document.getElementById('timer-status').textContent, 'Отдых закончен');
+  assert.equal(app.timer.running, false);
+  assert.equal(clock.liveIntervals, 0, 'живых интервалов после конца отдыха не осталось');
+
+  // И дальше часы идут, а таймер стоит: погашенный интервал ничего не считает.
+  clock.advance(5000);
+  assert.equal(value.textContent, '00:00');
+});
+
+// Сброс и загрузка встречаются в одном окне времени: подтверждение
+// асинхронное, а хранилище ещё не ответило. Ниже — все четыре порядка.
+const RACE_SAVED = ['start-0-1', 'start-1-1', 'circuit-0-1', 'circuit-1-1', 'circuit-2-1'];
+
+function mountRace(t) {
+  const cloud = fakeCloud({ data: { [todayKey()]: JSON.stringify(RACE_SAVED) }, delay: 700 });
+  const webApp = fakeWebApp({ cloud });
+  return { ...mount(t, { webApp }), cloud, webApp };
+}
+
+test('сброс до ответа хранилища, потом отметка: приехавшее не возвращается', async t => {
+  const { document, app, cloud } = mountRace(t);
+
+  document.getElementById('reset').click();      // набор пуст — спрашивать не о чем
+  const box = document.querySelector('#legs1 input[data-mark]');
+  box.click();
+
+  await app.ready;
+  assert.deepEqual([...app.marks], [box.dataset.mark], 'на экране только своя отметка');
+  assert.equal(document.getElementById('progress').value, 1);
+
+  await settle(700);
+  assert.deepEqual(JSON.parse(cloud.data[todayKey()]), [box.dataset.mark]);
+});
+
+test('отметка, затем подтверждённый сброс до ответа хранилища', async t => {
+  const { document, app, cloud, webApp } = mountRace(t);
+  document.querySelector('#legs1 input[data-mark]').click();
+
+  document.getElementById('reset').click();
+  assert.deepEqual(webApp.confirms.map(ask => ask.message), ['Сбросить все отметки за сегодня?']);
+  webApp.confirms[0].answer(true);
+  await settle(0);
+  assert.equal(app.marks.size, 0);
+
+  await app.ready;
+  assert.equal(app.marks.size, 0, 'приехавшее не отменяет только что сделанный сброс');
+  assert.equal(document.getElementById('progress').value, 0);
+
+  await settle(700);
+  assert.equal(todayKey() in cloud.data, false, 'поверх очистки ничего не дописано');
+});
+
+test('отметка, затем отклонённый сброс: приехавшее объединяется как обычно', async t => {
+  const { document, app, cloud, webApp } = mountRace(t);
+  const box = document.querySelector('#legs1 input[data-mark]');
+  box.click();
+
+  document.getElementById('reset').click();
+  webApp.confirms[0].answer(false);
+  await settle(0);
+  assert.equal(app.marks.size, 1, 'отказ ничего не менял');
+
+  await app.ready;
+  const expected = [...RACE_SAVED, box.dataset.mark].sort();
+  assert.deepEqual([...app.marks].sort(), expected, 'отказ от сброса не отменяет слияние');
+
+  await settle(700);
+  assert.deepEqual(JSON.parse(cloud.data[todayKey()]).sort(), expected);
+});
+
+test('два сброса подряд до ответа хранилища', async t => {
+  const { document, app, cloud, webApp } = mountRace(t);
+  document.querySelector('#legs1 input[data-mark]').click();
+
+  document.getElementById('reset').click();
+  document.getElementById('reset').click();
+  assert.equal(webApp.confirms.length, 2, 'второй вопрос задан, пока отметка ещё на экране');
+
+  webApp.confirms[0].answer(true);
+  webApp.confirms[1].answer(true);
+  await settle(0);
+  await app.ready;
+
+  assert.equal(app.marks.size, 0);
+  assert.equal(boxes(document).some(box => box.checked), false);
+  assert.equal(document.getElementById('progress').value, 0);
+
+  await settle(700);
+  assert.equal(todayKey() in cloud.data, false);
+});
+
+// Пятый порядок, которого не было в списке: человек думал над вопросом дольше,
+// чем отвечало хранилище. Сброс обязан распространиться на объединённый набор —
+// он про «забыть сегодняшнее», а не про «забыть то, что было на экране».
+test('подтверждение, пришедшее после ответа хранилища, чистит объединённый набор', async t => {
+  const { document, app, cloud, webApp } = mountRace(t);
+  document.querySelector('#legs1 input[data-mark]').click();
+  document.getElementById('reset').click();
+
+  await app.ready;
+  assert.equal(app.marks.size, 6, 'пока человек думает, старые отметки приехали');
+
+  webApp.confirms[0].answer(true);
+  await settle(0);
+  assert.equal(app.marks.size, 0);
+  assert.equal(document.getElementById('progress').value, 0);
+
+  document.getElementById('reset').click();
+  assert.equal(webApp.confirms.length, 1, 'на пустом наборе больше не спрашиваем');
+
+  await settle(700);
+  assert.equal(todayKey() in cloud.data, false);
+});
+
 // Пауза обязана замирать на настоящем остатке, а не на округлённой секунде:
 // иначе каждая пара «пауза — старт» дарит человеку почти секунду отдыха,
 // и за подход из пяти пауз отдых растягивается на пять секунд.
@@ -653,6 +868,24 @@ test('конец отдыха на клиенте без HapticFeedback всё �
 
   assert.deepEqual(buzz, [[120, 80, 120]]);
   assert.deepEqual(webApp.calls.filter(call => call.startsWith('notify:')), [], 'клиент отклика не давал');
+});
+
+// Вибромотор вправе отказать: на части платформ vibrate бросает, если не
+// было жеста пользователя. Конец отдыха всё равно обязан состояться.
+test('вибромотор, который бросает, не ломает конец отдыха', t => {
+  const mounted = mount(t);
+  Object.defineProperty(mounted.window.navigator, 'vibrate', {
+    value: () => { throw new Error('нет разрешения'); },
+    configurable: true,
+  });
+
+  const { document, app } = mounted;
+  document.querySelector('.presets button[data-time="20"]').click();
+  document.getElementById('timer-toggle').click();
+  for (let i = 0; i < 20; i += 1) app.timer.tick();
+
+  assert.equal(document.getElementById('timer-value').textContent, '00:00');
+  assert.equal(document.getElementById('timer-status').textContent, 'Отдых закончен');
 });
 
 test('на современном клиенте отзывается он сам, а не вибромотор', t => {
@@ -778,4 +1011,9 @@ test('навигация подсвечивает блок, о котором с
 
   const active = [...document.querySelectorAll('.block-nav a.active')];
   assert.deepEqual(active.map(link => link.hash), ['#legs1']);
+
+  // Наблюдатель сообщает и об уходе блока с экрана — такое сообщение подсветку
+  // не переносит, иначе она уезжала бы на блок, которого на экране уже нет.
+  observer.intersect(document.getElementById('finish'), false);
+  assert.deepEqual([...document.querySelectorAll('.block-nav a.active')].map(link => link.hash), ['#legs1']);
 });
