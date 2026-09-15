@@ -160,6 +160,91 @@ test('повторённый день недели попадает в отчё�
   assert.match(validateWorkout(minimalWorkout({ days: [1, 1] })).join('\n'), /дважды/);
 });
 
+// v, links, detail, extra, note не проверялись вовсе, хотя README обещает,
+// что валидатор проверит форму. item.v = ['abc'] отрисовывал подпись
+// «Видео · undefined», и плеер при этом молча не включался.
+
+test('v не массивом попадает в отчёт', () => {
+  const w = minimalWorkout();
+  w.blocks[0].items[0].v = 'VZ3f0pSTObM';
+  assert.match(validateWorkout(w).join('\n'), /v должен быть массивом/);
+});
+
+test('v из одного элемента попадает в отчёт', () => {
+  const w = minimalWorkout();
+  w.blocks[0].items[0].v = ['VZ3f0pSTObM'];
+  assert.match(validateWorkout(w).join('\n'), /трёх элементов/);
+});
+
+test('v без подписи попадает в отчёт', () => {
+  const w = minimalWorkout();
+  w.blocks[0].items[0].v = ['VZ3f0pSTObM', 20, ''];
+  assert.match(validateWorkout(w).join('\n'), /подпись/);
+});
+
+test('нецелый старт ролика попадает в отчёт', () => {
+  const w = minimalWorkout();
+  w.blocks[0].items[0].v = ['VZ3f0pSTObM', '20', '0:20'];
+  assert.match(validateWorkout(w).join('\n'), /старт/);
+});
+
+// Не одиннадцать символов — и player.js не подменит ссылку встроенным плеером:
+// на телефоне это выглядит как «видео просто не открывается внутри».
+test('id ролика не из одиннадцати символов попадает в отчёт', () => {
+  const w = minimalWorkout();
+  w.blocks[0].items[0].v = ['abc', 0, '0:00'];
+  assert.match(validateWorkout(w).join('\n'), /id ролика/);
+});
+
+test('корректный v проходит проверку', () => {
+  const w = minimalWorkout();
+  w.blocks[0].items[0].v = ['VZ3f0pSTObM', 20, '0:20'];
+  assert.deepEqual(validateWorkout(w), []);
+});
+
+test('links не массивом попадает в отчёт', () => {
+  const w = minimalWorkout();
+  w.blocks[0].items[0].links = ['zMZWyURC6tw', 18, 'Подпись'];
+  assert.match(validateWorkout(w).join('\n'), /links\[0\]/);
+});
+
+test('битый элемент links попадает в отчёт с его номером', () => {
+  const w = minimalWorkout();
+  w.blocks[0].items[0].links = [['zMZWyURC6tw', 18, 'Подпись'], ['zMZWyURC6tw', 38]];
+  assert.match(validateWorkout(w).join('\n'), /links\[1\]/);
+});
+
+test('корректный links проходит проверку', () => {
+  const w = minimalWorkout();
+  w.blocks[0].items[0].links = [['zMZWyURC6tw', 18, 'Как установить · 0:18']];
+  assert.deepEqual(validateWorkout(w), []);
+});
+
+test('пустой detail попадает в отчёт', () => {
+  const w = minimalWorkout();
+  w.blocks[0].items[0].detail = '';
+  assert.match(validateWorkout(w).join('\n'), /detail/);
+});
+
+test('extra не строкой попадает в отчёт', () => {
+  const w = minimalWorkout();
+  w.blocks[0].items[0].extra = ['подсказка'];
+  assert.match(validateWorkout(w).join('\n'), /extra/);
+});
+
+test('пустой note у блока попадает в отчёт', () => {
+  const w = minimalWorkout();
+  w.blocks[0].note = '';
+  assert.match(validateWorkout(w).join('\n'), /note/);
+});
+
+test('упражнение без необязательных полей проходит проверку', () => {
+  const w = minimalWorkout();
+  assert.equal(w.blocks[0].items[0].v, undefined);
+  assert.equal(w.blocks[0].items[0].links, undefined);
+  assert.deepEqual(validateWorkout(w), []);
+});
+
 test('countMarks считает rounds умножить на число упражнений по всем блокам', () => {
   const w = minimalWorkout();
   w.blocks.push({

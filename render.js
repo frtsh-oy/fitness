@@ -6,7 +6,11 @@ export function markId(blockId, itemKey, round) {
   return `${blockId}-${itemKey}-${round}`;
 }
 
-export function videoUrl([id, start = 0]) {
+// Ролик в данных — [id, старт в секундах, подпись]; форму сторожит валидатор,
+// поэтому подстановки «нет старта — считаем нулём» здесь нет: на
+// провалидированных данных она недостижима, а на непровалидированных превратила
+// бы поломку данных в тихо неверную ссылку.
+export function videoUrl([id, start]) {
   return `https://www.youtube.com/watch?v=${id}&t=${start}s`;
 }
 

@@ -9,12 +9,44 @@ const WORKOUT_FIELDS = ['id', 'kicker', 'title', 'titleLines', 'lead', 'days', '
 const BLOCK_FIELDS = ['id', 'n', 'nav', 'title', 'sub', 'rounds', 'items'];
 const ITEM_FIELDS = ['key', 'name', 'muscles', 'reps', 'text', 'load', 'pattern', 'gear', 'unilateral', 'kind'];
 
+// Поля, которые обязаны быть непустой строкой, ЕСЛИ они есть. Обязательность
+// задают списки выше, поэтому здесь перечислены и необязательные поля тоже
+// (note у блока, detail и extra у упражнения): пустая строка в них ничего не
+// значит, а рендерер по ним решает, рисовать ли раскрывающийся блок.
 const WORKOUT_TEXT_FIELDS = ['id', 'kicker', 'title', 'lead', 'equipment', 'caution'];
-const BLOCK_TEXT_FIELDS = ['id', 'n', 'nav', 'title', 'sub'];
-const ITEM_TEXT_FIELDS = ['name', 'muscles', 'reps', 'text'];
+const BLOCK_TEXT_FIELDS = ['id', 'n', 'nav', 'title', 'sub', 'note'];
+const ITEM_TEXT_FIELDS = ['name', 'muscles', 'reps', 'text', 'detail', 'extra'];
+
+// Идентификатор ролика YouTube — ровно одиннадцать символов из этого набора.
+// Ту же форму требует player.js: по ней он решает, подменять ли ссылку на
+// встроенный плеер. Не подошло — ссылка останется ссылкой, и узнать об этом
+// можно было только ткнув в неё на телефоне.
+const YOUTUBE_ID = /^[A-Za-z0-9_-]{11}$/;
 
 function isNonEmptyString(value) {
   return typeof value === 'string' && value.length > 0;
+}
+
+// Ролик в данных — [id, старт в секундах, подпись]. Так устроены и v, и каждый
+// элемент links: render.js берёт id со стартом для ссылки, а подпись — в текст
+// ссылки и в aria-label. Без проверки формы v: ['abc'] рисовало «Видео ·
+// undefined», и это единственное, что человек увидел бы.
+function videoProblems(value, at, field) {
+  if (!Array.isArray(value) || value.length !== 3) {
+    return [`${at}: ${field} должен быть массивом из трёх элементов [id, старт, подпись]`];
+  }
+  const [id, start, caption] = value;
+  const problems = [];
+  if (!isNonEmptyString(id) || !YOUTUBE_ID.test(id)) {
+    problems.push(`${at}: ${field}[0] — id ролика YouTube (11 символов), получено ${JSON.stringify(id)}`);
+  }
+  if (!Number.isInteger(start) || start < 0) {
+    problems.push(`${at}: ${field}[1] — старт в секундах, целое число не меньше 0, получено ${JSON.stringify(start)}`);
+  }
+  if (!isNonEmptyString(caption)) {
+    problems.push(`${at}: ${field}[2] — подпись, непустая строка, получено ${JSON.stringify(caption)}`);
+  }
+  return problems;
 }
 
 // Часть абзаца preamble: либо обычный текст, либо { b: 'текст' } для полужирного —
@@ -151,6 +183,15 @@ export function validateWorkout(workout) {
       for (const field of ITEM_TEXT_FIELDS) {
         if (item[field] !== undefined && !isNonEmptyString(item[field])) problems.push(`${at}: поле ${field} должно быть непустой строкой`);
       }
+      if (item.v !== undefined) problems.push(...videoProblems(item.v, at, 'v'));
+      if (item.links !== undefined) {
+        if (!Array.isArray(item.links)) {
+          problems.push(`${at}: links должен быть массивом`);
+        } else {
+          item.links.forEach((link, li) => problems.push(...videoProblems(link, at, `links[${li}]`)));
+        }
+      }
+
       if (!PATTERNS.includes(item.pattern)) problems.push(`${at}: неизвестный pattern ${item.pattern}`);
       if (!KINDS.includes(item.kind)) problems.push(`${at}: неизвестный kind ${item.kind}`);
       if (typeof item.unilateral !== 'boolean') problems.push(`${at}: unilateral должен быть true или false`);
