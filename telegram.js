@@ -71,9 +71,13 @@ export function initTelegram(win = globalThis) {
     // бросает — колбэк не придёт никогда, и обещание зависло бы навсегда,
     // а вместе с ним и действие, которого ждёт человек. Проверено на живом SDK:
     // неподдерживаемые методы только пишут предупреждение в консоль.
+    //
+    // Отдельной проверки «а функция ли showConfirm» нет: по той же модели SDK
+    // решение уже принято версией, а если метода всё же не окажется, вызов
+    // бросит — и это тот самый случай, ради которого стоит try/catch.
     confirm(message) {
       return new Promise(resolve => {
-        if (available && webApp.isVersionAtLeast?.('6.2') && typeof webApp.showConfirm === 'function') {
+        if (available && webApp.isVersionAtLeast?.('6.2')) {
           try {
             webApp.showConfirm(message, ok => resolve(ok === true));
             return;

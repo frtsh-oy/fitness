@@ -223,6 +223,47 @@ test('ранняя отметка не стирает приехавшие из 
   assert.deepEqual(JSON.parse(cloud.data[todayKey()]).sort(), expected);
 });
 
+// Тот же дефект, но ранний набор — ПОДМНОЖЕСТВО сохранённого, и по размеру
+// набора его не видно. Человек открыл мини-апп и отметил круг, который уже
+// отмечен: на экране всё честно, а в хранилище остался бы один круг из пяти.
+test('ранний тап по уже сохранённой отметке не обрезает хранилище', async t => {
+  const saved = ['start-0-1', 'start-1-1', 'circuit-0-1', 'circuit-1-1', 'circuit-2-1'];
+  const cloud = fakeCloud({ data: { [todayKey()]: JSON.stringify(saved) }, delay: 700 });
+  const { document, app } = mount(t, { webApp: fakeWebApp({ cloud }) });
+
+  const box = document.querySelector('input[data-mark="start-0-1"]');
+  box.click();
+
+  await app.ready;
+  assert.deepEqual([...app.marks].sort(), [...saved].sort(), 'на экране все пять');
+  assert.deepEqual(JSON.parse(cloud.data[todayKey()]), ['start-0-1'],
+    'ранняя запись оставила в хранилище одну отметку');
+
+  await settle(700);
+  assert.deepEqual(JSON.parse(cloud.data[todayKey()]).sort(), [...saved].sort());
+});
+
+// Самый тихий вариант: тап и сразу снятие — ранний набор пуст, размеров не
+// различить вовсе, а в хранилище уезжает пустота. День стирается целиком от
+// одного исправленного промаха, и на экране это никак не видно.
+test('ранний тап со снятием не стирает день из хранилища', async t => {
+  const saved = ['start-0-1', 'start-1-1', 'circuit-0-1', 'circuit-1-1', 'circuit-2-1'];
+  const cloud = fakeCloud({ data: { [todayKey()]: JSON.stringify(saved) }, delay: 700 });
+  const { document, app } = mount(t, { webApp: fakeWebApp({ cloud }) });
+
+  const box = document.querySelector('#legs1 input[data-mark]');
+  box.click();
+  box.click();
+  assert.equal(app.marks.size, 0);
+
+  await app.ready;
+  assert.deepEqual([...app.marks].sort(), [...saved].sort(), 'на экране все пять');
+  assert.deepEqual(JSON.parse(cloud.data[todayKey()]), [], 'в хранилище к этому моменту пусто');
+
+  await settle(700);
+  assert.deepEqual(JSON.parse(cloud.data[todayKey()]).sort(), [...saved].sort());
+});
+
 // Обратная сторона той же дописки: открыть тренировку и ничего не трогать —
 // не повод лезть в CloudStorage с записью.
 test('открытие без единого касания ничего не пишет в хранилище', async t => {
@@ -330,6 +371,42 @@ test('уход в фон дописывает отметку, не дожида�
     [`set:${JSON.stringify([box.dataset.mark])}`]);
 });
 
+// В Safari и на iOS visibilitychange при уходе со страницы приходит не всегда.
+test('pagehide дописывает отложенную отметку так же, как уход в фон', async t => {
+  const cloud = fakeCloud();
+  const { window, document, app } = mount(t, { webApp: fakeWebApp({ cloud }) });
+  await app.ready;
+
+  const box = boxes(document)[0];
+  box.click();
+  window.dispatchEvent(new window.Event('pagehide'));
+
+  await settle(0);
+  assert.deepEqual(cloud.calls.filter(call => call.startsWith('set:')),
+    [`set:${JSON.stringify([box.dataset.mark])}`]);
+});
+
+// Уход с глаз — это не повод писать: каждое сворачивание мини-аппа без единого
+// изменения тратило бы обращение к облаку впустую.
+test('уход со страницы без несохранённых изменений ничего не пишет', async t => {
+  const cloud = fakeCloud({ data: { [todayKey()]: JSON.stringify(['start-0-1']) } });
+  const { window, document, app } = mount(t, { webApp: fakeWebApp({ cloud }) });
+  await app.ready;
+
+  // Отметка есть, но она уже сохранена: ждём, пока склейка отработает сама.
+  boxes(document)[1].click();
+  await settle(700);
+  const written = cloud.calls.filter(call => call.startsWith('set:')).length;
+
+  Object.defineProperty(window.document, 'hidden', { value: true, configurable: true });
+  window.document.dispatchEvent(new window.Event('visibilitychange'));
+  window.dispatchEvent(new window.Event('pagehide'));
+  await settle(0);
+
+  assert.equal(cloud.calls.filter(call => call.startsWith('set:')).length, written,
+    'ни visibilitychange, ни pagehide не добавили записи');
+});
+
 // CloudStorage появился в Bot API 6.9. В клиенте постарше (и в обычном браузере,
 // где SDK представляется версией 6.0) каждый его вызов пишет ошибку в консоль
 // и бросает — поэтому облако там не берут вовсе.
@@ -348,6 +425,22 @@ test('клиент старше 6.9 не получает ни одного об
   assert.deepEqual(JSON.parse(window.localStorage.getItem(todayKey())), [box.dataset.mark]);
 });
 
+// Объект WebApp приходит от чужой программы: клиенты и сборки SDK разные, и
+// приложение обязано пережить любой их состав. Пустой объект — крайний случай:
+// ни версии, ни методов, и облака у такого клиента нет.
+test('пустой объект WebApp не роняет приложение и не мешает отметкам', async t => {
+  const { window, document, app } = mount(t, { webApp: {} });
+  await app.ready;
+
+  assert.equal(boxes(document).length, TOTAL, 'страница собралась');
+  const box = boxes(document)[0];
+  box.click();
+  await settle(700);
+
+  assert.deepEqual([...app.marks], [box.dataset.mark]);
+  assert.deepEqual(JSON.parse(window.localStorage.getItem(todayKey())), [box.dataset.mark]);
+});
+
 test('таймер на странице: пресет, старт, шаг, сброс', t => {
   const { document, app } = mount(t);
   const value = document.getElementById('timer-value');
@@ -359,9 +452,11 @@ test('таймер на странице: пресет, старт, шаг, сб
   assert.equal(document.querySelector('.presets button[data-time="20"]').getAttribute('aria-pressed'), 'true');
   assert.equal(document.querySelector('.presets button[data-time="60"]').getAttribute('aria-pressed'), 'false');
 
+  assert.equal(status.textContent, 'Готов к старту');
+
   toggle.click();
   assert.equal(toggle.textContent, 'Пауза');
-  assert.equal(status.textContent, 'Идёт отдых');
+  assert.equal(status.textContent, 'Восстанавливай дыхание');
 
   app.timer.tick();
   assert.equal(value.textContent, '00:19');
@@ -369,7 +464,34 @@ test('таймер на странице: пресет, старт, шаг, сб
   document.getElementById('timer-reset').click();
   assert.equal(value.textContent, '00:20');
   assert.equal(toggle.textContent, 'Старт');
+  assert.equal(status.textContent, 'Готов к старту');
   assert.equal(app.timer.running, false);
+});
+
+// Подписи — дословно из src-original/app.js. «Выбери время» на паузе врало бы:
+// время уже выбрано, а отдых поставлен на паузу.
+test('подписи таймера: свежая страница, пауза, возобновление, сброс', t => {
+  const { document } = mount(t);
+  const status = document.getElementById('timer-status');
+  const toggle = document.getElementById('timer-toggle');
+
+  assert.equal(status.textContent, 'Выбери время', 'на свежей странице человек ещё ничего не выбирал');
+
+  document.querySelector('.presets button[data-time="45"]').click();
+  assert.equal(status.textContent, 'Готов к старту');
+
+  toggle.click();
+  assert.equal(status.textContent, 'Восстанавливай дыхание');
+
+  toggle.click();
+  assert.equal(status.textContent, 'На паузе');
+  assert.equal(toggle.textContent, 'Старт');
+
+  toggle.click();
+  assert.equal(status.textContent, 'Восстанавливай дыхание');
+
+  document.getElementById('timer-reset').click();
+  assert.equal(status.textContent, 'Готов к старту');
 });
 
 test('конец отдыха: панель гаснет в ноль и кнопка снова зовёт стартовать', t => {
@@ -383,12 +505,33 @@ test('конец отдыха: панель гаснет в ноль и кноп
 
   assert.equal(document.getElementById('timer-value').textContent, '00:00');
   assert.equal(status.textContent, 'Отдых закончен');
-  assert.equal(toggle.textContent, 'Старт');
+  assert.equal(toggle.textContent, 'Ещё раз', 'старт на отработавшем таймере начинает заново');
   assert.equal(document.querySelector('.timer').classList.contains('done'), true);
 
   toggle.click();
   assert.equal(document.getElementById('timer-value').textContent, '00:20');
+  assert.equal(toggle.textContent, 'Пауза');
   assert.equal(document.querySelector('.timer').classList.contains('done'), false);
+});
+
+// #timer-status — область aria-live: каждое значение в ней диктор произносит.
+// Значение, которое тут же перетирается, он всё равно проговорит, поэтому за
+// весь отдых их должно быть ровно столько, сколько событий.
+test('в области aria-live не появляется значений, которых никто не видел', async t => {
+  const { window, document, app } = mount(t);
+  const status = document.getElementById('timer-status');
+  const said = [];
+  const observer = new window.MutationObserver(records => {
+    for (const record of records) for (const node of record.addedNodes) said.push(node.textContent);
+  });
+  observer.observe(status, { childList: true });
+
+  document.querySelector('.presets button[data-time="20"]').click();
+  document.getElementById('timer-toggle').click();
+  for (let i = 0; i < 20; i += 1) app.timer.tick();
+  await settle(0);
+
+  assert.deepEqual(said, ['Готов к старту', 'Восстанавливай дыхание', 'Отдых закончен']);
 });
 
 // Отсчёт идёт по настоящим часам, а не по числу срабатываний интервала:
@@ -426,6 +569,61 @@ test('время, пока приложение было свёрнуто, до�
   window.document.dispatchEvent(new window.Event('visibilitychange'));
   assert.equal(value.textContent, '00:18', 'вернулись — и остаток пересчитан по часам');
   assert.equal(app.timer.running, true);
+});
+
+// Пауза обязана замирать на настоящем остатке, а не на округлённой секунде:
+// иначе каждая пара «пауза — старт» дарит человеку почти секунду отдыха,
+// и за подход из пяти пауз отдых растягивается на пять секунд.
+test('пауза и возобновление не добавляют человеку отдыха', async t => {
+  const { document } = mount(t);
+  const toggle = document.getElementById('timer-toggle');
+
+  document.querySelector('.presets button[data-time="20"]').click();
+  for (let i = 0; i < 5; i += 1) {
+    toggle.click();            // старт
+    await settle(600);
+    toggle.click();            // пауза
+  }
+
+  // Отдыхали ровно три секунды из двадцати, пять раз прервавшись.
+  assert.equal(document.getElementById('timer-value').textContent, '00:17');
+});
+
+// На паузе экран показывает то, что показывают часы, а не то, что успел
+// нарисовать интервал: между срабатываниями он отстаёт, а в свёрнутом
+// приложении не срабатывает вовсе.
+test('пауза замирает на том, что показывают часы', async t => {
+  const { document, app } = mount(t, { freezeTimers: true });
+  const toggle = document.getElementById('timer-toggle');
+
+  document.querySelector('.presets button[data-time="20"]').click();
+  toggle.click();
+  await settle(2200);
+  assert.equal(document.getElementById('timer-value').textContent, '00:20', 'интервал мёртв');
+
+  toggle.click();
+  assert.equal(document.getElementById('timer-value').textContent, '00:18');
+  assert.equal(document.getElementById('timer-status').textContent, 'На паузе');
+  assert.equal(app.timer.running, false);
+});
+
+// «Пауза», нажатая ровно тогда, когда отдых уже кончился по часам: конец
+// обрабатывается, но отсчёт не начинается заново от кнопки паузы.
+test('пауза, нажатая после конца отдыха, не запускает его снова', async t => {
+  const { document, app } = mount(t, { freezeTimers: true });
+  const toggle = document.getElementById('timer-toggle');
+  const preset = document.querySelector('.presets button[data-time="20"]');
+
+  preset.dataset.time = '2';
+  preset.click();
+  toggle.click();
+  await settle(2200);
+
+  toggle.click();
+  assert.equal(document.getElementById('timer-value').textContent, '00:00');
+  assert.equal(document.getElementById('timer-status').textContent, 'Отдых закончен');
+  assert.equal(toggle.textContent, 'Ещё раз');
+  assert.equal(app.timer.running, false);
 });
 
 // Человек на отдыхе смотрит не в экран, поэтому конец отдыха обязан быть

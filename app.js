@@ -86,10 +86,7 @@ export function startApp(win = globalThis.window) {
     // все его круги — так это устроено в style.css.
     for (const exercise of host.querySelectorAll('.exercise')) {
       const boxes = [...exercise.querySelectorAll('input[data-mark]')];
-      // Проверка на пустоту здесь не про невозможного вызывающего, а про every():
-      // на пустом списке он отвечает true, и упражнение без кругов загорелось бы
-      // выполненным, ничего не выполнив.
-      exercise.classList.toggle('completed', boxes.length > 0 && boxes.every(b => b.checked));
+      exercise.classList.toggle('completed', boxes.every(box => box.checked));
     }
     progress.value = marks.size;
     progressText.textContent = `Сегодня: ${marks.size} из ${total} отметок`;
@@ -132,13 +129,20 @@ export function startApp(win = globalThis.window) {
   // Сброс — единственное исключение: он и означает «забыть сохранённое».
   // Признак отдельный, потому что обычная отметка приехавшего не отменяет.
   let resetBeforeLoad = false;
+  // А этот — про то, успела ли уйти запись до слияния. Спрашивать вместо него
+  // «стал ли набор больше приехавшего» нельзя: ранний набор бывает
+  // ПОДМНОЖЕСТВОМ сохранённого — тапнули круг, который в хранилище уже отмечен,
+  // или тапнули и тут же сняли промах. Размеры тогда совпадают (во втором
+  // случае ранний набор вообще пуст), а в хранилище уже лежит обрезанный набор
+  // или пустота. Значение имеет сам факт изменения, а не его размер.
+  let touchedBeforeLoad = false;
   const ready = storage.load(workout.id).then(saved => {
     if (resetBeforeLoad) return;
     for (const id of saved) marks.add(id);
-    // Ранняя отметка уже ушла в хранилище одна, без сохранённых: save пишет
-    // набор целиком. Возвращаем туда объединённый набор, иначе старые отметки
-    // пропадут из хранилища, даже оставшись на экране.
-    if (marks.size > saved.size) queueSave();
+    // Ранняя отметка уже уехала в хранилище — одна, без сохранённых, потому что
+    // save пишет набор целиком. Возвращаем туда объединённый набор, иначе старые
+    // отметки пропадут из хранилища, даже оставшись на экране.
+    if (touchedBeforeLoad) queueSave();
     paint();
   });
   paint();
@@ -151,6 +155,7 @@ export function startApp(win = globalThis.window) {
     // Цель change от чекбокса — сам чекбокс, вложенности тут не бывает.
     const box = event.target;
     if (!box.matches('input[data-mark]')) return;
+    touchedBeforeLoad = true;
     const id = box.dataset.mark;
     if (box.checked) marks.add(id); else marks.delete(id);
     paint();
@@ -191,9 +196,15 @@ export function startApp(win = globalThis.window) {
   const timer = createTimer({
     onTick: remaining => {
       value.textContent = formatTime(remaining);
-      toggle.textContent = timer.running ? 'Пауза' : 'Старт';
-      status.textContent = timer.running ? 'Идёт отдых' : 'Выбери время';
+      // «Ещё раз» в нуле — как в оригинале: старт на отработавшем таймере
+      // начинает отсчёт заново, и кнопка обязана обещать именно это.
+      toggle.textContent = timer.running ? 'Пауза' : remaining === 0 ? 'Ещё раз' : 'Старт';
       panel.classList.toggle('done', remaining === 0);
+      // Статус здесь не пишется намеренно. #timer-status — область aria-live:
+      // каждое значение в ней экранный диктор проговаривает вслух. Перерисовка
+      // случается и в нуле, и тогда он успел бы сказать одно ровно перед тем,
+      // как onDone скажет «Отдых закончен». Статус меняют события, а не
+      // перерисовка, поэтому его ставят обработчики — по одному разу на событие.
     },
     onDone: () => {
       status.textContent = 'Отдых закончен';
@@ -213,55 +224,82 @@ export function startApp(win = globalThis.window) {
   // спрашивает часы, сколько целых секунд уже прошло.
   let ticker = null;
   let endAt = 0;
+  // Остаток, с которым таймер встал на паузу, — в миллисекундах. timer.remaining
+  // огрублён до целых секунд вверх, и возобновление по нему дарило бы человеку
+  // почти секунду отдыха на каждой паре «пауза — старт».
+  let pausedMs = 0;
 
   function stopTicking() {
-    if (ticker === null) return;
     win.clearInterval(ticker);
     ticker = null;
   }
 
   function catchUp() {
-    const shouldRemain = Math.max(0, Math.ceil((endAt - Date.now()) / 1000));
     // Догоняем часы ровно на столько секунд, сколько они ушли вперёд: после сна
     // вкладки это может быть сразу вся оставшаяся минута. Цикл ограничен самим
     // остатком — в ноль таймер останавливается и tick() перестаёт что-то менять.
+    const shouldRemain = Math.ceil((endAt - Date.now()) / 1000);
     while (timer.running && timer.remaining > shouldRemain) timer.tick();
     if (!timer.running) stopTicking();
   }
 
   function startTicking() {
-    endAt = Date.now() + timer.remaining * 1000;
+    endAt = Date.now() + (pausedMs || timer.remaining * 1000);
+    pausedMs = 0;
     ticker = win.setInterval(catchUp, TIMER_PERIOD_MS);
   }
 
   toggle.addEventListener('click', () => {
+    if (!timer.running) {
+      timer.toggle();
+      startTicking();
+      status.textContent = 'Восстанавливай дыхание';
+      return;
+    }
+    // Пауза. Сначала добираем секунды, созревшие с последнего срабатывания:
+    // замереть надо на том, что показывают часы, а не на том, что успел
+    // нарисовать интервал. Отдых мог на этом и закончиться — тогда паузу
+    // ставить уже не над чем, конец обработан внутри catchUp.
+    catchUp();
+    if (!timer.running) return;
+    pausedMs = endAt - Date.now();
     timer.toggle();
-    // Пауза и конец отдыха гасят интервал: незачем будить процессор телефона,
-    // пока человек делает подход.
-    if (timer.running) startTicking(); else stopTicking();
+    // Интервал гасим: незачем будить процессор телефона, пока человек
+    // делает подход.
+    stopTicking();
+    status.textContent = 'На паузе';
   });
+
+  const presets = [...document.querySelectorAll('.presets button')];
+
+  function selectDuration(preset) {
+    for (const other of presets) other.setAttribute('aria-pressed', String(other === preset));
+    timer.setDuration(Number(preset.dataset.time));
+    stopTicking();
+    pausedMs = 0;
+  }
+
+  for (const preset of presets) {
+    preset.addEventListener('click', () => {
+      selectDuration(preset);
+      status.textContent = 'Готов к старту';
+    });
+  }
 
   document.getElementById('timer-reset').addEventListener('click', () => {
     timer.reset();
     stopTicking();
+    pausedMs = 0;
+    status.textContent = 'Готов к старту';
   });
-
-  const presets = [...document.querySelectorAll('.presets button')];
-  for (const preset of presets) {
-    preset.addEventListener('click', () => {
-      for (const other of presets) other.setAttribute('aria-pressed', 'false');
-      preset.setAttribute('aria-pressed', 'true');
-      timer.setDuration(Number(preset.dataset.time));
-      stopTicking();
-    });
-  }
 
   // Начальная длительность — из разметки, из пресета с aria-pressed. Другого
   // источника нет: ни в index.html текстом, ни в timer.js по умолчанию. Что
   // отмеченный пресет на странице есть, сторожит тест стартового экрана, а не
   // ветка в коде: без него приложению всё равно нечего показать на табло.
-  const chosen = presets.find(preset => preset.getAttribute('aria-pressed') === 'true');
-  timer.setDuration(Number(chosen.dataset.time));
+  // Статус при этом не трогаем: на свежей странице человек ещё ничего не
+  // выбирал, и «Выбери время» из разметки — правда. Это тоже как в оригинале.
+  selectDuration(presets.find(preset => preset.getAttribute('aria-pressed') === 'true'));
 
   // Возвращение к приложению — второй источник правды о времени, кроме интервала:
   // пока вкладка была скрыта, он мог не сработать ни разу. Уход, наоборот, —
@@ -269,6 +307,11 @@ export function startApp(win = globalThis.window) {
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) flushSave(); else catchUp();
   });
+
+  // В Safari и на iOS visibilitychange при уходе со страницы приходит не всегда,
+  // а pagehide — штатный путь: им клиент и браузер сообщают, что страницу
+  // сворачивают, заменяют или выгружают.
+  win.addEventListener('pagehide', flushSave);
 
   // Кнопка «назад» показывается, когда пользователь ушёл ниже первого экрана.
   // Вешаем обработчик ровно один раз: у настоящего BackButton.onClick
