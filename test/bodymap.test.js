@@ -55,7 +55,11 @@ test('группы, которые греются только в разминк
 });
 
 test('незадействованные группы перечислены отдельно', () => {
-  assert.deepEqual(idleGroups(legs).sort(), ['calves', 'forearms']);
+  // Предплечья — единственная группа без разметки: хват резинки есть в шести
+  // упражнениях, но в load он не учитывается (см. docs/muscle-map.md).
+  // Икроножные с Task 7 размечены вспомогательными в четырёх упражнениях и
+  // сюда больше не попадают.
+  assert.deepEqual(idleGroups(legs).sort(), ['forearms']);
 });
 
 // Кликает первый попавшийся полигон переднего вида, без выбора региона:
@@ -156,14 +160,16 @@ test('клик по незадействованной мышце даёт пу�
   const picks = [];
   createBodyMap({ workout: legs, anteriorHost: a, posteriorHost: b, onPick: p => picks.push(p) });
   const win = a.ownerDocument.defaultView;
-  // calves — регион без силовой нагрузки в legs-mwf (idleGroups выше).
+  // forearm — единственный регион без нагрузки любого типа в legs-mwf
+  // (idleGroups выше). Ищем по обоим видам: на каком из них библиотека рисует
+  // предплечья, для этой проверки неважно.
   let target;
-  for (const polygon of a.querySelectorAll('polygon')) {
+  for (const polygon of [...a.querySelectorAll('polygon'), ...b.querySelectorAll('polygon')]) {
     picks.length = 0;
     polygon.dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
-    if (picks[0]?.region === 'calves') { target = polygon; break; }
+    if (picks[0]?.region === 'forearm') { target = polygon; break; }
   }
-  assert.ok(target, 'регион calves должен быть кликабелен на переднем виде');
+  assert.ok(target, 'регион forearm должен быть кликабелен хотя бы на одном виде');
   assert.equal(picks[0].sets, 0);
   assert.deepEqual(picks[0].exercises, []);
   // '#cdd8e5' — значение IDLE_COLOR в bodymap.js; наружу константа не экспортирована.

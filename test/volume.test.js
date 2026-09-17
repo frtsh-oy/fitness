@@ -14,7 +14,10 @@ test('силовой объём по группам совпадает с раз
   assert.equal(s.get('triceps'), 3);
   assert.equal(s.get('adductors'), 2);
   assert.equal(s.get('abs'), 1);
-  assert.equal(s.get('calves'), undefined);
+  // Икроножные — по 0.5 в «Ягодичном мосте» и «Жиме двумя ногами лёжа»,
+  // оба блока по 2 круга.
+  assert.equal(s.get('calves'), 2);
+  assert.equal(s.get('forearms'), undefined);
 });
 
 test('разминка считается отдельно и даёт дробные значения', () => {
@@ -23,6 +26,15 @@ test('разминка считается отдельно и даёт дроб�
   assert.equal(w.get('abs'), 5.5);
   assert.equal(w.get('delts_rear'), 3);
   assert.equal(w.get('upper_back'), 0.5);
+  // «Китайское» приседание и подъём колена, по 0.5 в блоке из 3 кругов.
+  assert.equal(w.get('calves'), 3);
+});
+
+test('икроножные работают в разминке и в силовых, но не в заминке', () => {
+  // Раздельный счёт — это и есть разница между двумя режимами карты: 2 против 5.
+  assert.equal(setsByGroup(legs, 'strength').get('calves'), 2);
+  assert.equal(setsByGroup(legs, 'warmup').get('calves'), 3);
+  assert.equal(setsByGroup(legs, 'cooldown').get('calves'), undefined);
 });
 
 test('заминка считается отдельно', () => {

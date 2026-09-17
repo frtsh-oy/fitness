@@ -106,8 +106,9 @@ test('подписи про разминку и незадействованны
   const note = window.document.querySelector('.bodymap-note').textContent;
   assert.match(note, /Сгибатели бедра/, 'не сказано, что греется только в разминке');
   const idle = window.document.querySelector('.bodymap-idle').textContent;
-  assert.match(idle, /Икроножные/);
   assert.match(idle, /Предплечья/);
+  assert.doesNotMatch(idle, /Икроножные/,
+    'икроножные размечены в четырёх упражнениях и в список неразмеченных больше не попадают');
 });
 
 test('подпись про укрупнение областей схемы есть в раскрытой секции', () => {
@@ -167,8 +168,10 @@ test('клик по другой мышце заменяет прежний сп
   d.querySelector('.bodymap-toggle').click();
   pickByTitle(d, window, 'Ягодичные');
   assert.equal(d.querySelectorAll('.bodymap-pick button').length, 4);
-  const title = pickByTitle(d, window, 'Икроножные');
-  assert.equal(title, 'Икроножные — 0 подх.');
+  // Предплечья — единственная группа без разметки, и ноль подходов у неё в
+  // любом режиме карты.
+  const title = pickByTitle(d, window, 'Предплечья');
+  assert.equal(title, 'Предплечья — 0 подх.');
   assert.equal(d.querySelectorAll('.bodymap-pick button').length, 0,
     'старый список упражнений не должен оставаться при клике по другой мышце');
 });
