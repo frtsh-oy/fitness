@@ -2,11 +2,15 @@
 // тренировку, ни про разметку страницы: получает объект тренировки и два
 // контейнера.
 import createBodyHighlighter, { ModelType } from './vendor/body-highlighter.esm.js';
-import { exerciseEntries, setsByGroup, PALETTE_STEPS } from './volume.js';
+import { exerciseEntries, setsByGroup } from './volume.js';
 import { MUSCLES, regionLabel } from './muscles.js';
 
 // Шесть оттенков от бледного к насыщенному. Библиотека выбирает цвет как
 // PALETTE[min(len-1, подходы-1)], поэтому порядок здесь и есть шкала.
+// Длина обязана равняться PALETTE_STEPS из volume.js — это держит тест
+// «палитра ровно на число уровней объёма», а не срез при передаче в
+// библиотеку: если бы длины разошлись, тест уже упал бы раньше, чем срез
+// успел бы что-то скрыть.
 export const PALETTE = ['#eaf6cb', '#ddf0a8', '#d2ec86', '#c6e765', '#a9d248', '#8ab82f'];
 
 // Мышцы без силовой нагрузки: заметно светлее фона секции, но не белые —
@@ -25,8 +29,13 @@ const KNOWN_REGIONS = new Set(Object.values(MUSCLES).map(m => m.region));
 
 export function warmupOnlyGroups(workout) {
   const strength = setsByGroup(workout, 'strength');
-  const soft = new Map([...setsByGroup(workout, 'warmup'), ...setsByGroup(workout, 'cooldown')]);
-  return [...soft.keys()].filter(group => !strength.has(group));
+  // Явно Set ключей, а не new Map([...a, ...b]): нас интересует только
+  // «встречалась ли группа», а слияние двух Map через spread не суммирует
+  // объёмы при совпадении ключа — оно их перезаписывает (заминка молча
+  // затёрла бы значение разминки). Пока читаются только ключи, это неважно,
+  // но выражение через Map выглядело бы как сложение объёмов, которого нет.
+  const soft = new Set([...setsByGroup(workout, 'warmup').keys(), ...setsByGroup(workout, 'cooldown').keys()]);
+  return [...soft].filter(group => !strength.has(group));
 }
 
 export function idleGroups(workout) {
@@ -44,18 +53,22 @@ export function createBodyMap({ workout, anteriorHost, posteriorHost, onPick }) 
     if (!onPick || !KNOWN_REGIONS.has(muscle)) return;
     // Наружу отдаём русское название, а не идентификатор региона: вызывающий
     // код показывает это человеку, и «gluteal» его только запутает.
+    // stats — без ?./??: аккумулятор библиотеки строится по полному списку
+    // её 22 канонических типов (включая те, что вне KNOWN_REGIONS), muscle
+    // всегда один из них, значит stats определён для любого клика по телу —
+    // проверено явно, кликом по всем полигонам без обеих проверок разом.
     onPick({
       region: muscle,
       label: regionLabel(muscle),
-      sets: stats?.frequency ?? 0,
-      exercises: stats?.exercises ?? [],
+      sets: stats.frequency,
+      exercises: stats.exercises,
     });
   };
 
   const common = {
     data,
     bodyColor: IDLE_COLOR,
-    highlightedColors: PALETTE.slice(0, PALETTE_STEPS),
+    highlightedColors: PALETTE,
     onClick: handle,
     style: { width: '100%' },
   };
@@ -65,11 +78,12 @@ export function createBodyMap({ workout, anteriorHost, posteriorHost, onPick }) 
     createBodyHighlighter({ ...common, container: posteriorHost, type: ModelType.POSTERIOR }),
   ];
 
-  let alive = true;
   return {
+    // Повторный вызов не бросает — это гарантирует destroy() самой библиотеки
+    // (пустой список детей и уже отсоединённый узел — оба no-op), а не флаг
+    // на нашей стороне: мутацией показано, что свой флаг здесь ничем не
+    // отличался бы от его отсутствия. См. тест в test/bodymap.test.js.
     destroy() {
-      if (!alive) return;          // повторный вызов не должен бросать
-      alive = false;
       for (const view of views) view.destroy();
     },
   };
