@@ -57,9 +57,10 @@ export function toRegions(load) {
 
 // Регион картинки может покрывать несколько наших групп (upper-back это и
 // широчайшие, и верх спины), поэтому перечисляем все — иначе человек решит,
-// что клик показал не то.
+// что клик показал не то. При выводе список в середине фразы пишется со строчной
+// буквы (например: «Широчайшие, верх спины — 5 подх.»).
 export function regionLabel(region) {
   const names = Object.values(MUSCLES).filter(m => m.region === region).map(m => m.ru);
   if (names.length === 0) throw new Error(`Неизвестный регион: ${region}`);
-  return names.length === 1 ? names[0] : names[0] + ', ' + names.slice(1).join(', ');
+  return names.length === 1 ? names[0] : names[0] + ', ' + names.slice(1).map(n => n.toLowerCase()).join(', ');
 }

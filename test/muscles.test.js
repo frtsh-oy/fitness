@@ -26,9 +26,9 @@ test('muscleLabel бросает ошибку на неизвестной гру
 });
 
 test('toRegions складывает группы, указывающие на один регион', () => {
-  const regions = toRegions({ lats: 1, upper_back: 0.5, quads: 1 });
-  assert.equal(regions.get('upper-back'), 1.5);
-  assert.equal(regions.get('quadriceps'), 1);
+  const regions = toRegions({ quads: 1, hip_flexors: 0.5, hamstrings: 1 });
+  assert.equal(regions.get('quadriceps'), 1.5);
+  assert.equal(regions.get('hamstring'), 1);
 });
 
 test('toRegions бросает ошибку на неизвестной группе', () => {
@@ -99,11 +99,13 @@ test('regionLabel даёт русское название региона, а н
 });
 
 test('regionLabel перечисляет все группы, попавшие в один регион', () => {
-  // upper-back это и широчайшие, и верх спины: человеку надо видеть обе
-  assert.match(regionLabel('upper-back'), /Широчайшие/);
-  assert.match(regionLabel('upper-back'), /Верх спины/i);
-  assert.match(regionLabel('front-deltoids'), /Передняя дельта/);
-  assert.match(regionLabel('front-deltoids'), /Средняя дельта/);
+  // одна группа в регионе — выводится как есть
+  assert.equal(regionLabel('gluteal'), 'Ягодичные');
+  // две группы — первая с заглавной, остальные со строчной
+  assert.equal(regionLabel('upper-back'), 'Широчайшие, верх спины');
+  assert.equal(regionLabel('front-deltoids'), 'Передняя дельта, средняя дельта');
+  // quadriceps содержит quads и hip_flexors — проверяем стабильность порядка
+  assert.equal(regionLabel('quadriceps'), 'Квадрицепсы, сгибатели бедра');
 });
 
 test('regionLabel бросает на неизвестном регионе', () => {
