@@ -412,3 +412,14 @@ test('на широком экране описания отрисованы р�
     assert.equal(region.hidden, false, 'область текста видна');
   }
 });
+
+// Значение по умолчанию — это обещание в сигнатуре renderWorkout: вызов без
+// параметров рисует телефонное состояние. Без этой проверки обещание держалось
+// бы только на словах комментария: все остальные тесты передают флаг явно.
+test('renderWorkout без параметров рисует описания свёрнутыми', () => {
+  const { document } = makeDom();
+  const fragment = renderWorkout(legsMwf, document);
+  const { button, region } = howtoOf(fragment, fragment.querySelector('.exercise'));
+  assert.equal(button.getAttribute('aria-expanded'), 'false');
+  assert.equal(region.hidden, true);
+});
