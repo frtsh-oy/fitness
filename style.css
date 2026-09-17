@@ -31,13 +31,17 @@
 .bodymap-modes button[aria-pressed=true]{background:#152d4a;border-color:#152d4a;color:white}
 .bodymap-views{display:flex;gap:14px;justify-content:center}
 .bodymap-views>div{flex:1;min-width:0;max-width:220px}
-/* .bodymap-scope — статичная подпись из index.html про то, что области схемы
-   крупнее наших групп. Оформлена вместе с соседними подписями, но отдельным
-   классом: содержимое .bodymap-note и .bodymap-idle пишет app.js по выборке
-   класса, и второй элемент с тем же классом сломал бы её. */
-.bodymap-note,.bodymap-idle,.bodymap-scope{font-size:13px;line-height:1.5;color:#526278;margin:10px 0 0}
+/* Две подписи под схемой: .bodymap-note — про то, что красит цвет в выбранном
+   режиме, .bodymap-groups — оговорки про отдельные группы мышц. Содержимое
+   обеих пишет app.js по выборке класса, поэтому второй элемент с тем же
+   классом сломал бы выборку. .bodymap-shared — объяснение про общую область
+   схемы; его app.js создаёт внутри подбора, и только когда область объединяет
+   несколько групп мышц, поэтому в index.html его нет. */
+.bodymap-note,.bodymap-groups,.bodymap-shared{font-size:13px;line-height:1.5;color:#526278}
+.bodymap-note,.bodymap-groups{margin:10px 0 0}
 .bodymap-pick:not(:empty){margin-top:12px;padding-top:12px;border-top:1px solid #e2e9f2}
 .bodymap-pick h3{font-size:15px;margin:0 0 6px}
+.bodymap-shared{margin:0 0 8px}
 .bodymap-pick button{display:block;width:100%;text-align:left;border:0;background:none;font:inherit;
   font-size:14px;color:#193d6a;text-decoration:underline;text-underline-offset:3px;
   min-height:44px;padding:6px 0;cursor:pointer}

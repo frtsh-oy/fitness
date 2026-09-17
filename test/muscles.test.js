@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { MUSCLES, isMuscleId, muscleLabel, toRegions, regionLabel } from '../muscles.js';
+import { MUSCLES, isMuscleId, muscleLabel, toRegions, regionLabel, regionGroups } from '../muscles.js';
 import { MuscleType } from '../vendor/body-highlighter.esm.js';
 
 test('словарь содержит ровно 20 групп', () => {
@@ -109,4 +109,42 @@ test('regionLabel перечисляет все группы, попавшие �
 
 test('regionLabel бросает на неизвестном регионе', () => {
   assert.throws(() => regionLabel('нет-такого'), /нет-такого/);
+});
+
+// regionGroups нужен подписи в подборе: она появляется только у области,
+// которая объединяет несколько групп мышц. Раньше числа групп спросить было
+// не у кого — regionLabel отдаёт готовую строку, и разбирать её обратно по
+// запятым значило бы считать названия, а не группы.
+test('regionGroups отдаёт идентификаторы групп региона в порядке словаря', () => {
+  assert.deepEqual(regionGroups('quadriceps'), ['quads', 'hip_flexors']);
+  assert.deepEqual(regionGroups('upper-back'), ['lats', 'upper_back']);
+  assert.deepEqual(regionGroups('chest'), ['chest']);
+});
+
+test('regionGroups бросает на неизвестном регионе, как и regionLabel', () => {
+  assert.throws(() => regionGroups('нет-такого'), /нет-такого/);
+});
+
+// Число из брифа Task 8: общих областей три из семнадцати, и постоянная
+// подпись под картой ради трёх случаев не нужна. Тест сторожит и состав
+// списка: если общей станет ещё одна область, подпись в подборе начнёт
+// появляться и на ней — это надо увидеть, а не узнать случайно.
+test('несколько групп мышц — ровно у трёх областей схемы из семнадцати', () => {
+  const regions = [...new Set(Object.values(MUSCLES).map(m => m.region))];
+  assert.equal(regions.length, 17);
+  assert.deepEqual(regions.filter(r => regionGroups(r).length > 1).sort(),
+    ['front-deltoids', 'quadriceps', 'upper-back']);
+});
+
+// На этом стоит подпись в подборе: она обещает, что в заголовке перечислены
+// все группы области. Если regionLabel когда-нибудь начнёт сокращать список,
+// обещание станет ложью — и упадёт вот здесь.
+test('regionLabel называет каждую группу из regionGroups', () => {
+  for (const region of new Set(Object.values(MUSCLES).map(m => m.region))) {
+    const label = regionLabel(region).toLowerCase();
+    for (const id of regionGroups(region)) {
+      assert.ok(label.includes(muscleLabel(id).toLowerCase()),
+        `в подписи региона ${region} («${regionLabel(region)}») нет группы ${id}`);
+    }
+  }
 });

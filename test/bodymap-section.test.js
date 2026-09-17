@@ -7,6 +7,9 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { makeDom } from './setup.js';
 import { startApp } from '../app.js';
+import legs from '../workouts/legs-mwf.js';
+import { warmupOnlyGroups, idleGroups } from '../bodymap.js';
+import { muscleLabel, regionGroups } from '../muscles.js';
 
 const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 
@@ -101,36 +104,87 @@ test('закрытие карты тоже сохраняется в localStorag
     'свежий запуск должен помнить, что карту свернули, а не открывать её заново');
 });
 
-test('подписи про разминку и незадействованные группы на месте', () => {
+test('подписи про разминку и неразмеченные группы на месте, а списки групп — из данных', () => {
   const { window } = mount();
   window.document.querySelector('.bodymap-toggle').click();
-  const note = window.document.querySelector('.bodymap-note').textContent;
-  assert.match(note, /Сгибатели бедра/, 'не сказано, что греется только в разминке');
-  const idle = window.document.querySelector('.bodymap-idle').textContent;
+  const groups = window.document.querySelector('.bodymap-groups').textContent;
+
+  // Списки собираются из разметки, а не вписаны в подпись руками.
+  for (const group of [...warmupOnlyGroups(legs), ...idleGroups(legs)]) {
+    assert.match(groups, new RegExp(muscleLabel(group), 'i'),
+      `в подписи нет группы «${muscleLabel(group)}»`);
+  }
+  // Внутри фразы названия групп идут со строчной — так в согласованном макете.
+  assert.match(groups, /Только в разминке и заминке: сгибатели бедра, задняя дельта\./);
+  assert.match(groups, /Светлым — то, чего нет в разметке: предплечья\./);
+
   // Подпись говорит про разметку, а не про тело: предплечья в ней потому, что
   // хват резинки нигде не размечен, а не потому, что тренировка их не касается.
-  assert.match(idle, /не размечено как нагрузка: .*Предплечья/);
-  assert.doesNotMatch(idle, /Икроножные/,
+  // Эту формулировку уже ломали один раз, поэтому проверка отдельная.
+  assert.doesNotMatch(groups, /не работа|не участв|не задейств|не касает/i,
+    'светлым показано отсутствие разметки, а не отсутствие работы в теле');
+  assert.doesNotMatch(groups, /Икроножные/i,
     'икроножные размечены в четырёх упражнениях и в список неразмеченных больше не попадают');
 });
 
-test('подпись про укрупнение областей схемы есть в раскрытой секции', () => {
-  // Спека требует подписать в интерфейсе, что области схемы крупнее нашей
-  // разметки: без этого на одном экране видно противоречие — клик по бедру
-  // перечисляет «Квадрицепсы, сгибатели бедра», а подпись ниже говорит, что
-  // сгибатели бедра работают только в разминке и заминке.
-  // Текст не зависит ни от тренировки, ни от выбора мышцы, поэтому живёт в
-  // разметке index.html, а не собирается в app.js, и своего класса у него два
-  // повода: .bodymap-note и .bodymap-idle app.js находит по классу, и второй
-  // элемент с тем же классом сломал бы выборку.
+test('под картой ровно две подписи и меньше двухсот знаков', () => {
+  // Владелец программы сказал, что подписей под картой много: их было три и
+  // около 380 знаков — шесть строк текста под картинкой на телефоне. Тест
+  // держит не формулировку, а объём и число абзацев: он упадёт, если под карту
+  // вернут третий абзац или разрастётся текст.
   const { window } = mount();
   const d = window.document;
   d.querySelector('.bodymap-toggle').click();
-  const scope = d.querySelector('.bodymap-body .bodymap-scope');
-  assert.ok(scope, 'подписи про укрупнение областей нет в секции');
-  assert.match(scope.textContent, /в одну область попадает несколько групп мышц/);
+  const captions = [...d.querySelectorAll('.bodymap-body > p')];
+  assert.deepEqual(captions.map(p => p.className), ['bodymap-note', 'bodymap-groups']);
+  const total = captions.map(p => p.textContent).join(' ');
+  assert.ok(total.length < 200, `под картой ${total.length} знаков:\n${total}`);
+});
+
+test('объяснения про общие области схемы под картой больше нет', () => {
+  // Постоянный абзац .bodymap-scope объяснял затруднение до того, как человек
+  // с ним столкнётся, и владелец сказал, что он непонятен. Объяснение
+  // переехало в подбор — туда, где область действительно общая (тест ниже).
+  const { window } = mount();
+  const d = window.document;
+  d.querySelector('.bodymap-toggle').click();
+  assert.equal(d.querySelector('.bodymap-scope'), null,
+    'статичная подпись про области схемы должна была уйти из разметки');
+  assert.doesNotMatch(d.querySelector('.bodymap-body').textContent, /област/i,
+    'до клика по мышце про области схемы под картой говорить нечего');
   assert.equal(d.querySelectorAll('.bodymap-note').length, 1,
     'класс .bodymap-note обязан остаться единственным: app.js пишет его содержимое по выборке класса');
+  assert.equal(d.querySelectorAll('.bodymap-groups').length, 1,
+    'класс .bodymap-groups обязан остаться единственным: app.js пишет его содержимое по выборке класса');
+});
+
+test('в подборе по общей области схемы есть объяснение, по обычной — нет', () => {
+  const { window } = mount();
+  const d = window.document;
+  d.querySelector('.bodymap-toggle').click();
+
+  // Квадрицепсы — область из двух наших групп: квадрицепсы и сгибатели бедра.
+  const title = pickByTitle(d, window, 'Квадрицепсы');
+  assert.equal(title, 'Квадрицепсы, сгибатели бедра — 2 подх.');
+  const shared = d.querySelector('.bodymap-pick .bodymap-shared');
+  assert.ok(shared, 'у области из нескольких групп мышц объяснение обязано быть');
+  assert.match(shared.textContent, /общая/);
+  // Подпись обещает, что в заголовке перечислены все группы области. Проверяем,
+  // что это правда, а не обещание.
+  for (const id of regionGroups('quadriceps')) {
+    assert.ok(title.toLowerCase().includes(muscleLabel(id).toLowerCase()),
+      `в заголовке подбора нет группы ${id}`);
+  }
+  // И стоит объяснение сразу под заголовком, а не после списка упражнений:
+  // речь в нём именно про заголовок.
+  assert.deepEqual([...d.querySelector('.bodymap-pick').children].slice(0, 2).map(e => e.tagName),
+    ['H3', 'P']);
+
+  // Грудные — область из одной группы: перечислять нечего, объяснять нечего.
+  assert.equal(regionGroups('chest').length, 1);
+  assert.equal(pickByTitle(d, window, 'Грудные'), 'Грудные — 2 подх.');
+  assert.equal(d.querySelector('.bodymap-pick .bodymap-shared'), null,
+    'у области из одной группы мышц объяснение появляться не должно');
 });
 
 test('карта рисуется только при первом раскрытии, а не при загрузке', () => {
@@ -279,36 +333,48 @@ test('режим «вся нагрузка» меняет число подхо�
   ]);
 });
 
-test('подпись под картой говорит про тот режим, который выбран', () => {
+test('первая подпись говорит про тот режим, который выбран', () => {
   const { window } = mount();
   const d = window.document;
   d.querySelector('.bodymap-toggle').click();
   const note = () => d.querySelector('.bodymap-note').textContent;
 
-  assert.match(note(), /Цветом показаны силовые подходы/);
-  assert.match(note(), /Только в разминке и заминке работают: .*Сгибатели бедра/);
+  assert.match(note(), /Цветом/);
+  assert.match(note(), /силовые подходы/);
+  assert.doesNotMatch(note(), /вся нагрузка/i,
+    'в силовом режиме цветом показаны только силовые подходы');
 
   modeButton(d, 'all').click();
-  assert.doesNotMatch(note(), /Цветом показаны силовые подходы/,
+  assert.match(note(), /Цветом/);
+  assert.match(note(), /вся нагрузка: разминка, силовые и заминка/,
     'в режиме всей нагрузки цвет — это уже не только силовые подходы');
-  assert.match(note(), /Цветом показана вся нагрузка/);
-  // Те же группы, но сказанные иначе: они раскрашены, и объяснять их бледность
-  // больше нечем — зато у них по-прежнему нет ни одного силового подхода.
-  assert.match(note(), /Силовых подходов нет у этих групп: .*Сгибатели бедра/);
 
   modeButton(d, 'strength').click();
-  assert.match(note(), /Цветом показаны силовые подходы/, 'возврат в силовой режим обязан вернуть и подпись');
+  assert.match(note(), /силовые подходы/, 'возврат в силовой режим обязан вернуть и подпись');
+  assert.doesNotMatch(note(), /вся нагрузка/i);
 });
 
-test('подпись про неразмеченные группы от режима не зависит', () => {
+test('строка про разминку и заминку есть только в силовом режиме, а про светлое — в обоих', () => {
   const { window } = mount();
   const d = window.document;
   d.querySelector('.bodymap-toggle').click();
-  const before = d.querySelector('.bodymap-idle').textContent;
-  assert.match(before, /Предплечья/);
+  const groups = () => d.querySelector('.bodymap-groups').textContent;
+
+  assert.match(groups(), /Только в разминке и заминке: сгибатели бедра, задняя дельта/);
+  assert.match(groups(), /чего нет в разметке: предплечья/);
+
   modeButton(d, 'all').click();
-  assert.equal(d.querySelector('.bodymap-idle').textContent, before,
-    'предплечий нет ни в одном типе нагрузки, поэтому подпись одна на оба режима');
+  // В этом режиме те же группы раскрашены наравне с силовыми: бледность
+  // объяснять больше нечем, и строка про них уходит совсем, а не переписывается.
+  assert.doesNotMatch(groups(), /разминк/i,
+    'в режиме всей нагрузки разминка и заминка уже в цвете — говорить о них нечего');
+  assert.doesNotMatch(groups(), /сгибатели бедра|задняя дельта/i);
+  // А предплечий нет ни в одном типе нагрузки, поэтому эта строка одна на оба режима.
+  assert.match(groups(), /Светлым — то, чего нет в разметке: предплечья\./);
+
+  modeButton(d, 'strength').click();
+  assert.match(groups(), /Только в разминке и заминке: сгибатели бедра, задняя дельта/,
+    'возврат в силовой режим обязан вернуть и строку про разминку');
 });
 
 test('смена режима убирает прежний подбор, а не оставляет числа другого режима', () => {
@@ -400,23 +466,21 @@ test('пресс во всей нагрузке показывает 6,5 под�
   assert.equal(names.length, 4);
 });
 
-test('подпись объясняет верх шкалы через округление, а не через целые шесть', () => {
-  // Шкала из шести оттенков, а в режиме всей нагрузки объёмы доходят до 12.5:
-  // верх шкалы сливает несколько областей в один цвет, и знать об этом
-  // человеку неоткуда, кроме подписи.
-  //
-  // Порог по ТОЧНОМУ объёму — 5.5, а не 6: цвет берётся от Math.round(объём),
-  // и 5.5 округляется до шести (bodymap.js). Поэтому «самый тёмный — 6 и
-  // больше» само по себе ложно в режиме всей нагрузки: верх спины и передняя
-  // дельта с их 5.5 покрашены самым тёмным, а по клику показывают «5,5 подх.».
-  // Что 5.5 действительно даёт последний оттенок — проверяет тест «смена
-  // режима перерисовывает и задний вид» в test/bodymap.test.js.
+test('про округление и верх шкалы подписи под картой молчат', () => {
+  // Объяснение «оттенок берётся по округлённому числу подходов: самый тёмный —
+  // 6 и больше, то есть уже с 5,5» из подписи убрано целиком: на экране оно
+  // почти никому не нужно, а сократить его, не соврав, нельзя — верх шкалы
+  // начинается с 5,5, а не с шести (цвет берётся от Math.round(объём), см.
+  // bodymap.js). Поэтому подпись про верх шкалы молчит, а подробность осталась
+  // в README. Точное число подходов по-прежнему видно по клику.
   const { window } = mount();
   const d = window.document;
   d.querySelector('.bodymap-toggle').click();
-  const note = () => d.querySelector('.bodymap-note').textContent;
-  const expected = /Оттенок берётся по округлённому числу подходов: самый тёмный — 6 и больше, то есть уже с 5,5\./;
-  assert.match(note(), expected);
-  modeButton(d, 'all').click();
-  assert.match(note(), expected, 'шкала одна на оба режима, и подпись про неё тоже');
+  const underMap = () => d.querySelector('.bodymap-body').textContent;
+  for (const mode of ['strength', 'all']) {
+    modeButton(d, mode).click();
+    assert.doesNotMatch(underMap(), /округл/i, `${mode}: про округление под картой сказать нечего`);
+    assert.doesNotMatch(underMap(), /оттенок|тёмн/i, `${mode}: про верх шкалы подпись молчит`);
+    assert.doesNotMatch(underMap(), /6 и больше|5,5/, `${mode}: чисел шкалы в подписи нет`);
+  }
 });
