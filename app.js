@@ -25,6 +25,14 @@ const SAVE_DELAY_MS = 500;
 // Вопрос перед сбросом — дословно из src-original/app.js.
 const RESET_QUESTION = 'Сбросить все отметки за сегодня?';
 
+// Порог телефона — то же число, что в style.css, где ниже него действуют
+// телефонные размеры. Здесь он нужен потому, что раскрытие описаний
+// упражнений — атрибут разметки (aria-expanded и hidden), а атрибут
+// медиазапросом не задать. Что оба файла говорят про одну и ту же ширину,
+// сторожит тест: разъехавшись, они дали бы телефонные размеры с раскрытым
+// текстом, и причину этого пришлось бы искать в двух файлах сразу.
+export const PHONE_MAX_WIDTH = 480;
+
 // Объяснение в подборе под картой: показывается только у области, которая на
 // схеме одна на несколько наших групп мышц (их три из семнадцати, см.
 // regionGroups в muscles.js). Постоянным абзацем под картой оно объясняло
@@ -85,8 +93,27 @@ export function startApp(win = globalThis.window) {
   renderIntro(workout, document);
 
   const host = document.getElementById('workout');
-  host.replaceChildren(renderWorkout(workout, document));
+  // Описания упражнений: на телефоне свёрнуты, в широком окне раскрыты — там
+  // места хватает, и прятать текст незачем. Решение принимается один раз, при
+  // отрисовке. Перерисовки при повороте экрана нет намеренно: она стёрла бы
+  // то, что человек успел раскрыть руками, а поворот телефона сам по себе
+  // просьбы «покажи мне технику» не означает.
+  const expandDescriptions = !win.matchMedia(`(max-width: ${PHONE_MAX_WIDTH}px)`).matches;
+  host.replaceChildren(renderWorkout(workout, document, { expandDescriptions }));
   setupPlayers(host, url => tg.openLink(url));
+
+  // Раскрытие описания — делегированием на host: кнопок девятнадцать, и своего
+  // обработчика каждой не нужно. Кнопку ищем через closest, потому что цель
+  // события — значок-уголок, когда палец попал в него, а не в подпись.
+  // Раскрытие одного упражнения не трогает остальные: человек вправе держать
+  // раскрытыми оба упражнения силовой пары, которые делает одно за другим.
+  host.addEventListener('click', event => {
+    const toggle = event.target.closest('.howto-toggle');
+    if (!toggle) return;
+    const open = toggle.getAttribute('aria-expanded') !== 'true';
+    toggle.setAttribute('aria-expanded', String(open));
+    document.getElementById(toggle.getAttribute('aria-controls')).hidden = !open;
+  });
 
   // Карта тела. Отложено именно РИСОВАНИЕ: сам модуль библиотеки грузится
   // вместе с приложением, статическим импортом. Отложена работа по построению

@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { makeDom } from './setup.js';
-import { startApp } from '../app.js';
+import { startApp, PHONE_MAX_WIDTH } from '../app.js';
 import { storageKey, currentDay } from '../storage.js';
 import { markId, scheduleShort, scheduleLong } from '../render.js';
 import { getWorkout } from '../workouts/index.js';
@@ -118,9 +118,29 @@ function installFakeClock(t, window) {
   };
 }
 
-function mount(t, { marks = null, webApp = null, freezeTimers = false, fakeClock = false, denyStorage = false } = {}) {
+// Окно заданной ширины: matchMedia отвечает на запросы о ширине так, как
+// ответил бы экран в screenWidth пикселей, а на остальные — как обычный стаб
+// окружения, то есть «нет». Разбор запроса, а не «всегда да»: приложение тем
+// же matchMedia спрашивает и про prefers-reduced-motion, и стаб-«да» отвечал бы
+// заодно и на него.
+function widthMatchMedia(screenWidth) {
+  return query => {
+    const max = query.match(/max-width:\s*(\d+)px/);
+    return {
+      media: query,
+      matches: max ? screenWidth <= Number(max[1]) : false,
+      addEventListener() {},
+      removeEventListener() {},
+    };
+  };
+}
+
+function mount(t, { marks = null, webApp = null, freezeTimers = false, fakeClock = false, denyStorage = false, screenWidth = null } = {}) {
   const { window, document } = makeDom(PAGE);
   t.after(() => window.close());
+  // Ширину окна подменяем до startApp: по ней приложение решает при отрисовке,
+  // раскрывать ли описания упражнений.
+  if (screenWidth !== null) window.matchMedia = widthMatchMedia(screenWidth);
   if (marks) window.localStorage.setItem(todayKey(), JSON.stringify(marks));
   // Приватный режим Safari и урезанный WebView: обращение к localStorage
   // бросает ещё до первого getItem.
@@ -1077,4 +1097,138 @@ test('навигация подсвечивает блок, о котором с
   // не переносит, иначе она уезжала бы на блок, которого на экране уже нет.
   observer.intersect(document.getElementById('finish'), false);
   assert.deepEqual([...document.querySelectorAll('.block-nav a.active')].map(link => link.hash), ['#legs1']);
+});
+
+// ЗАДАЧА 9: описания упражнений под нажатием. Что в свёрнутой карточке лежит
+// внутри области раскрытия, а что снаружи, проверяет render.test.js; здесь —
+// поведение на настоящей странице: решение по ширине окна, нажатие и то, что
+// сворачивание не задело ни отметки, ни счётчик, ни навигацию.
+
+const howtoPairs = document => [...document.querySelectorAll('#workout .exercise')].map(article => {
+  const button = article.querySelector('.howto-toggle');
+  return { button, region: document.getElementById(button.getAttribute('aria-controls')) };
+});
+
+// Телефон 375px против окна 800px: на узком экране места нет, на широком
+// прятать текст незачем. Порог — PHONE_MAX_WIDTH, и обе стороны от него здесь
+// проверены на одной и той же странице.
+test('на телефоне описания свёрнуты, а в широком окне раскрыты', t => {
+  const phone = mount(t, { screenWidth: 375 }).document;
+  const wide = mount(t, { screenWidth: 800 }).document;
+
+  const phonePairs = howtoPairs(phone);
+  assert.equal(phonePairs.length, 19);
+  for (const { button, region } of phonePairs) {
+    assert.equal(button.getAttribute('aria-expanded'), 'false');
+    assert.equal(region.hidden, true);
+  }
+
+  const widePairs = howtoPairs(wide);
+  assert.equal(widePairs.length, 19);
+  for (const { button, region } of widePairs) {
+    assert.equal(button.getAttribute('aria-expanded'), 'true');
+    assert.equal(region.hidden, false);
+  }
+});
+
+// Окно ровно на пороге считается телефоном: в style.css правила телефона
+// включает max-width, то есть границу он включает тоже.
+test('окно ровно по порогу получает телефонную раскладку описаний', t => {
+  const { document } = mount(t, { screenWidth: PHONE_MAX_WIDTH });
+  assert.equal(document.querySelector('.howto-toggle').getAttribute('aria-expanded'), 'false');
+  const { document: wider } = mount(t, { screenWidth: PHONE_MAX_WIDTH + 1 });
+  assert.equal(wider.querySelector('.howto-toggle').getAttribute('aria-expanded'), 'true');
+});
+
+// Порог живёт в двух местах: в style.css (размеры) и в app.js (раскрытие
+// описаний при отрисовке, медиазапросом атрибут не задать). Разъехавшись, они
+// дали бы телефонные размеры с раскрытым текстом или наоборот — на экране это
+// выглядит как «просто так получилось», и причину пришлось бы искать в двух
+// файлах сразу.
+test('порог телефона в app.js и в style.css — одно и то же число', () => {
+  const css = readFileSync(fileURLToPath(new URL('../style.css', import.meta.url)), 'utf8');
+  const widths = [...css.matchAll(/@media[^{]*max-width:\s*(\d+)px/g)].map(m => Number(m[1]));
+  assert.ok(widths.includes(PHONE_MAX_WIDTH),
+    `в style.css нет медиазапроса на ${PHONE_MAX_WIDTH}px, есть ${widths.join(', ')}`);
+});
+
+test('нажатие на «Как выполнять» раскрывает описание, повторное — сворачивает', t => {
+  const { document } = mount(t, { screenWidth: 375 });
+  const [{ button, region }] = howtoPairs(document);
+
+  button.click();
+  assert.equal(button.getAttribute('aria-expanded'), 'true');
+  assert.equal(region.hidden, false);
+
+  button.click();
+  assert.equal(button.getAttribute('aria-expanded'), 'false');
+  assert.equal(region.hidden, true);
+});
+
+// Нажимают не по подписи, а по кнопке целиком, и палец часто попадает в
+// уголок: у обработчика цель — сам значок, а не кнопка.
+test('нажатие по значку-уголку раскрывает описание так же, как по подписи', t => {
+  const { document } = mount(t, { screenWidth: 375 });
+  const [{ button, region }] = howtoPairs(document);
+
+  button.querySelector('.howto-caret').dispatchEvent(
+    new document.defaultView.MouseEvent('click', { bubbles: true }));
+  assert.equal(button.getAttribute('aria-expanded'), 'true');
+  assert.equal(region.hidden, false);
+});
+
+// Не аккордеон: человек вправе раскрыть сразу несколько упражнений — например
+// оба упражнения силовой пары, которые делает по кругу одно за другим.
+test('раскрытие одного упражнения не сворачивает остальные', t => {
+  const { document } = mount(t, { screenWidth: 375 });
+  const pairs = howtoPairs(document);
+
+  pairs[0].button.click();
+  pairs[1].button.click();
+
+  assert.deepEqual(pairs.slice(0, 2).map(p => p.button.getAttribute('aria-expanded')), ['true', 'true']);
+  assert.deepEqual(pairs.slice(0, 2).map(p => p.region.hidden), [false, false]);
+  assert.equal(pairs.slice(2).filter(p => p.region.hidden).length, 17, 'остальные так и свёрнуты');
+});
+
+// Ревью прошлой итерации ловило дефект «счётчик считал отметки за пределами
+// экрана»: в наборе оказывались отметки, которых на странице нет. Сворачивание
+// описаний — ровно тот случай, когда отметка могла уехать под hidden: тогда
+// счётчик считал бы её, а палец до неё не дотянулся бы.
+test('в свёрнутом виде ни одна отметка и ни одно видео не спрятаны под hidden', t => {
+  const { document, app } = mount(t, { screenWidth: 375 });
+
+  assert.equal(app.total, TOTAL, 'счётчик знает про все отметки тренировки');
+  assert.equal(boxes(document).length, TOTAL);
+  assert.equal(boxes(document).filter(box => box.closest('[hidden]')).length, 0);
+
+  const videos = [...document.querySelectorAll('#workout button.video')];
+  assert.equal(videos.length, 18, 'плеер подменил все ссылки на видео');
+  assert.equal(videos.filter(button => button.closest('[hidden]')).length, 0);
+});
+
+test('отметка в свёрнутой карточке работает и двигает счётчик', t => {
+  const { document, app } = mount(t, { screenWidth: 375 });
+  const exercise = document.querySelector('#legs1 .exercise');
+  const [first, second] = [...exercise.querySelectorAll('input[data-mark]')];
+
+  first.click();
+  second.click();
+
+  assert.equal(app.marks.size, 2);
+  assert.equal(exercise.classList.contains('completed'), true);
+  assert.equal(document.getElementById('progress').value, 2);
+  assert.equal(document.getElementById('progress-text').textContent, `Сегодня: 2 из ${TOTAL} отметок`);
+});
+
+// Навигация следит за появлением блоков на экране, а не за упражнениями:
+// сворачивание описаний не должно было ни убрать блок из-под наблюдения, ни
+// сбить подсветку.
+test('навигация по блокам работает и при свёрнутых описаниях', t => {
+  const { window, document } = mount(t, { screenWidth: 375 });
+  const [observer] = window.intersectionObservers;
+
+  assert.equal(observer.targets.length, WORKOUT.blocks.length);
+  observer.intersect(document.getElementById('upper2'));
+  assert.deepEqual([...document.querySelectorAll('.block-nav a.active')].map(link => link.hash), ['#upper2']);
 });
