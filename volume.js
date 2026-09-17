@@ -2,7 +2,7 @@
 // тренировки: на вход объект по схеме, на выход числа. Это же основание для
 // будущей оценки недельной нагрузки, поэтому модуль обязан жить отдельно
 // от рисования картинки.
-import { MUSCLES, toRegions } from './muscles.js';
+import { MUSCLES, isMuscleId, toRegions } from './muscles.js';
 
 // Объёмы выше этого числа библиотека красит последним оттенком палитры,
 // различие между ними на карте пропадёт. Это принятое ограничение,
@@ -33,7 +33,7 @@ export function setsByGroup(workout, kind) {
 export function setsByRegion(workout, kind) {
   const sets = new Map();
   for (const [group, value] of setsByGroup(workout, kind)) {
-    if (!Object.hasOwn(MUSCLES, group)) {
+    if (!isMuscleId(group)) {
       throw new Error(`Неизвестная группа мышц: ${group}`);
     }
     const region = MUSCLES[group].region;
@@ -50,9 +50,10 @@ export function exerciseEntries(workout, kind) {
     // Форма этой функции подогнана под то, как библиотека карты суммирует частоту.
     // Для будущей оценки недельной нагрузки опираться на setsByGroup и setsByRegion.
     for (const [region, share] of toRegions(item.load)) {
-      // Схема гарантирует, что доля равна 0.5 или 1, а rounds — целое не меньше 1.
-      // Поэтому произведение никогда не меньше 0.5, а Math.round(0.5) даёт 1.
-      // Инвариант (минимум один подход) обеспечен входными данными, а не защитой.
+      // share — результат toRegions, сумма одной или нескольких долей из {0.5, 1}.
+      // Например, seated-row (широчайшие и верх спины в один регион): 1 + 1 = 2.
+      // Сумма ненулевых значений из {0.5, 1} не меньше 0.5; число кругов целое ≥1.
+      // Значит share * rounds ≥0.5, а Math.round(0.5) даёт 1 — frequency ≥1 всегда.
       entries.push({
         name: item.name,
         key: item.key,
