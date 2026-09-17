@@ -67,6 +67,20 @@ test('дробный объём округляется до целого, мин
   assert.equal(byKeyRegion.get('overhead-pull-apart:back-deltoids'), 3);
   assert.equal(byKeyRegion.get('overhead-pull-apart:trapezius'), 2);
   assert.equal(byKeyRegion.get('overhead-pull-apart:front-deltoids'), 2);
+  // Нижняя граница — ровно тот случай, ради которого из volume.js убрали
+  // Math.max(1, …): произведение равно 0.5, и поднять его до 1 обязан сам
+  // Math.round. Без этих двух утверждений тест обещал «минимум один подход»,
+  // а проверял только значения 3, 2 и 2. Math.floor на них ещё видно (1.5
+  // дало бы 1, а не 2), а вот обнуление всего, что меньше 1, — уже нет:
+  // значения ≥1 такая замена не трогает, и вся проверка проходила зелёной.
+  // pelvic-tilt (блок «Старт», rounds 1, load { abs: 1, obliques: 0.5 }):
+  // obliques доля 0.5 × 1 круг = 0.5 → round(0.5)=1.
+  // thoracic-rotation (тот же блок, load { obliques: 1, upper_back: 0.5 }):
+  // upper_back → регион upper-back, доля 0.5 × 1 круг = 0.5 → round(0.5)=1.
+  assert.equal(byKeyRegion.get('pelvic-tilt:obliques'), 1,
+    'доля 0.5 при одном круге обязана дать один подход, а не ноль');
+  assert.equal(byKeyRegion.get('thoracic-rotation:upper-back'), 1,
+    'доля 0.5 при одном круге обязана дать один подход, а не ноль');
 });
 
 test('палитра закрывает максимальный объём по всем тренировкам', () => {

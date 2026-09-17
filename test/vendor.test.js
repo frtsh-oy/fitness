@@ -51,7 +51,7 @@ test('лицензия MIT сохранена полностью', () => {
   assert.match(text, /THE SOFTWARE IS PROVIDED .* WITHOUT WARRANTY/, 'отказ от ответственности');
 });
 
-test('лицензия MI скопирована в шапку ESM сборки', () => {
+test('лицензия MIT скопирована в шапку ESM сборки', () => {
   const src = readFileSync(new URL('../vendor/body-highlighter.esm.js', import.meta.url), 'utf8');
   assert.match(src, /MIT License/, 'заголовок лицензии в сборке');
   assert.match(src, /Permission is hereby granted/, 'текст разрешения в сборке');

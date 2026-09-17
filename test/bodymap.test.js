@@ -58,11 +58,25 @@ test('незадействованные группы перечислены о�
   assert.deepEqual(idleGroups(legs).sort(), ['calves', 'forearms']);
 });
 
-test('клик по мышце отдаёт её упражнения', () => {
+// Кликает первый попавшийся полигон переднего вида, без выбора региона:
+// проверяется форма ответа onPick, а не конкретная мышца. Раньше здесь стоял
+// `a.querySelector('[data-muscle="gluteal"]') ?? a.querySelector('polygon')`,
+// и первый операнд не совпадал никогда — библиотека не ставит на полигоны
+// никаких data-* (h() в vendor/body-highlighter.esm.js:377-381 задаёт только
+// points, style.cursor, style.fill и слушатель клика), так что всю работу
+// делал запасной вариант, а селектор обещал ягодичные, которых тест не касался.
+// Непустой список упражнений тест вправе требовать только потому, что первый
+// полигон переднего вида — грудные, а они в силовых есть. Если библиотека
+// когда-нибудь переставит полигоны и первым окажется регион без силовой
+// нагрузки, тест упадёт — тогда адресовать регион перебором, как это сделано
+// ниже в тестах про gluteal и calves. Пустой список сам по себе не дефект: он
+// проверен отдельным тестом «клик по незадействованной мышце даёт пустой
+// результат и цвет фона мышц».
+test('клик по мышце отдаёт её упражнения и русское название региона', () => {
   const { a, b } = hosts();
   const picks = [];
   createBodyMap({ workout: legs, anteriorHost: a, posteriorHost: b, onPick: p => picks.push(p) });
-  const target = a.querySelector('[data-muscle="gluteal"]') ?? a.querySelector('polygon');
+  const target = a.querySelector('polygon');
   assert.ok(target, 'в отрисованном виде нет кликабельных элементов');
   target.dispatchEvent(new a.ownerDocument.defaultView.MouseEvent('click', { bubbles: true }));
   assert.equal(picks.length, 1, 'обработчик клика не вызвался');
