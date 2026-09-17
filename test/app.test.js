@@ -1232,3 +1232,29 @@ test('навигация по блокам работает и при свёрн
   observer.intersect(document.getElementById('upper2'));
   assert.deepEqual([...document.querySelectorAll('.block-nav a.active')].map(link => link.hash), ['#upper2']);
 });
+
+// Обработчик раскрытия висит на всём списке упражнений и видит каждый клик
+// внутри него — по отметке, по её подписи, по кнопке видео, по заголовку.
+// Без раннего выхода (closest вернул null) он падал бы с TypeError на каждом
+// таком клике, и ни один тест этого бы не увидел: исключение из обработчика
+// события не доходит до вызова click(). На телефоне оно осталось бы только
+// ошибкой в консоли, которую никто не читает, — поэтому ловим необработанные
+// исключения окна явно.
+test('клик в списке упражнений не оставляет необработанных исключений', t => {
+  const { window, document } = mount(t, { screenWidth: 375 });
+  const errors = [];
+  window.addEventListener('error', event => errors.push(String(event.error ?? event.message)));
+  const exercise = document.querySelector('#legs1 .exercise');
+
+  exercise.querySelector('input[data-mark]').click();
+  exercise.querySelector('label.check span').click();
+  exercise.querySelector('button.video').click();
+  exercise.querySelector('h3').click();
+  exercise.querySelector('.howto-toggle').click();
+
+  assert.deepEqual(errors, []);
+  // Клики по отметке и по её подписи — это два переключения одного чекбокса,
+  // то есть набор снова пуст: проверка заодно сторожит, что клики дошли.
+  assert.equal(document.getElementById('progress-text').textContent, `Сегодня: 0 из ${TOTAL} отметок`);
+  assert.equal(exercise.querySelector('.howto-toggle').getAttribute('aria-expanded'), 'true');
+});

@@ -56,13 +56,10 @@ const SVG_NS = 'http://www.w3.org/2000/svg';
 // Значок — путь, а не символ шрифта: «треугольник» и «уголок» системные шрифты
 // рисуют каждый по-своему, разного размера и с разными боковыми просветами,
 // и подпись рядом с ними съезжала бы от системы к системе.
-function renderIcon(document, d, className) {
+function renderIcon(document, d) {
   const svg = document.createElementNS(SVG_NS, 'svg');
   svg.setAttribute('viewBox', '0 0 24 24');
   svg.setAttribute('aria-hidden', 'true');
-  // Класс атрибутом: className у SVG — не строка, а SVGAnimatedString, и
-  // присваивание в неё молча не сработало бы.
-  if (className) svg.setAttribute('class', className);
   const path = document.createElementNS(SVG_NS, 'path');
   path.setAttribute('d', d);
   svg.append(path);
@@ -107,7 +104,12 @@ function renderItem(document, block, item, itemIndex, expandDescriptions) {
   toggle.type = 'button';
   toggle.setAttribute('aria-expanded', String(expandDescriptions));
   toggle.setAttribute('aria-controls', regionId);
-  toggle.append(el(document, 'span', null, HOWTO_LABEL), renderIcon(document, CARET_PATH, 'howto-caret'));
+  const caret = renderIcon(document, CARET_PATH);
+  // Класс атрибутом, а не присваиванием в className: у SVG это не строка, а
+  // SVGAnimatedString, и присваивание молча не сработало бы. По этому классу
+  // style.css и поворачивает уголок в раскрытом виде.
+  caret.setAttribute('class', 'howto-caret');
+  toggle.append(el(document, 'span', null, HOWTO_LABEL), caret);
   article.append(toggle);
 
   const howto = el(document, 'div', 'howto-body');
