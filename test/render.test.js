@@ -423,3 +423,55 @@ test('renderWorkout без параметров рисует описания с
   assert.equal(button.getAttribute('aria-expanded'), 'false');
   assert.equal(region.hidden, true);
 });
+
+// РАУНД ПРАВОК 2: кнопка «Как выполнять» и ссылка на видео — в одну строку,
+// отметки — своей строкой ниже. Строка из трёх (с отметками) не влезает никогда:
+// отметок на карточке от одной до трёх, и с подписями «Круг N» трём элементам
+// нужно от 348 до 591px при 317 доступных на экране 375px.
+//
+// Раскладку в jsdom не посчитать, поэтому тест сторожит то, на чём она держится:
+// состав строки. Видео за её пределами вернуло бы столбик, а отметки внутри —
+// раскладку, которая по ширине не сходится и у которой палец промахивается.
+test('в строке карточки только кнопка «Как выполнять» и видео, отметки — снаружи', () => {
+  const { document } = makeDom();
+  const fragment = renderWorkout(legsMwf, document);
+  const articles = [...fragment.querySelectorAll('.exercise')];
+  assert.equal(articles.length, 19);
+
+  let withVideo = 0;
+  for (const article of articles) {
+    const refs = article.querySelector('.exercise-refs');
+    assert.ok(refs, 'строка есть у каждого упражнения');
+    assert.equal(refs.querySelector('.howto-toggle'), article.querySelector('.howto-toggle'),
+      'кнопка раскрытия лежит в строке');
+
+    const video = article.querySelector('a.video');
+    if (video) {
+      withVideo += 1;
+      assert.equal(video.parentNode, refs, 'ссылка на видео лежит в той же строке');
+      assert.equal(refs.children.length, 2, 'в строке ровно два элемента');
+    } else {
+      assert.equal(refs.children.length, 1, 'без видео в строке остаётся одна кнопка');
+    }
+
+    // Отметки — своей строкой: ни одна не внутри строки, и .checks — прямой
+    // ребёнок карточки, а не её часть.
+    assert.equal(refs.querySelectorAll('input[data-mark]').length, 0);
+    assert.equal(refs.querySelector('.checks'), null);
+    assert.equal(article.querySelector('.checks').parentNode, article);
+  }
+  assert.equal(withVideo, 18, 'видео есть у восемнадцати упражнений из девятнадцати');
+});
+
+// Область с текстом раскрывается ПОД строкой, а не между кнопкой и видео:
+// иначе раскрытие разрывало бы строку пополам.
+test('область раскрытия стоит следом за строкой, а не внутри неё', () => {
+  const { document } = makeDom();
+  const fragment = renderWorkout(legsMwf, document);
+  for (const article of [...fragment.querySelectorAll('.exercise')]) {
+    const { region } = howtoOf(fragment, article);
+    const refs = article.querySelector('.exercise-refs');
+    assert.equal(region.parentNode, article, 'область — прямой ребёнок карточки');
+    assert.equal(refs.nextElementSibling, region, 'область идёт сразу за строкой');
+  }
+});

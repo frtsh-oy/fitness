@@ -110,15 +110,18 @@ function renderItem(document, block, item, itemIndex, expandDescriptions) {
   // style.css и поворачивает уголок в раскрытом виде.
   caret.setAttribute('class', 'howto-caret');
   toggle.append(el(document, 'span', null, HOWTO_LABEL), caret);
-  article.append(toggle);
 
-  const howto = el(document, 'div', 'howto-body');
-  howto.id = regionId;
-  howto.hidden = !expandDescriptions;
-  howto.append(el(document, 'p', 'technique', item.text));
-  if (item.detail) howto.append(el(document, 'p', null, item.detail));
-  if (item.extra) howto.append(el(document, 'p', null, item.extra));
-  article.append(howto);
+  // Кнопка раскрытия и ссылка на видео — в одну строку: и то и другое
+  // справочное, нужное в первые разы. Отметки в эту строку не идут и остаются
+  // своей строкой ниже, во всю ширину: ими пользуются между подходами, попасть
+  // по ним пальцем должно быть легко, а промах стоит дороже всего.
+  //
+  // Тремя элементами строка не собирается ни на одной карточке с видео:
+  // отметок от одной до трёх, и с подписями «Круг N» трём элементам нужно от
+  // 348 до 591px при 317 доступных внутри карточки на экране 375px (замер
+  // getBoundingClientRect, см. отчёт задачи).
+  const refs = el(document, 'div', 'exercise-refs');
+  refs.append(toggle);
 
   if (item.v) {
     const link = el(document, 'a', 'video');
@@ -127,8 +130,19 @@ function renderItem(document, block, item, itemIndex, expandDescriptions) {
     link.rel = 'noopener noreferrer';
     link.setAttribute('aria-label', `Видео: ${item.name}, ${item.v[2]}`);
     link.append(renderIcon(document, PLAY_PATH), document.createTextNode(` Видео · ${item.v[2]}`));
-    article.append(link);
+    refs.append(link);
   }
+  article.append(refs);
+
+  // Область с текстом — следом за строкой, а не внутри неё: внутри раскрытие
+  // разрывало бы строку между кнопкой и видео.
+  const howto = el(document, 'div', 'howto-body');
+  howto.id = regionId;
+  howto.hidden = !expandDescriptions;
+  howto.append(el(document, 'p', 'technique', item.text));
+  if (item.detail) howto.append(el(document, 'p', null, item.detail));
+  if (item.extra) howto.append(el(document, 'p', null, item.extra));
+  article.append(howto);
 
   for (const extra of item.links ?? []) {
     // Форма элемента — [id, start, caption], как у v: workouts/legs-mwf.js
