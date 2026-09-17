@@ -46,14 +46,24 @@
 
 В конце `src-original/index.html` есть инлайновый скрипт, начинающийся с `(function(){function c(){var b=a.contentDocument`. Это челлендж хостинга, к приложению отношения не имеет. Удалить весь тег `<script>…</script>` вместе с содержимым.
 
-- [ ] **Step 3: Проверить, что архив совпал с оригиналом по размеру**
+- [ ] **Step 3: Проверить, что архив совпал с оригиналом побайтово**
 
-Ожидаемые размеры оригинала в байтах: `app.js` 16024, `index.html` 5159 (до вырезания Cloudflare-скрипта), `player.css` 1130, `player.js` 3003, `style.css` 8364.
+Сравнивать надо хеши, а не размеры: файлы кириллические, и число символов в JS не равно числу байт в UTF-8.
 
-Run: `wc -c src-original/*`
-Expected: `app.js`, `player.js`, `player.css`, `style.css` совпадают точно. `index.html` меньше 5159 — это ожидаемо после Step 2.
+Снять эталон на живом сайте через браузер:
 
-Если какой-то файл не совпал — забрать его заново, передав из браузера `btoa(unescape(encodeURIComponent(text)))` и раскодировав через `base64 -d`.
+```js
+const sha = async p => {
+  const buf = await (await fetch(p)).arrayBuffer();
+  const h = await crypto.subtle.digest('SHA-256', buf);
+  return [...new Uint8Array(h)].map(b => b.toString(16).padStart(2, '0')).join('');
+};
+```
+
+Run: `shasum -a 256 src-original/*`
+Expected: все пять хешей совпадают с эталоном.
+
+Если файл не совпал — забрать его заново в base64 (`btoa(unescape(encodeURIComponent(text)))`) и раскодировать через `base64 -d`. Перенос длинного кириллического текста через буфер портит символы незаметно, поэтому сверка хешей обязательна.
 
 - [ ] **Step 4: Создать package.json**
 
@@ -64,10 +74,10 @@ Expected: `app.js`, `player.js`, `player.css`, `style.css` совпадают т
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node --test test/"
+    "test": "node --test"
   },
   "devDependencies": {
-    "jsdom": "^26.0.0"
+    "jsdom": "^30.0.0"
   }
 }
 ```
@@ -272,13 +282,14 @@ function minimalWorkout(overrides = {}) {
   return {
     id: 'test',
     kicker: 'ДОМА',
-    title: 'Тест',
+    title: 'Тест один. Тест два.',
+    titleLines: ['Тест один.', 'Тест два.'],
     lead: 'Описание',
     schedule: 'ПН · СР · ПТ',
     stats: [{ v: '10', l: 'минут' }],
     gear: 'Коврик',
     blocks: [{
-      id: 'b1', n: '01', title: 'Блок', sub: 'Подзаголовок', rounds: 2,
+      id: 'b1', n: '01', nav: 'Блок', title: 'Блок', sub: 'Подзаголовок', rounds: 2,
       items: [{
         name: 'Упражнение', muscles: 'Ягодицы', reps: '10 раз', text: 'Описание',
         load: { glutes: 1 }, pattern: 'hinge', gear: ['band_long'],
@@ -301,6 +312,17 @@ test('отсутствие обязательного поля верхнего 
   const problems = validateWorkout(w);
   assert.equal(problems.length, 1);
   assert.match(problems[0], /title/);
+});
+
+test('titleLines из трёх строк попадает в отчёт', () => {
+  const w = minimalWorkout({ titleLines: ['раз', 'два', 'три'] });
+  assert.match(validateWorkout(w).join('\n'), /titleLines/);
+});
+
+test('блок без короткой подписи nav попадает в отчёт', () => {
+  const w = minimalWorkout();
+  delete w.blocks[0].nav;
+  assert.match(validateWorkout(w).join('\n'), /nav/);
 });
 
 test('неизвестная группа мышц в load попадает в отчёт', () => {
@@ -343,7 +365,7 @@ test('силовому упражнению пустой load запрещён',
 test('countMarks считает rounds умножить на число упражнений по всем блокам', () => {
   const w = minimalWorkout();
   w.blocks.push({
-    id: 'b2', n: '02', title: 'Второй', sub: '', rounds: 3,
+    id: 'b2', n: '02', nav: 'Второй', title: 'Второй', sub: '', rounds: 3,
     items: [w.blocks[0].items[0], w.blocks[0].items[0]],
   });
   // блок 1: 2 круга * 1 упражнение = 2; блок 2: 3 круга * 2 упражнения = 6
@@ -366,8 +388,8 @@ export const GEAR = ['band_long', 'loop_short', 'none'];
 export const KINDS = ['warmup', 'strength', 'cooldown'];
 export const LOAD_VALUES = [0.5, 1];
 
-const WORKOUT_FIELDS = ['id', 'kicker', 'title', 'lead', 'schedule', 'stats', 'gear', 'blocks', 'progression', 'caution'];
-const BLOCK_FIELDS = ['id', 'n', 'title', 'sub', 'rounds', 'items'];
+const WORKOUT_FIELDS = ['id', 'kicker', 'title', 'titleLines', 'lead', 'schedule', 'stats', 'gear', 'blocks', 'progression', 'caution'];
+const BLOCK_FIELDS = ['id', 'n', 'nav', 'title', 'sub', 'rounds', 'items'];
 const ITEM_FIELDS = ['name', 'muscles', 'reps', 'text', 'load', 'pattern', 'gear', 'unilateral', 'kind'];
 
 export function validateWorkout(workout) {
@@ -375,6 +397,10 @@ export function validateWorkout(workout) {
 
   for (const field of WORKOUT_FIELDS) {
     if (workout[field] === undefined) problems.push(`Тренировка: нет поля ${field}`);
+  }
+  if (!Array.isArray(workout.titleLines) || workout.titleLines.length < 1 || workout.titleLines.length > 2
+      || workout.titleLines.some(line => typeof line !== 'string' || line.length === 0)) {
+    problems.push('Тренировка: titleLines должен быть массивом из одной или двух непустых строк');
   }
   if (!Array.isArray(workout.blocks)) return problems;
 
@@ -419,6 +445,13 @@ export function countMarks(workout) {
   return workout.blocks.reduce((sum, block) => sum + block.rounds * block.items.length, 0);
 }
 ```
+
+>Код выше — исходная версия. По итогам ревью валидатор усилен и в репозитории
+> отличается от этого блока: проверка `field === undefined` заменена на проверку
+> непустых строк, добавлены уникальность `block.id`, запрет пустого `items`,
+> `Array.isArray` для `gear` и `items`, типы `stats` и `progression`, отказ на
+> `null` в `items` и `load`. Актуальный код — в `workouts/schema.js`; этот блок
+> оставлен как след того, с чего начинали. Основания — Rulings R11 и R13 в журнале.
 
 - [ ] **Step 4: Запустить тесты**
 
@@ -492,6 +525,17 @@ test('приводящие и средняя ягодичная размечен
   assert.ok(load.some(l => l.glutes_med === 1), 'нет упражнения с целевой средней ягодичной');
 });
 
+test('у каждого блока есть короткая подпись nav, отличная от заголовка', () => {
+  assert.deepEqual(
+    legsMwf.blocks.map(b => b.nav),
+    ['Старт', 'Разогрев', 'Ноги 1', 'Ноги 2', 'Ноги 3', 'Верх 1', 'Верх 2', 'Финиш'],
+  );
+});
+
+test('заголовок разбит на две строки как в оригинальной вёрстке', () => {
+  assert.deepEqual(legsMwf.titleLines, ['Всё тело.', 'Акцент на ноги.']);
+});
+
 test('реестр отдаёт тренировку по id и падает на дефолт при неизвестном', () => {
   assert.equal(getWorkout('legs-mwf').id, 'legs-mwf');
   assert.equal(getWorkout('нет-такой').id, DEFAULT_WORKOUT_ID);
@@ -508,7 +552,15 @@ Expected: FAIL — `Cannot find module '../workouts/legs-mwf.js'`.
 
 Открыть `src-original/app.js`. В нём объявлен `const blocks=[…]` — восемь блоков с полями `id, n, title, sub, rounds, note?, items`, каждый item с `name, reps, muscles, text, detail?, extra?, v?, links?, key?`.
 
-Перенести всё содержимое дословно в `workouts/legs-mwf.js`, обернув в объект тренировки. Тексты верхнего уровня (`kicker`, `title`, `lead`, `stats`, `gear`, `progression`, `caution`, `schedule`) взять из `src-original/index.html` — они там в разметке, а не в JS.
+Перенести всё содержимое дословно в `workouts/legs-mwf.js`, обернув в объект тренировки.
+
+Добавить каждому блоку короткую подпись `nav` — она идёт в навигацию и не равна `title`:
+`start` → `Старт`, `circuit` → `Разогрев`, `legs1` → `Ноги 1`, `legs2` → `Ноги 2`,
+`legs3` → `Ноги 3`, `upper1` → `Верх 1`, `upper2` → `Верх 2`, `finish` → `Финиш`.
+
+На верхнем уровне задать `title: 'Всё тело. Акцент на ноги.'` и
+`titleLines: ['Всё тело.', 'Акцент на ноги.']` — вторая строка уходит в `<span>`,
+как в оригинальной вёрстке. Тексты верхнего уровня (`kicker`, `title`, `lead`, `stats`, `gear`, `progression`, `caution`, `schedule`) взять из `src-original/index.html` — они там в разметке, а не в JS.
 
 Поле `v` остаётся в исходном виде `[youtubeId, стартСек, подпись]`. Ссылка на YouTube собирается в рендерере, а не хранится в данных.
 
@@ -568,6 +620,15 @@ finish / Спокойное дыхание
 
 Разметка составлена по описаниям упражнений и является инженерным суждением, а не заключением тренера. Она выносится на вычитку в Task 9.
 
+> Таблица выше — исходная версия. По итогам ревью в неё внесено семь правок, и
+> в репозитории разметка отличается от этого блока: в «Ягодичный мост» добавлена
+> `glutes_med: 0.5`, в тягу одной рукой `traps: 0.5`, в «Птицу-собаку»
+> `obliques: 0.5`; у «Разведения резинки над головой» целевой стала задняя дельта
+> вместо средней; у «Подкручивания таза» убраны разгибатели поясницы как антагонист;
+> три упражнения на изоляцию бедра переведены с `core` на новое значение `isolation`;
+> «Спокойное дыхание» переведено со `stretch` на `mobility`. Актуальная разметка —
+> в `workouts/legs-mwf.js`. Основания — Rulings R15 и R16 в журнале.
+
 - [ ] **Step 5: Написать реестр тренировок**
 
 ```js
@@ -616,7 +677,7 @@ git commit -m "Данные тренировки legs-mwf с разметкой 
   - `createStorage({ cloud, local, today }) -> { load(workoutId), save(workoutId, marks), clear(workoutId) }`
   - `load` возвращает `Promise<Set<string>>` — множество идентификаторов отметок
   - `save` и `clear` возвращают `Promise<void>`
-  - `pickBackend(win) -> 'cloud' | 'local'` — выбор бэкенда по наличию `win.Telegram.WebApp.CloudStorage`
+  - `storageKey(workoutId, date) -> string`
   - Ключ хранения: `w:<workoutId>:<YYYY-MM-DD>`
 
 - [ ] **Step 1: Написать падающие тесты**
@@ -625,7 +686,7 @@ git commit -m "Данные тренировки legs-mwf с разметкой 
 // test/storage.test.js
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createStorage, pickBackend, storageKey } from '../storage.js';
+import { createStorage, storageKey } from '../storage.js';
 
 function fakeLocal() {
   const map = new Map();
@@ -697,11 +758,6 @@ test('ошибка CloudStorage не роняет загрузку', async () =>
   assert.deepEqual([...(await s.load('legs-mwf'))], []);
 });
 
-test('pickBackend выбирает cloud только при наличии CloudStorage', () => {
-  assert.equal(pickBackend({ Telegram: { WebApp: { CloudStorage: {} } } }), 'cloud');
-  assert.equal(pickBackend({ Telegram: { WebApp: {} } }), 'local');
-  assert.equal(pickBackend({}), 'local');
-});
 ```
 
 - [ ] **Step 2: Запустить и убедиться, что тесты падают**
@@ -716,10 +772,6 @@ Expected: FAIL — `Cannot find module '../storage.js'`.
 // Ключ включает дату, поэтому отметки сами сбрасываются на следующий день.
 export function storageKey(workoutId, date) {
   return `w:${workoutId}:${date}`;
-}
-
-export function pickBackend(win) {
-  return win?.Telegram?.WebApp?.CloudStorage ? 'cloud' : 'local';
 }
 
 function parseMarks(raw) {
@@ -804,6 +856,15 @@ git commit -m "Адаптер прогресса CloudStorage и localStorage"
 
 Примечание к спеке: спека называет рендерер `app.js`. Здесь он разделён на `render.js` (чистое построение DOM, тестируемое) и `app.js` (связывание, Task 8). Это следует принципу спеки «один файл — одна ответственность».
 
+> Код и тесты Task 6 ниже — исходная версия, она разошлась с репозиторием.
+> Контракт имён классов в ней ошибочен: `section.block` и `button[data-mark]`
+> заменены на `section.workout-block` и `input[type=checkbox][data-mark]`
+> внутри `label.check`, потому что копируемый без изменений `style.css` ждёт
+> структуру оригинала (Ruling R21). Идентификатор отметки строится по
+> `item.key ?? itemIndex`, а не по индексу (Ruling R23). Добавлено поле
+> `preamble` на блоке и рендер вставки «Как выполнять силовые пары»,
+> потерянной при переносе на Task 4 (Ruling R22). Актуальный код — `render.js`.
+
 - [ ] **Step 1: Написать падающие тесты**
 
 ```js
@@ -886,7 +947,8 @@ test('renderIntro заполняет шапку из данных, а не из 
   </body></html>`);
   renderIntro(legsMwf, document);
   assert.equal(document.querySelector('.eyebrow').textContent, legsMwf.kicker);
-  assert.match(document.querySelector('h1').textContent, /Акцент на ноги/);
+  assert.equal(document.querySelector('h1').childNodes[0].textContent, 'Всё тело.');
+  assert.equal(document.querySelector('h1').querySelector('span').textContent, 'Акцент на ноги.');
   assert.equal(document.querySelector('.intro-copy').textContent, legsMwf.lead);
   assert.equal(document.querySelectorAll('.facts > div').length, legsMwf.stats.length);
   assert.equal(document.querySelector('.equipment').textContent, legsMwf.gear);
@@ -903,6 +965,7 @@ test('renderIntro строит навигацию по реальным блок
   const links = [...document.querySelectorAll('.block-nav a')];
   assert.equal(links.length, 8);
   assert.deepEqual(links.map(a => a.getAttribute('href')), legsMwf.blocks.map(b => `#${b.id}`));
+  assert.deepEqual(links.map(a => a.textContent), ['Старт', 'Разогрев', 'Ноги 1', 'Ноги 2', 'Ноги 3', 'Верх 1', 'Верх 2', 'Финиш']);
 });
 
 test('тексты упражнения попадают в разметку', () => {
@@ -922,7 +985,7 @@ Expected: FAIL — `Cannot find module '../render.js'`.
 
 - [ ] **Step 3: Написать render.js**
 
-Разметку и имена классов взять из `src-original/app.js`, чтобы существующий `style.css` подошёл без правок. Обязательные точки сцепления с CSS и с `player.js`: секция блока — `section.block` с `id` равным `block.id`; упражнение — элемент с классом `exercise`, внутри `h3` с названием; ссылка на видео — `a.video`; дополнительные ссылки — `a.extra-link`; кнопки отметок — `button[data-mark="<markId>"]`.
+Разметку и имена классов взять из `src-original/app.js` — это эталон, а не источник вдохновения. Приведённый ниже код был написан до сверки с оригиналом и задавал собственные имена классов; по итогам ревью контракт отменён (Ruling R21). Структура должна совпадать с исходной: `section.workout-block`, `.block-heading`, `.block-number`, `.round-tag`, `.cards`, `.exercise`, `.exercise-top`, `.exercise-index`, `.muscles`, `.reps`, `.technique`, `a.video`, `a.extra-link`, `.checks` с `label.check`, внутри которого `input[type=checkbox][data-mark]`. Состояние выполненного упражнения — класс `completed` на самом `.exercise`. Актуальная реализация — в `render.js`.
 
 ```js
 export function markId(blockId, itemIndex, round) {
@@ -1010,10 +1073,13 @@ export function renderWorkout(workout, document) {
 export function renderIntro(workout, document) {
   document.querySelector('.eyebrow').textContent = workout.kicker;
 
-  const [first, ...rest] = workout.title.split(' ');
+  // Разбиение заголовка на строки задаётся данными, а не угадывается по пробелам.
+  const [firstLine, ...restLines] = workout.titleLines;
   const h1 = document.querySelector('h1');
-  h1.replaceChildren(document.createTextNode(first), document.createElement('br'));
-  h1.append(el(document, 'span', null, rest.join(' ')));
+  h1.replaceChildren(document.createTextNode(firstLine));
+  for (const line of restLines) {
+    h1.append(document.createElement('br'), el(document, 'span', null, line));
+  }
 
   document.querySelector('.intro-copy').textContent = workout.lead;
 
@@ -1026,7 +1092,7 @@ export function renderIntro(workout, document) {
 
   const nav = document.querySelector('.block-nav');
   nav.replaceChildren(...workout.blocks.map(block => {
-    const link = el(document, 'a', null, block.title);
+    const link = el(document, 'a', null, block.nav);
     link.href = `#${block.id}`;
     return link;
   }));
@@ -1462,14 +1528,18 @@ setupPlayers(host, url => tg.openLink(url));
 const marks = new Set();
 const progress = document.getElementById('progress');
 const progressText = document.getElementById('progress-text');
-const total = host.querySelectorAll('button[data-mark]').length;
+const total = host.querySelectorAll('input[data-mark]').length;
 progress.max = total;
 
 function paint() {
-  for (const button of host.querySelectorAll('button[data-mark]')) {
-    const on = marks.has(button.dataset.mark);
-    button.setAttribute('aria-pressed', String(on));
-    button.classList.toggle('done', on);
+  for (const box of host.querySelectorAll('input[data-mark]')) {
+    box.checked = marks.has(box.dataset.mark);
+  }
+  // Класс completed висит на самом упражнении и загорается, когда закрыты
+  // все его круги — так это устроено в style.css.
+  for (const exercise of host.querySelectorAll('.exercise')) {
+    const boxes = [...exercise.querySelectorAll('input[data-mark]')];
+    exercise.classList.toggle('completed', boxes.length > 0 && boxes.every(b => b.checked));
   }
   progress.value = marks.size;
   progressText.textContent = `Сегодня: ${marks.size} из ${total} отметок`;
@@ -1481,16 +1551,18 @@ storage.load(workout.id).then(saved => {
 });
 paint();
 
-host.addEventListener('click', event => {
-  const button = event.target.closest('button[data-mark]');
-  if (!button) return;
-  const id = button.dataset.mark;
-  if (marks.has(id)) marks.delete(id); else marks.add(id);
+// Отметка — чекбокс, поэтому слушаем change, а не click: клик по подписи
+// label тоже переключает его, и обработчик click такое пропустил бы.
+host.addEventListener('change', event => {
+  const box = event.target.closest('input[data-mark]');
+  if (!box) return;
+  const id = box.dataset.mark;
+  if (box.checked) marks.add(id); else marks.delete(id);
   paint();
   storage.save(workout.id, marks);
 
-  const section = button.closest('section.block');
-  const all = [...section.querySelectorAll('button[data-mark]')];
+  const section = box.closest('section.workout-block');
+  const all = [...section.querySelectorAll('input[data-mark]')];
   tg.haptic(all.every(b => marks.has(b.dataset.mark)) ? 'done' : 'mark');
 });
 

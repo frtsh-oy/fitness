@@ -1,0 +1,12 @@
+{
+  "name": "tg-workout",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test"
+  },
+  "devDependencies": {
+    "jsdom": "^30.0.0"
+  }
+}
