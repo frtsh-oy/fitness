@@ -108,8 +108,14 @@ export function startApp(win = globalThis.window) {
       link.type = 'button';
       link.textContent = name;
       link.addEventListener('click', () => {
+        // target — без ?.: name пришёл из exerciseEntries того же объекта
+        // тренировки, что нарисован в host, а render.js безусловно рисует h3
+        // с item.name для каждого упражнения каждого блока. Силовые — их
+        // подмножество, значит заголовок находится всегда. Тот же стандарт,
+        // что у stats в bodymap.js и у localStorage ниже: защиту ставим там,
+        // где ветка достижима.
         const target = [...host.querySelectorAll('.exercise h3')].find(h => h.textContent === name);
-        target?.scrollIntoView({ block: 'center', behavior: scrollBehavior(win) });
+        target.scrollIntoView({ block: 'center', behavior: scrollBehavior(win) });
       });
       mapPick.append(link);
     }
