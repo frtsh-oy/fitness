@@ -8,8 +8,9 @@ import { readFileSync } from 'node:fs';
 import { makeDom } from './setup.js';
 import { startApp } from '../app.js';
 import legs from '../workouts/legs-mwf.js';
+import { WORKOUTS } from '../workouts/index.js';
 import { warmupOnlyGroups, idleGroups } from '../bodymap.js';
-import { muscleLabel, regionGroups } from '../muscles.js';
+import { muscleLabel, regionGroups, MUSCLES } from '../muscles.js';
 
 const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 
@@ -104,17 +105,16 @@ test('закрытие карты тоже сохраняется в localStorag
     'свежий запуск должен помнить, что карту свернули, а не открывать её заново');
 });
 
-test('подписи про разминку и неразмеченные группы на месте, а списки групп — из данных', () => {
+test('подписи про разминку и неразмеченные группы на месте', () => {
   const { window } = mount();
   window.document.querySelector('.bodymap-toggle').click();
   const groups = window.document.querySelector('.bodymap-groups').textContent;
 
-  // Списки собираются из разметки, а не вписаны в подпись руками.
-  for (const group of [...warmupOnlyGroups(legs), ...idleGroups(legs)]) {
-    assert.match(groups, new RegExp(muscleLabel(group), 'i'),
-      `в подписи нет группы «${muscleLabel(group)}»`);
-  }
-  // Внутри фразы названия групп идут со строчной — так в согласованном макете.
+  // Списки здесь дословные: это разметка legs-mwf, и тест сторожит именно её —
+  // состав, порядок и строчные буквы внутри фразы (так в согласованном макете).
+  // А что списки СЧИТАЮТСЯ, а не вписаны в текст, проверяет тест с фикстурой
+  // ниже: сравнением с реальной тренировкой этого не отличить, потому что
+  // вписанный литерал и производное значение здесь совпадают.
   assert.match(groups, /Только в разминке и заминке: сгибатели бедра, задняя дельта\./);
   assert.match(groups, /Светлым — то, чего нет в разметке: предплечья\./);
 
@@ -125,6 +125,104 @@ test('подписи про разминку и неразмеченные гр�
     'светлым показано отсутствие разметки, а не отсутствие работы в теле');
   assert.doesNotMatch(groups, /Икроножные/i,
     'икроножные размечены в четырёх упражнениях и в список неразмеченных больше не попадают');
+});
+
+// Синтетическая тренировка для подписей. Дополнение к брифу требует, чтобы
+// списки групп в подписи считались из разметки, а не вписывались в текст, — и
+// проверить это можно только на тренировке с ДРУГИМИ списками: вписанный
+// литерал, совпадающий с legs-mwf, дословное сравнение выше проходит (ревью
+// Task 8 показало это мутацией — оба списка литералами оставляли все тесты
+// зелёными).
+//
+// Фикстура — клон реальной тренировки с переписанной разметкой: структура,
+// блоки и вёрстка те же, поэтому страница рисуется как обычно, а списки
+// заведомо другие. Бицепс работает только в разминке и заминке; икроножные и
+// предплечья не размечены нигде; все остальные группы — в силовых, в том числе
+// сгибатели бедра и задняя дельта, чтобы ни одно название из списков legs-mwf
+// в подписи фикстуры появиться не могло.
+//
+// Регистрация в WORKOUTS и `?w=` — штатный способ открыть другую тренировку
+// (README: «добавили workouts/<id>.js, зарегистрировали в WORKOUTS»), а не
+// лазейка для теста. Запись убираем после теста, чтобы остальные тесты файла
+// видели реестр таким, каков он в приложении.
+const NOTES_FIXTURE_ID = 'fixture-notes';
+
+function notesFixture() {
+  const workout = structuredClone(legs);
+  workout.id = NOTES_FIXTURE_ID;
+  const strengthLoad = {};
+  for (const id of Object.keys(MUSCLES)) {
+    if (id === 'biceps' || id === 'calves' || id === 'forearms') continue;
+    strengthLoad[id] = 1;
+  }
+  for (const block of workout.blocks) {
+    for (const item of block.items) {
+      item.load = item.kind === 'strength' ? { ...strengthLoad } : { biceps: 1 };
+    }
+  }
+  return workout;
+}
+
+test('списки групп в подписи — из разметки открытой тренировки, а не вписаны в текст', (t) => {
+  const fixture = notesFixture();
+  WORKOUTS[NOTES_FIXTURE_ID] = fixture;
+  t.after(() => { delete WORKOUTS[NOTES_FIXTURE_ID]; });
+
+  // Сначала — что фикстура собрана как задумано: иначе тест проверял бы не то,
+  // что думает, и молча.
+  assert.deepEqual(warmupOnlyGroups(fixture), ['biceps']);
+  assert.deepEqual(idleGroups(fixture), ['calves', 'forearms']);
+  assert.deepEqual(warmupOnlyGroups(legs), ['hip_flexors', 'delts_rear']);
+  assert.deepEqual(idleGroups(legs), ['forearms']);
+
+  const { window } = makeDom(html, { url: `https://example.test/?w=${NOTES_FIXTURE_ID}` });
+  startApp(window);
+  const d = window.document;
+  d.querySelector('.bodymap-toggle').click();
+  const groups = d.querySelector('.bodymap-groups').textContent;
+
+  assert.match(groups, /Только в разминке и заминке: бицепс\./);
+  assert.match(groups, /Светлым — то, чего нет в разметке: икроножные, предплечья\./);
+  // И ни одного названия из списков legs-mwf: вписанные литералы падают здесь.
+  assert.doesNotMatch(groups, /сгибатели бедра|задняя дельта/i);
+});
+
+// Обратный случай, и он же — единственный способ дойти до проверок на непустоту
+// списков в app.js: тренировка, где все двадцать групп словаря размечены
+// силовыми, а разминка с заминкой не добавляют ни одной группы сверх них. Тогда
+// во второй подписи говорить не о чем, и её не должно быть вовсе — а не
+// «Только в разминке и заминке: .» с повисшим двоеточием.
+const FULL_FIXTURE_ID = 'fixture-full';
+
+function fullyMarkedFixture() {
+  const workout = structuredClone(legs);
+  workout.id = FULL_FIXTURE_ID;
+  const everything = {};
+  for (const id of Object.keys(MUSCLES)) everything[id] = 1;
+  for (const block of workout.blocks) {
+    for (const item of block.items) {
+      item.load = item.kind === 'strength' ? { ...everything } : { glutes: 1 };
+    }
+  }
+  return workout;
+}
+
+test('у тренировки, где нечего оговаривать, второй подписи под картой нет вовсе', (t) => {
+  const fixture = fullyMarkedFixture();
+  WORKOUTS[FULL_FIXTURE_ID] = fixture;
+  t.after(() => { delete WORKOUTS[FULL_FIXTURE_ID]; });
+
+  assert.deepEqual(warmupOnlyGroups(fixture), [], 'фикстура собрана не так, как задумано');
+  assert.deepEqual(idleGroups(fixture), [], 'фикстура собрана не так, как задумано');
+
+  const { window } = makeDom(html, { url: `https://example.test/?w=${FULL_FIXTURE_ID}` });
+  startApp(window);
+  const d = window.document;
+  d.querySelector('.bodymap-toggle').click();
+  assert.equal(d.querySelector('.bodymap-groups').textContent, '',
+    'обеих оговорок тут быть не может: и работающих только в разминке, и неразмеченных групп нет');
+  // А первая подпись от разметки не зависит и остаётся на месте.
+  assert.match(d.querySelector('.bodymap-note').textContent, /Цветом — силовые подходы/);
 });
 
 test('под картой ровно две подписи и меньше двухсот знаков', () => {

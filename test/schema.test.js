@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { validateWorkout, countMarks, PATTERNS, NO_LOAD_PATTERN } from '../workouts/schema.js';
+import { validateWorkout, countMarks, NO_LOAD_PATTERN } from '../workouts/schema.js';
 
 function minimalWorkout(overrides = {}) {
   return {
@@ -103,21 +103,21 @@ test('силовому упражнению пустой load запрещён',
 // разметка, придуманная ради правила, была бы хуже её отсутствия. Пустоту
 // разрешает явная пометка pattern, по которой видно, что нагрузки нет
 // намеренно.
+//
+// Парой к этому тесту стоит «заминочному упражнению пустой load запрещён» выше:
+// там тот же kind, но обычный pattern. Без этой пары послабление, привязанное
+// к kind === 'cooldown', прошло бы незамеченным — мутацией показано, что валит
+// его именно тот тест.
+//
+// Отдельного теста «NO_LOAD_PATTERN есть в PATTERNS» здесь нет намеренно: своей
+// поломки у него не было бы. Забытое в словаре значение даёт «неизвестный
+// pattern», и это валит и тест ниже, и валидацию самой тренировки.
 test('упражнению с pattern для восстановления пустой load разрешён', () => {
   const w = minimalWorkout();
   w.blocks[0].items[0].kind = 'cooldown';
   w.blocks[0].items[0].pattern = NO_LOAD_PATTERN;
   w.blocks[0].items[0].load = {};
   assert.deepEqual(validateWorkout(w), []);
-});
-
-// Тест выше прошёл бы и при NO_LOAD_PATTERN, забытом в словаре PATTERNS, —
-// нет: забытый дал бы «неизвестный pattern». Зато он прошёл бы при
-// послаблении, привязанном к kind === 'cooldown', поэтому парой к нему стоит
-// «заминочному упражнению пустой load запрещён» выше: там тот же kind, но
-// обычный pattern.
-test('pattern для восстановления есть в словаре PATTERNS', () => {
-  assert.ok(PATTERNS.includes(NO_LOAD_PATTERN), `${NO_LOAD_PATTERN} нет в PATTERNS`);
 });
 
 // Послабление касается только пустоты: если восстановительному упражнению
