@@ -8,6 +8,8 @@ import { createStorage } from './storage.js';
 import { initTelegram } from './telegram.js';
 import { createTimer, formatTime } from './timer.js';
 import { setupPlayers } from './player.js';
+import { createBodyMap, warmupOnlyGroups, idleGroups } from './bodymap.js';
+import { muscleLabel } from './muscles.js';
 
 // Отсчёт сверяется с часами часто, чтобы экран не отставал от них больше чем
 // на глаз: на границе секунды подпись меняется в пределах пятой доли.
@@ -73,6 +75,74 @@ export function startApp(win = globalThis.window) {
   const host = document.getElementById('workout');
   host.replaceChildren(renderWorkout(workout, document));
   setupPlayers(host, url => tg.openLink(url));
+
+  // Карта тела. Отложено именно РИСОВАНИЕ: сам модуль библиотеки грузится
+  // вместе с приложением, статическим импортом. Отложена работа по построению
+  // двух SVG-схем, которая большинству открытий не нужна.
+  const mapToggle = document.querySelector('.bodymap-toggle');
+  const mapBody = document.querySelector('.bodymap-body');
+  const mapPick = document.querySelector('.bodymap-pick');
+  const MAP_KEY = 'bodymap-open';
+  let bodyMap = null;
+
+  const listGroups = groups => groups.map(muscleLabel).join(', ');
+
+  function fillNotes() {
+    const warm = warmupOnlyGroups(workout);
+    document.querySelector('.bodymap-note').textContent = warm.length
+      ? `Цветом показаны силовые подходы. Только в разминке и заминке работают: ${listGroups(warm)}.`
+      : 'Цветом показаны силовые подходы.';
+    const idle = idleGroups(workout);
+    document.querySelector('.bodymap-idle').textContent = idle.length
+      ? `Светлым — то, что эта тренировка не затрагивает: ${listGroups(idle)}.`
+      : '';
+  }
+
+  function showPick({ label, sets, exercises }) {
+    mapPick.replaceChildren();
+    const title = document.createElement('h3');
+    title.textContent = `${label} — ${sets} подх.`;
+    mapPick.append(title);
+    for (const name of exercises) {
+      const link = document.createElement('button');
+      link.type = 'button';
+      link.textContent = name;
+      link.addEventListener('click', () => {
+        const target = [...host.querySelectorAll('.exercise h3')].find(h => h.textContent === name);
+        target?.scrollIntoView({ block: 'center', behavior: scrollBehavior(win) });
+      });
+      mapPick.append(link);
+    }
+  }
+
+  function openMap() {
+    if (!bodyMap) {
+      bodyMap = createBodyMap({
+        workout,
+        anteriorHost: document.querySelector('.bodymap-anterior'),
+        posteriorHost: document.querySelector('.bodymap-posterior'),
+        onPick: showPick,
+      });
+      fillNotes();
+    }
+  }
+
+  function setMapOpen(open) {
+    mapToggle.setAttribute('aria-expanded', String(open));
+    mapBody.hidden = !open;
+    if (open) openMap();
+    // Как и в остальном приложении (см. localStore/vibrate выше): try/catch
+    // сам по себе уже гасит и бросающий геттер localStorage, и отсутствующий
+    // объект — второй защиты поверх него (?.) не требуется.
+    try { win.localStorage.setItem(MAP_KEY, open ? '1' : '0'); } catch { /* приватный режим */ }
+  }
+
+  mapToggle.addEventListener('click', () =>
+    setMapOpen(mapToggle.getAttribute('aria-expanded') !== 'true'));
+
+  let mapWasOpen = false;
+  try { mapWasOpen = win.localStorage.getItem(MAP_KEY) === '1'; } catch { /* см. выше */ }
+  if (mapWasOpen) setMapOpen(true);
 
   const marks = new Set();
   const progress = document.getElementById('progress');
