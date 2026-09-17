@@ -1320,4 +1320,12 @@ test('ни одно правило печати не перекрыто боле
     }
   }
   assert.deepEqual(shadowed, []);
+
+  // И само правило на месте: на бумаге кнопка не нужна (в блоке печати рядом
+  // так же скрыты отметки), а текст техники печатается, хотя на экране он
+  // свёрнут атрибутом hidden. Без этой проверки удаление всего блока печати
+  // прошло бы мимо теста: перекрывать стало бы нечего.
+  const declared = printed.flatMap(rule => rule.selectors.map(selector => `${selector}{${rule.props.join(',')}}`));
+  assert.ok(declared.includes('.howto-toggle{display}'), `.howto-toggle не скрыт при печати: ${declared.join(' ')}`);
+  assert.ok(declared.includes('.howto-body{display}'), `.howto-body не раскрыт при печати: ${declared.join(' ')}`);
 });
