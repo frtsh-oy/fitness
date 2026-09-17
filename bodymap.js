@@ -2,7 +2,7 @@
 // тренировку, ни про разметку страницы: получает объект тренировки и два
 // контейнера.
 import createBodyHighlighter, { ModelType } from './vendor/body-highlighter.esm.js';
-import { exerciseEntries, setsByGroup } from './volume.js';
+import { regionSummary, setsByGroup } from './volume.js';
 import { MUSCLES, regionLabel } from './muscles.js';
 
 // Шесть оттенков от бледного к насыщенному. Библиотека выбирает цвет как
@@ -13,8 +13,8 @@ import { MUSCLES, regionLabel } from './muscles.js';
 // успел бы что-то скрыть.
 export const PALETTE = ['#eaf6cb', '#ddf0a8', '#d2ec86', '#c6e765', '#a9d248', '#8ab82f'];
 
-// Мышцы без силовой нагрузки: заметно светлее фона секции, но не белые —
-// они есть на схеме, просто не работают.
+// Мышцы без нагрузки в выбранном режиме: заметно светлее фона секции, но не
+// белые — они есть на схеме, просто не работают.
 const IDLE_COLOR = '#cdd8e5';
 
 // Библиотека рисует целиком весь силуэт своей анатомии — включая шею, голову,
@@ -77,34 +77,51 @@ export function idleGroups(workout) {
 }
 
 export function createBodyMap({ workout, anteriorHost, posteriorHost, onPick, mode = DEFAULT_MODE }) {
-  const dataForMode = next => exerciseEntries(workout, kindsOfMode(next));
-  const data = dataForMode(mode);
+  // Сводка выбранного режима — наш единственный источник чисел и списков.
+  // Меняется при setMode, поэтому let: обработчик клика держит на неё ссылку
+  // и после перерисовки обязан отвечать по новому режиму.
+  let summary = regionSummary(workout, kindsOfMode(mode));
 
-  const handle = ({ muscle, data: stats }) => {
+  // Библиотеке отдаём по одной записи на регион, и её дело — полигоны и цвет,
+  // а не арифметика. Своё число она считает как сумму frequency всех записей
+  // региона, поэтому запись должна быть одна и уже с итогом.
+  //
+  // Округляем здесь, а не в volume.js: целая частота нужна библиотеке (цвет
+  // выбирается как PALETTE[min(len-1, frequency-1)]), человеку же показывается
+  // точная сумма. И округляем один раз от суммы, а не по каждому упражнению:
+  // сумма округлений давала бы другое число — у пресса 8 вместо 7, у косых 5
+  // вместо 4.
+  //
+  // name не передаём: библиотека кладёт его только в свой список упражнений,
+  // а подбор мы собираем из summary и этот список больше не читаем.
+  //
+  // frequency нулём не бывает: в summary попадают только регионы с нагрузкой,
+  // наименьший вклад — доля 0.5 (LOAD_VALUES) на один круг, а Math.round(0.5)
+  // даёт 1. Это важно: внутри библиотеки стоит `frequency || 1`, и запись с
+  // нулём она покрасила бы как один подход.
+  const dataOf = rows => [...rows].map(([region, row]) => ({
+    muscles: [region],
+    frequency: Math.round(row.sets),
+  }));
+
+  const handle = ({ muscle }) => {
     if (!onPick || !KNOWN_REGIONS.has(muscle)) return;
+    // Регион без нагрузки в этом режиме в summary отсутствует — по клику это
+    // обычный случай (предплечья, а в силовом режиме и задняя дельта), а не
+    // край: ноль подходов и пустой список.
+    const row = summary.get(muscle) ?? { sets: 0, exercises: [] };
     // Наружу отдаём русское название, а не идентификатор региона: вызывающий
     // код показывает это человеку, и «gluteal» его только запутает.
-    // stats — без ?./??: аккумулятор библиотеки строится по полному списку
-    // её 22 канонических типов (включая те, что вне KNOWN_REGIONS), muscle
-    // всегда один из них, значит stats определён для любого клика по телу.
-    // Это свойство читается в самой библиотеке, а не проверяется кликами:
-    // затравка аккумулятора (vendor/body-highlighter.esm.js:266-288)
-    // перечисляет все 22 типа со значением { exercises: [], frequency: 0 },
-    // а reduce внутри I (там же, 349-355) копирует затравку заново на каждую
-    // перерисовку. Кликами это и не проверить: в литерале ниже
-    // label: regionLabel(muscle) вычисляется раньше sets: stats.frequency,
-    // поэтому на чужой анатомии первым бросает regionLabel и до stats
-    // выполнение не доходит.
     onPick({
       region: muscle,
       label: regionLabel(muscle),
-      sets: stats.frequency,
-      exercises: stats.exercises,
+      sets: row.sets,
+      exercises: row.exercises,
     });
   };
 
   const common = {
-    data,
+    data: dataOf(summary),
     bodyColor: IDLE_COLOR,
     highlightedColors: PALETTE,
     onClick: handle,
@@ -124,7 +141,8 @@ export function createBodyMap({ workout, anteriorHost, posteriorHost, onPick, mo
     // destroy()/createBodyMap() дала бы тот же экран, но силуэт при каждом
     // переключении пересоздавался бы целиком.
     setMode(next) {
-      const nextData = dataForMode(next);
+      summary = regionSummary(workout, kindsOfMode(next));
+      const nextData = dataOf(summary);
       for (const view of views) view.update({ data: nextData });
     },
     // Повторный вызов не бросает — это гарантирует destroy() самой библиотеки

@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { makeDom } from './setup.js';
 import { createBodyMap, PALETTE, warmupOnlyGroups, idleGroups, isMode, MODE_KINDS } from '../bodymap.js';
-import { PALETTE_STEPS } from '../volume.js';
+import { PALETTE_STEPS, setsByRegion } from '../volume.js';
 import { MUSCLES } from '../muscles.js';
 import legs from '../workouts/legs-mwf.js';
 
@@ -237,7 +237,8 @@ test('в режиме всей нагрузки клик отдаёт подхо
 
   map.setMode('all');
   assert.ok(findByRegion([a], picks, 'calves'), 'после смены режима регион calves должен остаться кликабельным');
-  assert.equal(picks[0].sets, 6);
+  // 1.5 + 1.5 + 1 + 1 = 5, а не 2+2+1+1=6: округляет только цвет, а не число.
+  assert.equal(picks[0].sets, 5);
   assert.deepEqual(picks[0].exercises, [
     '«Китайское» приседание с подъёмом таза и разворотом',
     'Подъём колена с лёгкой резинкой',
@@ -250,14 +251,92 @@ test('смена режима меняет цвет области', () => {
   const { a, b } = hosts();
   const picks = [];
   const map = createBodyMap({ workout: legs, anteriorHost: a, posteriorHost: b, onPick: p => picks.push(p) });
-  // Икроножные: 2 подхода в силовом режиме — второй оттенок палитры, 6 во всей
-  // нагрузке — последний. Полигон после update() другой, поэтому ищем заново.
+  // Икроножные: 2 подхода в силовом режиме — второй оттенок палитры, 5 во всей
+  // нагрузке — пятый. Цвет считается от округлённой точной суммы, поэтому пятый,
+  // а не последний: сумма округлений по упражнениям дала бы 6 и последний
+  // оттенок, и икры выглядели бы как квадрицепсы с их 12.5.
+  // Полигон после update() другой, поэтому ищем заново.
   assert.equal(findByRegion([a], picks, 'calves').style.fill, hexToRgb(PALETTE[1]));
   map.setMode('all');
-  assert.equal(findByRegion([a], picks, 'calves').style.fill, hexToRgb(PALETTE[PALETTE_STEPS - 1]));
+  assert.equal(findByRegion([a], picks, 'calves').style.fill, hexToRgb(PALETTE[4]));
   map.setMode('strength');
   assert.equal(findByRegion([a], picks, 'calves').style.fill, hexToRgb(PALETTE[1]),
     'возврат в силовой режим обязан вернуть и цвет');
+});
+
+// Главная проверка правки раунда 1, но уже через саму карту: число, которое
+// человек видит по клику, обязано совпадать с объёмом, посчитанным по правилу
+// docs/muscle-map.md (setsByRegion), — по КАЖДОМУ региону в КАЖДОМ режиме, а
+// не на одной показательной мышце.
+// Раньше число приходило из аккумулятора библиотеки, который складывал частоты,
+// округлённые по каждому упражнению: в режиме всей нагрузки расходилась
+// половина регионов (пресс 8 вместо 7, косые 5 вместо 4), в силовом — ни один,
+// потому что там все вклады целые.
+test('в обоих режимах клик отдаёт точный объём по каждому региону, а не сумму округлений', () => {
+  const { a, b } = hosts();
+  const picks = [];
+  const map = createBodyMap({ workout: legs, anteriorHost: a, posteriorHost: b, onPick: p => picks.push(p) });
+
+  for (const [mode, kinds] of Object.entries(MODE_KINDS)) {
+    map.setMode(mode);
+    const expected = new Map();
+    for (const kind of kinds) {
+      for (const [region, value] of setsByRegion(legs, kind)) {
+        expected.set(region, (expected.get(region) ?? 0) + value);
+      }
+    }
+    // Проходим все полигоны обоих видов: другого способа адресовать регион у
+    // нас нет, а так заодно видно, что до onPick доходит каждый из них.
+    const seen = new Map();
+    for (const host of [a, b]) {
+      const win = host.ownerDocument.defaultView;
+      for (const polygon of host.querySelectorAll('polygon')) {
+        picks.length = 0;
+        polygon.dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
+        if (picks[0]) seen.set(picks[0].region, picks[0].sets);
+      }
+    }
+    assert.ok(expected.size > 10, `${mode}: слишком мало регионов, проверять почти нечего`);
+    for (const [region, exact] of expected) {
+      assert.equal(seen.get(region), exact, `${mode}: регион ${region}`);
+    }
+  }
+
+  // Без дробных объёмов эта проверка не отличила бы точную сумму от округлённой.
+  map.setMode('all');
+  const fractional = [...setsByRegion(legs, 'warmup')].some(([, v]) => !Number.isInteger(v));
+  assert.ok(fractional, 'в разминке обязаны быть дробные объёмы — иначе проверка слепа к округлению');
+});
+
+// Единственное округление в проекте живёт теперь здесь — в подготовке данных
+// для библиотеки, — и у него две границы, каждая со своей ловушкой.
+test('дробный объём региона округляется до целого: 0.5 красится, 1.5 даёт второй оттенок', () => {
+  // Нижняя граница: 0.5 за один круг. Ловушка в том, что цветом её не
+  // проверить — библиотека считает `frequency || 1`, поэтому и честный
+  // Math.round(0.5)=1, и ошибочный ноль дали бы один и тот же первый оттенок.
+  // Что проверяет цвет на самом деле: что запись вообще дошла до библиотеки, а
+  // регион не выпал из данных и не остался цветом фона.
+  // Вторая граница, 1.5 → 2, отличает round от floor: floor дал бы первый
+  // оттенок вместо второго.
+  const workout = {
+    blocks: [
+      { rounds: 1, items: [{ kind: 'strength', load: { chest: 0.5 }, name: 'Половина подхода', key: 'a' }] },
+      { rounds: 3, items: [{ kind: 'strength', load: { biceps: 0.5 }, name: 'Полтора подхода', key: 'b' }] },
+    ],
+  };
+  const { a, b } = hosts();
+  const picks = [];
+  createBodyMap({ workout, anteriorHost: a, posteriorHost: b, onPick: p => picks.push(p) });
+
+  const chest = findByRegion([a, b], picks, 'chest');
+  assert.ok(chest, 'регион chest должен быть кликабелен');
+  assert.equal(picks[0].sets, 0.5, 'в подборе — точный объём, без округления');
+  assert.equal(chest.style.fill, hexToRgb(PALETTE[0]), 'пол-подхода — это первый оттенок, а не цвет фона');
+
+  const biceps = findByRegion([a, b], picks, 'biceps');
+  assert.ok(biceps, 'регион biceps должен быть кликабелен');
+  assert.equal(picks[0].sets, 1.5);
+  assert.equal(biceps.style.fill, hexToRgb(PALETTE[1]), '1.5 подхода округляется вверх, до второго оттенка');
 });
 
 // Мутацией найдено: с `views[0].update(...)` вместо цикла по views все тесты
@@ -274,7 +353,7 @@ test('смена режима перерисовывает и задний ви�
 
   map.setMode('all');
   assert.ok(findByRegion([b], picks, 'gluteal'), 'после смены режима регион gluteal должен остаться кликабельным');
-  assert.equal(picks[0].sets, 10, 'вся нагрузка: 6 силовых + разминка и заминка');
+  assert.equal(picks[0].sets, 9.5, 'вся нагрузка: 6 силовых + 3 разминочных + 0.5 заминочных');
 });
 
 test('смена режима перерисовывает те же виды, а не добавляет вторые', () => {

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { setsByGroup, setsByRegion, exerciseEntries, PALETTE_STEPS } from '../volume.js';
+import { setsByGroup, setsByRegion, regionSummary, PALETTE_STEPS } from '../volume.js';
 import legs from '../workouts/legs-mwf.js';
 import { WORKOUTS } from '../workouts/index.js';
 
@@ -55,54 +55,28 @@ test('объём по регионам складывает группы одн�
   assert.equal(r.get('abductors'), 3);        // отдельно от gluteal
 });
 
-test('записи для библиотеки: по одной на пару упражнение и группа', () => {
-  const rows = exerciseEntries(legs, ['strength']).filter(e => e.key === 'rdl');
-  assert.equal(rows.length, 3);
-  const byRegion = new Map(rows.map(r => [r.muscles[0], r.frequency]));
-  assert.equal(byRegion.get('hamstring'), 2);    // load 1 × 2 круга
-  assert.equal(byRegion.get('gluteal'), 2);
-  assert.equal(byRegion.get('lower-back'), 1);   // load 0.5 × 2 круга
-  for (const r of rows) assert.equal(r.muscles.length, 1);
-});
-
-test('дробный объём округляется до целого, минимум один подход', () => {
-  const rows = exerciseEntries(legs, ['warmup']);
-  const byKeyRegion = new Map();
-  for (const r of rows) {
-    const k = `${r.key}:${r.muscles[0]}`;
-    byKeyRegion.set(k, r.frequency);
-  }
-  // overhead-pull-apart (разведение резинки): rounds 3, load { delts_rear: 1, traps: 0.5, delts_side: 0.5 }
-  // delts_rear доля 1: 1*3=3 → round(3)=3
-  // traps доля 0.5: 0.5*3=1.5 → round(1.5)=2
-  // delts_side → front-deltoids доля 0.5: 0.5*3=1.5 → round(1.5)=2
-  assert.equal(byKeyRegion.get('overhead-pull-apart:back-deltoids'), 3);
-  assert.equal(byKeyRegion.get('overhead-pull-apart:trapezius'), 2);
-  assert.equal(byKeyRegion.get('overhead-pull-apart:front-deltoids'), 2);
-  // Нижняя граница — ровно тот случай, ради которого из volume.js убрали
-  // Math.max(1, …): произведение равно 0.5, и поднять его до 1 обязан сам
-  // Math.round. Без этих двух утверждений тест обещал «минимум один подход»,
-  // а проверял только значения 3, 2 и 2. Math.floor на них ещё видно (1.5
-  // дало бы 1, а не 2), а вот обнуление всего, что меньше 1, — уже нет:
-  // значения ≥1 такая замена не трогает, и вся проверка проходила зелёной.
-  // pelvic-tilt (блок «Старт», rounds 1, load { abs: 1, obliques: 0.5 }):
-  // obliques доля 0.5 × 1 круг = 0.5 → round(0.5)=1.
-  // thoracic-rotation (тот же блок, load { obliques: 1, upper_back: 0.5 }):
-  // upper_back → регион upper-back, доля 0.5 × 1 круг = 0.5 → round(0.5)=1.
-  assert.equal(byKeyRegion.get('pelvic-tilt:obliques'), 1,
-    'доля 0.5 при одном круге обязана дать один подход, а не ноль');
-  assert.equal(byKeyRegion.get('thoracic-rotation:upper-back'), 1,
-    'доля 0.5 при одном круге обязана дать один подход, а не ноль');
+test('сводка по региону: точный объём и упражнения, которые его дают', () => {
+  const summary = regionSummary(legs, ['strength']);
+  // upper-back — регион из двух наших групп: широчайшие и верх спины.
+  // «Тяга сидя» грузит обе (1 + 1 = 2 за круг, 2 круга → 4), «Тяга одной
+  // рукой» — только верх спины (0.5 × 2 = 1). Итого 5.
+  const back = summary.get('upper-back');
+  assert.equal(back.sets, 5);
+  // И одна запись на упражнение, а не по одной на каждую группу региона:
+  // иначе «Тяга сидя» стояла бы в подборе дважды.
+  assert.deepEqual(back.exercises, [
+    'Тяга резинки сидя к поясу',
+    'Тяга короткой резинки одной рукой к груди',
+  ]);
 });
 
 // Несколько типов сразу — это второй режим карты («вся нагрузка»).
-test('записи нескольких типов идут в порядке упражнений тренировки, а не по типам', () => {
-  // Порядок важен не сам по себе: список упражнений из exerciseEntries
-  // показывается человеку в подборе под картой, и клик по строке прокручивает
-  // страницу к упражнению. В legs-mwf блоки идут «разминка → силовые →
-  // заминка», поэтому склейка по типам совпала бы там с порядком страницы
-  // случайно. Фикстура ставит силовой блок перед разминочным — на ней склейка
-  // по типам видна сразу.
+test('упражнения региона идут в порядке тренировки, а не по типам', () => {
+  // Порядок важен не сам по себе: этот список показывается человеку в подборе
+  // под картой, и клик по строке прокручивает страницу к упражнению. В
+  // legs-mwf блоки идут «разминка → силовые → заминка», поэтому склейка по
+  // типам совпала бы там с порядком страницы случайно. Фикстура ставит силовой
+  // блок перед разминочным — на ней склейка по типам видна сразу.
   const workout = {
     blocks: [
       { rounds: 1, items: [{ kind: 'strength', load: { chest: 1 }, name: 'Силовое', key: 's' }] },
@@ -110,19 +84,50 @@ test('записи нескольких типов идут в порядке у
     ],
   };
   assert.deepEqual(
-    exerciseEntries(workout, ['warmup', 'strength']).map(e => e.name),
+    regionSummary(workout, ['warmup', 'strength']).get('chest').exercises,
     ['Силовое', 'Разминочное'],
   );
 });
 
-test('вся нагрузка складывает разминку, силовые и заминку в один список', () => {
-  const all = exerciseEntries(legs, ['warmup', 'strength', 'cooldown']).filter(e => e.muscles[0] === 'calves');
-  assert.deepEqual(all.map(e => e.key), ['chinese-squat', 'knee-raise', 'glute-bridge', 'leg-press']);
-  // 0.5×3=1.5 → 2, 0.5×3=1.5 → 2, 0.5×2=1, 0.5×2=1. Библиотека сложит это в 6,
-  // хотя точный объём по setsByGroup — 5: округление идёт по каждому
-  // упражнению отдельно, и в режиме «вся нагрузка» его видно сильнее.
-  assert.deepEqual(all.map(e => e.frequency), [2, 2, 1, 1]);
-  assert.equal(setsByGroup(legs, 'warmup').get('calves') + setsByGroup(legs, 'strength').get('calves'), 5);
+test('вся нагрузка складывает разминку, силовые и заминку в одну сводку', () => {
+  const calves = regionSummary(legs, ['warmup', 'strength', 'cooldown']).get('calves');
+  assert.deepEqual(calves.exercises, [
+    '«Китайское» приседание с подъёмом таза и разворотом',
+    'Подъём колена с лёгкой резинкой',
+    'Ягодичный мост',
+    'Жим двумя ногами лёжа',
+  ]);
+  // 0.5×3 + 0.5×3 + 0.5×2 + 0.5×2 = 5, без округлений по дороге.
+  assert.equal(calves.sets, 5);
+});
+
+// Главная проверка правки раунда 1: число на карте обязано совпадать с
+// объёмом, который печатает docs/muscle-map.md. Раньше карта складывала
+// частоты, округлённые по каждому упражнению, и в режиме всей нагрузки это
+// расходилось у половины регионов (пресс 8 вместо 7, косые 5 вместо 4).
+// Проверяем расчётом по всем регионам обоих режимов, а не примером на одной
+// мышце: setsByRegion идёт через MUSCLES[group].region, regionSummary — через
+// toRegions, то есть два независимых пути к одному числу.
+test('сводка по регионам совпадает с точным объёмом setsByRegion в обоих режимах', () => {
+  for (const kinds of [['strength'], ['warmup', 'strength', 'cooldown']]) {
+    const expected = new Map();
+    for (const kind of kinds) {
+      for (const [region, value] of setsByRegion(legs, kind)) {
+        expected.set(region, (expected.get(region) ?? 0) + value);
+      }
+    }
+    const summary = regionSummary(legs, kinds);
+    assert.deepEqual([...summary.keys()].sort(), [...expected.keys()].sort(),
+      `${kinds}: набор регионов разошёлся`);
+    for (const [region, value] of expected) {
+      assert.equal(summary.get(region).sets, value, `${kinds}: регион ${region}`);
+    }
+    assert.ok(expected.size > 10, `${kinds}: слишком мало регионов, тест почти ничего не проверяет`);
+  }
+  // Без дробных значений этот тест не отличил бы точную сумму от округлённой.
+  const all = [...regionSummary(legs, ['warmup', 'strength', 'cooldown']).values()];
+  assert.ok(all.some(row => !Number.isInteger(row.sets)),
+    'в режиме всей нагрузки обязаны быть дробные объёмы — иначе проверка слепа к округлению');
 });
 
 test('палитра закрывает максимальный силовой объём по всем тренировкам', () => {

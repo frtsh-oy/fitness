@@ -8,7 +8,7 @@ import { createStorage } from './storage.js';
 import { initTelegram } from './telegram.js';
 import { createTimer, formatTime } from './timer.js';
 import { setupPlayers } from './player.js';
-import { createBodyMap, warmupOnlyGroups, idleGroups, isMode, DEFAULT_MODE } from './bodymap.js';
+import { createBodyMap, warmupOnlyGroups, idleGroups, isMode, DEFAULT_MODE, PALETTE } from './bodymap.js';
 import { muscleLabel } from './muscles.js';
 
 // Отсчёт сверяется с часами часто, чтобы экран не отставал от них больше чем
@@ -100,10 +100,19 @@ export function startApp(win = globalThis.window) {
     const about = mapMode === 'all'
       ? 'Цветом показана вся нагрузка: разминка, силовые и заминка вместе.'
       : 'Цветом показаны силовые подходы.';
+    // Шкала одна на оба режима, и верх у неё упирается в длину палитры: объёмы
+    // выше неё красятся тем же последним оттенком. В режиме всей нагрузки так
+    // сливаются сразу пять областей — у квадрицепсов 12.5 подхода, у верха
+    // спины 5.5, а цвет один и тот же, — и узнать об этом человеку больше
+    // неоткуда: число видно только по клику. Длину берём у палитры, чтобы
+    // подпись не разошлась с ней.
+    const aboutScale = `Самый тёмный оттенок — ${PALETTE.length} подходов и больше.`;
     const aboutWarm = mapMode === 'all'
       ? `Силовых подходов нет у этих групп: ${listGroups(warm)}.`
       : `Только в разминке и заминке работают: ${listGroups(warm)}.`;
-    document.querySelector('.bodymap-note').textContent = warm.length ? `${about} ${aboutWarm}` : about;
+    document.querySelector('.bodymap-note').textContent = warm.length
+      ? `${about} ${aboutScale} ${aboutWarm}`
+      : `${about} ${aboutScale}`;
     // Этот список от режима не зависит: idleGroups перебирает все типы
     // упражнений сразу, и группа попадает в него, только если её нет ни в
     // одном load. Речь именно о разметке, а не о теле: хват резинки в шести
@@ -120,21 +129,27 @@ export function startApp(win = globalThis.window) {
     }
   }
 
+  // Объём — точная сумма долей, поэтому бывает дробным (0.5 за круг): 2.5 в
+  // русском тексте пишется «2,5». Доли кратны 0.5, такие суммы в double
+  // представимы точно, и String печатает их не длиннее одного знака после
+  // точки — без toFixed, который приписал бы «,0» целым числам.
+  const formatSets = sets => String(sets).replace('.', ',');
+
   function showPick({ label, sets, exercises }) {
     mapPick.replaceChildren();
     const title = document.createElement('h3');
-    title.textContent = `${label} — ${sets} подх.`;
+    title.textContent = `${label} — ${formatSets(sets)} подх.`;
     mapPick.append(title);
     for (const name of exercises) {
       const link = document.createElement('button');
       link.type = 'button';
       link.textContent = name;
       link.addEventListener('click', () => {
-        // target — без ?.: name пришёл из exerciseEntries того же объекта
+        // target — без ?.: name пришёл из regionSummary того же объекта
         // тренировки, что нарисован в host, а render.js безусловно рисует h3
-        // с item.name для каждого упражнения каждого блока. Силовые — их
-        // подмножество, значит заголовок находится всегда. Тот же стандарт,
-        // что у stats в bodymap.js и у localStorage ниже: защиту ставим там,
+        // с item.name для каждого упражнения каждого блока — любой режим карты
+        // отбирает подмножество этих упражнений, значит заголовок находится
+        // всегда. Тот же стандарт, что у localStorage ниже: защиту ставим там,
         // где ветка достижима.
         const target = [...host.querySelectorAll('.exercise h3')].find(h => h.textContent === name);
         target.scrollIntoView({ block: 'center', behavior: scrollBehavior(win) });
