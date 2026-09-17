@@ -25,10 +25,14 @@ test('muscleLabel бросает ошибку на неизвестной гру
   assert.throws(() => muscleLabel('nope'), /nope/);
 });
 
-test('toRegions складывает группы, указывающие на один регион', () => {
-  const regions = toRegions({ quads: 1, hip_flexors: 0.5, hamstrings: 1 });
+test('toRegions складывает группы, попавшие в один регион, и разделяет разные', () => {
+  // две группы в один регион складываются
+  const regions = toRegions({ quads: 1, hip_flexors: 0.5, hamstrings: 1, lats: 0.2, upper_back: 0.3 });
   assert.equal(regions.get('quadriceps'), 1.5);
+  assert.equal(regions.get('upper-back'), 0.5);
   assert.equal(regions.get('hamstring'), 1);
+  // не смешиваются
+  assert.equal(regions.size, 3);
 });
 
 test('toRegions бросает ошибку на неизвестной группе', () => {
@@ -85,11 +89,6 @@ test('дельты разведены по переднему и заднему 
 
 test('регионов стало 17', () => {
   assert.equal(new Set(Object.values(MUSCLES).map(m => m.region)).size, 17);
-});
-
-test('toRegions складывает группы, попавшие в один регион', () => {
-  const regions = toRegions({ lats: 1, upper_back: 0.5 });
-  assert.equal(regions.get('upper-back'), 1.5);
 });
 
 test('regionLabel даёт русское название региона, а не английский идентификатор', () => {

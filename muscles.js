@@ -62,5 +62,5 @@ export function toRegions(load) {
 export function regionLabel(region) {
   const names = Object.values(MUSCLES).filter(m => m.region === region).map(m => m.ru);
   if (names.length === 0) throw new Error(`Неизвестный регион: ${region}`);
-  return names.length === 1 ? names[0] : names[0] + ', ' + names.slice(1).map(n => n.toLowerCase()).join(', ');
+  return names.map((n, i) => (i === 0 ? n : n.toLowerCase())).join(', ');
 }
