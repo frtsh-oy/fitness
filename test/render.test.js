@@ -305,6 +305,16 @@ test('у каждого из 19 упражнений есть кнопка «К�
     assert.match(button.textContent, /^Как выполнять/);
     assert.ok(button.hasAttribute('aria-expanded'), 'кнопка несёт aria-expanded');
   }
+
+  // Имя для диктора называет упражнение — как у ссылки на видео и у отметок.
+  // Без этого при обходе по кнопкам девятнадцать раз подряд звучит одно и то
+  // же «Как выполнять». Видимая подпись стоит в начале имени: так кнопку
+  // находит и голосовое управление.
+  const names = buttons.map(button => button.getAttribute('aria-label'));
+  assert.equal(new Set(names).size, 19, 'имена кнопок различны');
+  for (const [index, article] of [...fragment.querySelectorAll('.exercise')].entries()) {
+    assert.equal(names[index], `Как выполнять: ${article.querySelector('h3').textContent}`);
+  }
 });
 
 // Если бы уголок нарисовали текстом или забыли, поворачивать в раскрытом виде
@@ -442,14 +452,15 @@ test('в строке карточки только кнопка «Как вып
   for (const article of articles) {
     const refs = article.querySelector('.exercise-refs');
     assert.ok(refs, 'строка есть у каждого упражнения');
-    assert.equal(refs.querySelector('.howto-toggle'), article.querySelector('.howto-toggle'),
-      'кнопка раскрытия лежит в строке');
+    assert.equal(refs.firstElementChild, article.querySelector('.howto-toggle'),
+      'кнопка раскрытия — первая в строке');
 
     const video = article.querySelector('a.video');
     if (video) {
       withVideo += 1;
       assert.equal(video.parentNode, refs, 'ссылка на видео лежит в той же строке');
       assert.equal(refs.children.length, 2, 'в строке ровно два элемента');
+      assert.equal(refs.lastElementChild, video, 'видео — второе, а не перед кнопкой');
     } else {
       assert.equal(refs.children.length, 1, 'без видео в строке остаётся одна кнопка');
     }

@@ -104,6 +104,12 @@ function renderItem(document, block, item, itemIndex, expandDescriptions) {
   toggle.type = 'button';
   toggle.setAttribute('aria-expanded', String(expandDescriptions));
   toggle.setAttribute('aria-controls', regionId);
+  // Имя для диктора называет упражнение — как у ссылки на видео и у каждой
+  // отметки ниже: иначе при обходе по кнопкам подряд девятнадцать раз звучит
+  // «Как выполнять», и какое из упражнений раскрывается, на слух не отличить.
+  // Видимая подпись стоит в начале имени, поэтому голосовое управление по ней
+  // кнопку по-прежнему находит.
+  toggle.setAttribute('aria-label', `${HOWTO_LABEL}: ${item.name}`);
   const caret = renderIcon(document, CARET_PATH);
   // Класс атрибутом, а не присваиванием в className: у SVG это не строка, а
   // SVGAnimatedString, и присваивание молча не сработало бы. По этому классу

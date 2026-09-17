@@ -1145,11 +1145,33 @@ test('окно ровно по порогу получает телефонну�
 // дали бы телефонные размеры с раскрытым текстом или наоборот — на экране это
 // выглядит как «просто так получилось», и причину пришлось бы искать в двух
 // файлах сразу.
-test('порог телефона в app.js и в style.css — одно и то же число', () => {
-  const css = readFileSync(fileURLToPath(new URL('../style.css', import.meta.url)), 'utf8');
-  const widths = [...css.matchAll(/@media[^{]*max-width:\s*(\d+)px/g)].map(m => Number(m[1]));
-  assert.ok(widths.includes(PHONE_MAX_WIDTH),
-    `в style.css нет медиазапроса на ${PHONE_MAX_WIDTH}px, есть ${widths.join(', ')}`);
+//
+// Сверяется условие ИМЕННО ТОГО блока, который задаёт телефонные размеры, а не
+// присутствие числа где-нибудь в файле: медиазапросов в style.css пять, и среди
+// них уже есть 520px (силуэты карты) — то самое число, на которое телефонный
+// порог скорее всего однажды и поднимут. Прежняя версия теста искала число по
+// всем медиазапросам и на PHONE_MAX_WIDTH = 520 оставалась зелёной.
+//
+// Блок опознаётся по правилу, которого нет ни в одном другом медиазапросе:
+// размер названия упражнения. Стили читаются разбором CSSOM, а не регулярным
+// выражением по тексту, поэтому условие берётся у настоящего разобранного
+// правила.
+test('телефонные размеры лежат в медиазапросе ровно на PHONE_MAX_WIDTH', () => {
+  const { document } = makeDom();
+  const style = document.createElement('style');
+  style.textContent = readFileSync(fileURLToPath(new URL('../style.css', import.meta.url)), 'utf8');
+  document.head.append(style);
+
+  const media = [...document.styleSheets[0].cssRules].filter(rule => rule.media);
+  const marked = media.filter(rule => [...rule.cssRules].some(r => r.selectorText === '.exercise h3'));
+  assert.equal(marked.length, 1,
+    `блок с телефонным размером .exercise h3 должен быть один, найдено ${marked.length}`);
+
+  const condition = marked[0].media.mediaText;
+  const max = /^\(max-width:\s*(\d+)px\)$/.exec(condition);
+  assert.ok(max, `условие блока должно быть «(max-width: Npx)», а оно «${condition}»`);
+  assert.equal(Number(max[1]), PHONE_MAX_WIDTH,
+    `телефонные размеры включаются на ${max[1]}px, а app.js считает порогом ${PHONE_MAX_WIDTH}px`);
 });
 
 test('нажатие на «Как выполнять» раскрывает описание, повторное — сворачивает', t => {
