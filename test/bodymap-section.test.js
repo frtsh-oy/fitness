@@ -107,7 +107,9 @@ test('подписи про разминку и незадействованны
   const note = window.document.querySelector('.bodymap-note').textContent;
   assert.match(note, /Сгибатели бедра/, 'не сказано, что греется только в разминке');
   const idle = window.document.querySelector('.bodymap-idle').textContent;
-  assert.match(idle, /Предплечья/);
+  // Подпись говорит про разметку, а не про тело: предплечья в ней потому, что
+  // хват резинки нигде не размечен, а не потому, что тренировка их не касается.
+  assert.match(idle, /не размечено как нагрузка: .*Предплечья/);
   assert.doesNotMatch(idle, /Икроножные/,
     'икроножные размечены в четырёх упражнениях и в список неразмеченных больше не попадают');
 });
