@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { setsByGroup, setsByRegion, exerciseEntries, PALETTE_STEPS } from '../volume.js';
 import legs from '../workouts/legs-mwf.js';
+import { WORKOUTS } from '../workouts/index.js';
 
 test('силовой объём по группам совпадает с разметкой', () => {
   const s = setsByGroup(legs, 'strength');
@@ -52,19 +53,54 @@ test('записи для библиотеки: по одной на пару у
   for (const r of rows) assert.equal(r.muscles.length, 1);
 });
 
-test('дробный объём округляется, но задействованная группа не исчезает', () => {
+test('дробный объём округляется до целого, минимум один подход', () => {
   const rows = exerciseEntries(legs, 'warmup');
+  const byKeyRegion = new Map();
   for (const r of rows) {
-    assert.ok(Number.isInteger(r.frequency), `${r.name}: frequency не целое`);
-    assert.ok(r.frequency >= 1, `${r.name}: задействованная группа получила ${r.frequency}`);
+    const k = `${r.key}:${r.muscles[0]}`;
+    byKeyRegion.set(k, r.frequency);
   }
+  // overhead-pull-apart (разведение резинки): rounds 3, load { delts_rear: 1, traps: 0.5, delts_side: 0.5 }
+  // delts_rear доля 1: 1*3=3 → round(3)=3
+  // traps доля 0.5: 0.5*3=1.5 → round(1.5)=2
+  // delts_side → front-deltoids доля 0.5: 0.5*3=1.5 → round(1.5)=2
+  assert.equal(byKeyRegion.get('overhead-pull-apart:back-deltoids'), 3);
+  assert.equal(byKeyRegion.get('overhead-pull-apart:trapezius'), 2);
+  assert.equal(byKeyRegion.get('overhead-pull-apart:front-deltoids'), 2);
 });
 
-test('уровней палитры шесть — по максимуму объёма в тренировке', () => {
-  assert.equal(PALETTE_STEPS, 6);
-  assert.equal(Math.max(...setsByRegion(legs, 'strength').values()), PALETTE_STEPS);
+test('палитра закрывает максимальный объём по всем тренировкам', () => {
+  let maxVolume = 0;
+  for (const workout of Object.values(WORKOUTS)) {
+    const regions = setsByRegion(workout, 'strength');
+    const max = Math.max(...regions.values(), 0);
+    maxVolume = Math.max(maxVolume, max);
+  }
+  assert.ok(maxVolume <= PALETTE_STEPS, `объём ${maxVolume} превышает ${PALETTE_STEPS} уровней`);
 });
 
 test('неизвестный тип упражнения даёт пустой результат, а не ошибку', () => {
   assert.equal(setsByGroup(legs, 'нет-такого').size, 0);
+});
+
+test('setsByRegion на неизвестной группе мышц бросает осмысленную ошибку', () => {
+  const badWorkout = {
+    blocks: [
+      {
+        rounds: 1,
+        items: [
+          {
+            kind: 'strength',
+            load: { 'неизвестная-группа': 1 },
+            name: 'Фиктивное упражнение',
+            key: 'fake',
+          },
+        ],
+      },
+    ],
+  };
+  assert.throws(
+    () => setsByRegion(badWorkout, 'strength'),
+    /Неизвестная группа мышц: неизвестная-группа/,
+  );
 });
