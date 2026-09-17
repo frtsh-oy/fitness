@@ -8,6 +8,8 @@ import { createStorage } from './storage.js';
 import { initTelegram } from './telegram.js';
 import { createTimer, formatTime } from './timer.js';
 import { setupPlayers } from './player.js';
+import { createBodyMap, warmupOnlyGroups, idleGroups, isMode, DEFAULT_MODE, PALETTE } from './bodymap.js';
+import { muscleLabel } from './muscles.js';
 
 // Отсчёт сверяется с часами часто, чтобы экран не отставал от них больше чем
 // на глаз: на границе секунды подпись меняется в пределах пятой доли.
@@ -73,6 +75,153 @@ export function startApp(win = globalThis.window) {
   const host = document.getElementById('workout');
   host.replaceChildren(renderWorkout(workout, document));
   setupPlayers(host, url => tg.openLink(url));
+
+  // Карта тела. Отложено именно РИСОВАНИЕ: сам модуль библиотеки грузится
+  // вместе с приложением, статическим импортом. Отложена работа по построению
+  // двух SVG-схем, которая большинству открытий не нужна.
+  const mapToggle = document.querySelector('.bodymap-toggle');
+  const mapBody = document.querySelector('.bodymap-body');
+  const mapPick = document.querySelector('.bodymap-pick');
+  const mapModeButtons = [...document.querySelectorAll('.bodymap-modes button')];
+  const MAP_KEY = 'bodymap-open';
+  const MODE_KEY = 'bodymap-mode';
+  let bodyMap = null;
+  let mapMode = DEFAULT_MODE;
+
+  const listGroups = groups => groups.map(muscleLabel).join(', ');
+
+  // Объём — точная сумма долей, поэтому бывает дробным (0.5 за круг): 2.5 в
+  // русском тексте пишется «2,5». Доли кратны 0.5, такие суммы в double
+  // представимы точно, и String печатает их не длиннее одного знака после
+  // точки — без toFixed, который приписал бы «,0» целым числам.
+  const formatSets = sets => String(sets).replace('.', ',');
+
+  function fillNotes() {
+    const warm = warmupOnlyGroups(workout);
+    // Подпись обязана описывать выбранный режим. В режиме всей нагрузки
+    // «цветом показаны силовые подходы» было бы прямой неправдой, а перечень
+    // warmupOnlyGroups перестаёт объяснять бледность этих групп — они как раз
+    // раскрашены. Сам факт при этом остаётся верным и нужным: только по нему
+    // на раскрашенной карте видно, что нагрузка у группы не силовая.
+    const about = mapMode === 'all'
+      ? 'Цветом показана вся нагрузка: разминка, силовые и заминка вместе.'
+      : 'Цветом показаны силовые подходы.';
+    // Шкала одна на оба режима, и верх у неё упирается в длину палитры: всё,
+    // что её переросло, красится тем же последним оттенком. В режиме всей
+    // нагрузки так сливаются сразу пять областей — у квадрицепсов 12.5
+    // подхода, у верха спины 5.5, а цвет один и тот же, — и узнать об этом
+    // человеку неоткуда: число видно только по клику.
+    //
+    // Порог называем через округление, а не «шесть подходов и больше»: цвет
+    // берётся от Math.round(объём) (см. bodymap.js), поэтому последний оттенок
+    // начинается с 5.5, и человек, ткнувший в самую тёмную спину, прочитает
+    // там «5,5 подх.». Оба числа считаем от длины палитры, чтобы подпись не
+    // разошлась ни с ней, ни с округлением.
+    const aboutScale = `Оттенок берётся по округлённому числу подходов: `
+      + `самый тёмный — ${PALETTE.length} и больше, то есть уже с ${formatSets(PALETTE.length - 0.5)}.`;
+    const aboutWarm = mapMode === 'all'
+      ? `Силовых подходов нет у этих групп: ${listGroups(warm)}.`
+      : `Только в разминке и заминке работают: ${listGroups(warm)}.`;
+    document.querySelector('.bodymap-note').textContent = warm.length
+      ? `${about} ${aboutScale} ${aboutWarm}`
+      : `${about} ${aboutScale}`;
+    // Этот список от режима не зависит: idleGroups перебирает все типы
+    // упражнений сразу, и группа попадает в него, только если её нет ни в
+    // одном load. Речь именно о разметке, а не о теле: хват резинки в шести
+    // упражнениях есть, но предплечьям он не размечен (см. docs/muscle-map.md).
+    const idle = idleGroups(workout);
+    document.querySelector('.bodymap-idle').textContent = idle.length
+      ? `Светлым — то, что в этой тренировке не размечено как нагрузка: ${listGroups(idle)}.`
+      : '';
+  }
+
+  function paintModeButtons() {
+    for (const button of mapModeButtons) {
+      button.setAttribute('aria-pressed', String(button.dataset.mode === mapMode));
+    }
+  }
+
+  function showPick({ label, sets, exercises }) {
+    mapPick.replaceChildren();
+    const title = document.createElement('h3');
+    title.textContent = `${label} — ${formatSets(sets)} подх.`;
+    mapPick.append(title);
+    for (const name of exercises) {
+      const link = document.createElement('button');
+      link.type = 'button';
+      link.textContent = name;
+      link.addEventListener('click', () => {
+        // target — без ?.: name пришёл из regionSummary того же объекта
+        // тренировки, что нарисован в host, а render.js безусловно рисует h3
+        // с item.name для каждого упражнения каждого блока — любой режим карты
+        // отбирает подмножество этих упражнений, значит заголовок находится
+        // всегда. Тот же стандарт, что у localStorage ниже: защиту ставим там,
+        // где ветка достижима.
+        const target = [...host.querySelectorAll('.exercise h3')].find(h => h.textContent === name);
+        target.scrollIntoView({ block: 'center', behavior: scrollBehavior(win) });
+      });
+      mapPick.append(link);
+    }
+  }
+
+  function openMap() {
+    if (!bodyMap) {
+      bodyMap = createBodyMap({
+        workout,
+        anteriorHost: document.querySelector('.bodymap-anterior'),
+        posteriorHost: document.querySelector('.bodymap-posterior'),
+        onPick: showPick,
+        mode: mapMode,
+      });
+    }
+  }
+
+  function setMapOpen(open) {
+    mapToggle.setAttribute('aria-expanded', String(open));
+    mapBody.hidden = !open;
+    if (open) openMap();
+    // Как и в остальном приложении (см. localStore/vibrate выше): try/catch
+    // сам по себе уже гасит и бросающий геттер localStorage, и отсутствующий
+    // объект — второй защиты поверх него (?.) не требуется.
+    try { win.localStorage.setItem(MAP_KEY, open ? '1' : '0'); } catch { /* приватный режим */ }
+  }
+
+  mapToggle.addEventListener('click', () =>
+    setMapOpen(mapToggle.getAttribute('aria-expanded') !== 'true'));
+
+  for (const button of mapModeButtons) {
+    button.addEventListener('click', () => {
+      mapMode = button.dataset.mode;
+      // bodyMap здесь заведомо построен, без ?.: кнопки режима лежат внутри
+      // .bodymap-body, а он скрыт атрибутом hidden, пока карту не раскрыли, —
+      // до нажатия скрытой кнопки не доходит ни мышь, ни Tab. Раскрытие же
+      // строит карту сразу (setMapOpen → openMap), в том же обработчике.
+      bodyMap.setMode(mapMode);
+      // Прежний подбор относится к прежнему режиму: в нём и число подходов, и
+      // список упражнений уже не те. Пересчитать его было бы чем — регион
+      // известен, и bodymap.js знает по нему всё, — но подбор это ответ на
+      // клик: подменить в нём числа под прежним заголовком значит показать
+      // человеку то, чего он не спрашивал. Поэтому убираем и ждём нового клика.
+      mapPick.replaceChildren();
+      paintModeButtons();
+      fillNotes();
+      try { win.localStorage.setItem(MODE_KEY, mapMode); } catch { /* приватный режим */ }
+    });
+  }
+
+  let mapWasOpen = false;
+  try { mapWasOpen = win.localStorage.getItem(MAP_KEY) === '1'; } catch { /* см. выше */ }
+  // Режим из хранилища проверяем: там переживает и смена версии приложения, и
+  // правка руками, а неизвестное значение обрушило бы построение карты.
+  try {
+    const savedMode = win.localStorage.getItem(MODE_KEY);
+    if (isMode(savedMode)) mapMode = savedMode;
+  } catch { /* см. выше */ }
+  paintModeButtons();
+  // Подписи не ждут раскрытия: они не стоят ничего, а зависят от режима, а не
+  // от построенной карты.
+  fillNotes();
+  if (mapWasOpen) setMapOpen(true);
 
   const marks = new Set();
   const progress = document.getElementById('progress');

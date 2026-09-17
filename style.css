@@ -7,3 +7,39 @@
    безопасной зоны устройства. */
 .timer{padding-bottom:max(env(safe-area-inset-bottom,0px),calc(var(--tg-safe-area-inset-bottom,0px) + var(--tg-content-safe-area-inset-bottom,0px)))}
 .masthead{padding-top:var(--tg-content-safe-area-inset-top,0px)}
+
+.bodymap{margin:18px 0}
+.bodymap-toggle{width:100%;text-align:left;border:1px solid #cad6e4;background:white;border-radius:10px;
+  font:inherit;font-size:15px;font-weight:650;color:#193d6a;min-height:44px;padding:11px 14px;cursor:pointer}
+/* В раскрытом виде кнопка и панель — один блок, а не две фигуры рядом: у кнопки
+   закруглены только верхние углы (иначе её закруглённый низ оставляет в стыке
+   зарубку с обеих сторон), граница у обеих одна и та же, и панель не прозрачная,
+   а белая — как соседние карточки .exercise и .guide. Прозрачная панель
+   показывала серый фон страницы под голубоватой кнопкой. */
+.bodymap-toggle[aria-expanded=true]{border-color:#d8e1eb;background:#e4edf8;border-radius:10px 10px 0 0}
+.bodymap-body{border:1px solid #d8e1eb;border-top:0;border-radius:0 0 10px 10px;padding:14px;background:white}
+/* Переключатель режима: что считает карта — одни силовые подходы или всю
+   нагрузку. Выбранный режим тёмный, как активная кнопка блока в .block-nav, —
+   на этой странице так уже выглядит «сейчас показано вот это». Кнопки обычные,
+   поэтому фокусную рамку им даёт общее правило button:focus-visible. */
+/* Зазор 10px, а не 6: общая фокусная рамка страницы — outline 3px с отступом
+   4px, то есть выходит за кнопку на 7px, и на 6px рамка «Силовых» упиралась в
+   границу соседа. */
+.bodymap-modes{display:flex;gap:10px;max-width:340px;margin:0 auto 14px}
+.bodymap-modes button{flex:1;min-height:44px;padding:9px 12px;border:1px solid #cad6e4;border-radius:8px;
+  background:#f3f7fc;color:#193d6a;font-size:14px;font-weight:650}
+.bodymap-modes button[aria-pressed=true]{background:#152d4a;border-color:#152d4a;color:white}
+.bodymap-views{display:flex;gap:14px;justify-content:center}
+.bodymap-views>div{flex:1;min-width:0;max-width:220px}
+/* .bodymap-scope — статичная подпись из index.html про то, что области схемы
+   крупнее наших групп. Оформлена вместе с соседними подписями, но отдельным
+   классом: содержимое .bodymap-note и .bodymap-idle пишет app.js по выборке
+   класса, и второй элемент с тем же классом сломал бы её. */
+.bodymap-note,.bodymap-idle,.bodymap-scope{font-size:13px;line-height:1.5;color:#526278;margin:10px 0 0}
+.bodymap-pick:not(:empty){margin-top:12px;padding-top:12px;border-top:1px solid #e2e9f2}
+.bodymap-pick h3{font-size:15px;margin:0 0 6px}
+.bodymap-pick button{display:block;width:100%;text-align:left;border:0;background:none;font:inherit;
+  font-size:14px;color:#193d6a;text-decoration:underline;text-underline-offset:3px;
+  min-height:44px;padding:6px 0;cursor:pointer}
+@media (max-width:520px){.bodymap-views{flex-direction:column;align-items:center}
+  .bodymap-views>div{max-width:260px;width:100%}}

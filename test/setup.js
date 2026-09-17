@@ -40,5 +40,15 @@ export function makeDom(html = '<!doctype html><html><body></body></html>') {
   // без которого не открывается плеер.
   const dom = new JSDOM(html, { url: 'https://example.test/', pretendToBeVisual: true });
   fillBrowserGaps(dom.window);
+
+  // Наш код document/window нигде не читает как глобаль — всюду они приходят
+  // параметром (см. app.js: const document = win.document). Но чужие библиотеки
+  // (vendor/body-highlighter.esm.js) обращаются к global document напрямую: в
+  // браузере он один на страницу и так глобален, а в Node под node:test — нет.
+  // Выставляем его здесь, в окружении: ветка с тем же смыслом внутри bodymap.js
+  // в браузере не сработала бы никогда и была бы решением только на вид.
+  globalThis.window = dom.window;
+  globalThis.document = dom.window.document;
+
   return { window: dom.window, document: dom.window.document };
 }
