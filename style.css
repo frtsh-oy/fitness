@@ -11,11 +11,20 @@
 .bodymap{margin:18px 0}
 .bodymap-toggle{width:100%;text-align:left;border:1px solid #cad6e4;background:white;border-radius:10px;
   font:inherit;font-size:15px;font-weight:650;color:#193d6a;min-height:44px;padding:11px 14px;cursor:pointer}
-.bodymap-toggle[aria-expanded=true]{border-color:#7590b2;background:#e4edf8}
-.bodymap-body{border:1px solid #d2dce8;border-top:0;border-radius:0 0 10px 10px;padding:14px}
+/* В раскрытом виде кнопка и панель — один блок, а не две фигуры рядом: у кнопки
+   закруглены только верхние углы (иначе её закруглённый низ оставляет в стыке
+   зарубку с обеих сторон), граница у обеих одна и та же, и панель не прозрачная,
+   а белая — как соседние карточки .exercise и .guide. Прозрачная панель
+   показывала серый фон страницы под голубоватой кнопкой. */
+.bodymap-toggle[aria-expanded=true]{border-color:#d8e1eb;background:#e4edf8;border-radius:10px 10px 0 0}
+.bodymap-body{border:1px solid #d8e1eb;border-top:0;border-radius:0 0 10px 10px;padding:14px;background:white}
 .bodymap-views{display:flex;gap:14px;justify-content:center}
 .bodymap-views>div{flex:1;min-width:0;max-width:220px}
-.bodymap-note,.bodymap-idle{font-size:13px;line-height:1.5;color:#526278;margin:10px 0 0}
+/* .bodymap-scope — статичная подпись из index.html про то, что области схемы
+   крупнее наших групп. Оформлена вместе с соседними подписями, но отдельным
+   классом: содержимое .bodymap-note и .bodymap-idle пишет app.js по выборке
+   класса, и второй элемент с тем же классом сломал бы её. */
+.bodymap-note,.bodymap-idle,.bodymap-scope{font-size:13px;line-height:1.5;color:#526278;margin:10px 0 0}
 .bodymap-pick:not(:empty){margin-top:12px;padding-top:12px;border-top:1px solid #e2e9f2}
 .bodymap-pick h3{font-size:15px;margin:0 0 6px}
 .bodymap-pick button{display:block;width:100%;text-align:left;border:0;background:none;font:inherit;
