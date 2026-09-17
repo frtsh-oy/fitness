@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { makeDom } from './setup.js';
-import { createBodyMap, PALETTE, warmupOnlyGroups, idleGroups } from '../bodymap.js';
+import { createBodyMap, PALETTE, warmupOnlyGroups, idleGroups, isMode, MODE_KINDS } from '../bodymap.js';
 import { PALETTE_STEPS } from '../volume.js';
 import { MUSCLES } from '../muscles.js';
 import legs from '../workouts/legs-mwf.js';
@@ -33,6 +33,22 @@ function clickAndCollectErrors(win, run) {
     win.removeEventListener('error', onError);
   }
   return errors;
+}
+
+// Адресовать регион можно только перебором: библиотека не ставит на полигоны
+// никаких data-* (см. комментарий к тесту про клик ниже), поэтому ищем тот,
+// клик по которому отдал в onPick нужный регион. picks — общий с вызывающим
+// тестом список, чтобы после находки в нём лежал pick именно этого полигона.
+function findByRegion(hosts, picks, region) {
+  for (const host of hosts) {
+    const win = host.ownerDocument.defaultView;
+    for (const polygon of host.querySelectorAll('polygon')) {
+      picks.length = 0;
+      polygon.dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
+      if (picks[0]?.region === region) return polygon;
+    }
+  }
+  return null;
 }
 
 test('палитра ровно на число уровней объёма', () => {
@@ -139,17 +155,11 @@ test('цвет мышцы на верхней границе объёма — п
   const { a, b } = hosts();
   const picks = [];
   createBodyMap({ workout: legs, anteriorHost: a, posteriorHost: b, onPick: p => picks.push(p) });
-  const win = b.ownerDocument.defaultView;
-  // gluteal — регион с максимальным для этой тренировки объёмом, ровно
+  // gluteal — регион с максимальным для этой тренировки силовым объёмом, ровно
   // PALETTE_STEPS (см. volume.test.js). Только на границе видно, действительно
   // ли до библиотеки доходят все PALETTE_STEPS оттенков, а не только первые:
   // на меньшем объёме усечённый по ошибке хвост палитры ничем себя не выдаст.
-  let target;
-  for (const polygon of b.querySelectorAll('polygon')) {
-    picks.length = 0;
-    polygon.dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
-    if (picks[0]?.region === 'gluteal') { target = polygon; break; }
-  }
+  const target = findByRegion([b], picks, 'gluteal');
   assert.ok(target, 'регион gluteal должен быть кликабелен на заднем виде');
   assert.equal(picks[0].sets, PALETTE_STEPS, 'проверка границы палитры опирается на регион с максимальным объёмом');
   assert.equal(target.style.fill, hexToRgb(PALETTE[PALETTE_STEPS - 1]), 'на верхней границе объёма должен быть последний оттенок палитры');
@@ -159,16 +169,10 @@ test('клик по незадействованной мышце даёт пу�
   const { a, b } = hosts();
   const picks = [];
   createBodyMap({ workout: legs, anteriorHost: a, posteriorHost: b, onPick: p => picks.push(p) });
-  const win = a.ownerDocument.defaultView;
   // forearm — единственный регион без нагрузки любого типа в legs-mwf
   // (idleGroups выше). Ищем по обоим видам: на каком из них библиотека рисует
   // предплечья, для этой проверки неважно.
-  let target;
-  for (const polygon of [...a.querySelectorAll('polygon'), ...b.querySelectorAll('polygon')]) {
-    picks.length = 0;
-    polygon.dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
-    if (picks[0]?.region === 'forearm') { target = polygon; break; }
-  }
+  const target = findByRegion([a, b], picks, 'forearm');
   assert.ok(target, 'регион forearm должен быть кликабелен хотя бы на одном виде');
   assert.equal(picks[0].sets, 0);
   assert.deepEqual(picks[0].exercises, []);
@@ -199,4 +203,73 @@ test('клик по анатомии вне модели (шея, голова, 
   const seenRegions = new Set(picks.map(p => p.region));
   const knownRegions = new Set(Object.values(MUSCLES).map(m => m.region));
   assert.deepEqual(seenRegions, knownRegions, 'onPick должен сработать ровно на регионах из MUSCLES — не больше и не меньше');
+});
+
+// Ниже — режимы карты (Task 7). Силовой режим отвечает на вопрос «что тут
+// нагружается по программе», режим всей нагрузки — «что эта тренировка вообще
+// задевает»; разница между ними видна на икроножных: 2 подхода против 6.
+
+test('режим карты: известны ровно два, силовые и вся нагрузка', () => {
+  assert.deepEqual(Object.keys(MODE_KINDS), ['strength', 'all']);
+  assert.deepEqual(MODE_KINDS.strength, ['strength']);
+  assert.deepEqual([...MODE_KINDS.all].sort(), ['cooldown', 'strength', 'warmup']);
+  assert.ok(isMode('strength') && isMode('all'));
+  assert.ok(!isMode('нет-такого'), 'чужое значение режимом быть не должно');
+  assert.ok(!isMode(null), 'отсутствие значения режимом быть не должно');
+});
+
+test('неизвестный режим — ошибка, а не бледная карта без единого упражнения', () => {
+  const { a, b } = hosts();
+  assert.throws(
+    () => createBodyMap({ workout: legs, anteriorHost: a, posteriorHost: b, mode: 'нет-такого' }),
+    /Неизвестный режим карты: нет-такого/,
+  );
+});
+
+test('в режиме всей нагрузки клик отдаёт подходы и упражнения всех типов', () => {
+  const { a, b } = hosts();
+  const picks = [];
+  const map = createBodyMap({ workout: legs, anteriorHost: a, posteriorHost: b, onPick: p => picks.push(p) });
+
+  assert.ok(findByRegion([a], picks, 'calves'), 'регион calves должен быть кликабелен');
+  assert.equal(picks[0].sets, 2, 'силовой режим — только мост и жим ногами');
+  assert.deepEqual(picks[0].exercises, ['Ягодичный мост', 'Жим двумя ногами лёжа']);
+
+  map.setMode('all');
+  assert.ok(findByRegion([a], picks, 'calves'), 'после смены режима регион calves должен остаться кликабельным');
+  assert.equal(picks[0].sets, 6);
+  assert.deepEqual(picks[0].exercises, [
+    '«Китайское» приседание с подъёмом таза и разворотом',
+    'Подъём колена с лёгкой резинкой',
+    'Ягодичный мост',
+    'Жим двумя ногами лёжа',
+  ]);
+});
+
+test('смена режима меняет цвет области', () => {
+  const { a, b } = hosts();
+  const picks = [];
+  const map = createBodyMap({ workout: legs, anteriorHost: a, posteriorHost: b, onPick: p => picks.push(p) });
+  // Икроножные: 2 подхода в силовом режиме — второй оттенок палитры, 6 во всей
+  // нагрузке — последний. Полигон после update() другой, поэтому ищем заново.
+  assert.equal(findByRegion([a], picks, 'calves').style.fill, hexToRgb(PALETTE[1]));
+  map.setMode('all');
+  assert.equal(findByRegion([a], picks, 'calves').style.fill, hexToRgb(PALETTE[PALETTE_STEPS - 1]));
+  map.setMode('strength');
+  assert.equal(findByRegion([a], picks, 'calves').style.fill, hexToRgb(PALETTE[1]),
+    'возврат в силовой режим обязан вернуть и цвет');
+});
+
+test('смена режима перерисовывает те же виды, а не добавляет вторые', () => {
+  // Перерисовка через destroy()/createBodyMap() выглядела бы так же на одном
+  // переключении, но силуэт пересоздавался бы целиком; а вставка второго вида
+  // рядом с первым — это ровно то, что библиотека делает при повторном
+  // createBodyHighlighter в тот же контейнер (см. тест про повторное раскрытие
+  // в test/bodymap-section.test.js).
+  const { a, b } = hosts();
+  const map = createBodyMap({ workout: legs, anteriorHost: a, posteriorHost: b });
+  map.setMode('all');
+  map.setMode('strength');
+  assert.equal(a.querySelectorAll('svg').length, 1);
+  assert.equal(b.querySelectorAll('svg').length, 1);
 });

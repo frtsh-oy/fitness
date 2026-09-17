@@ -56,7 +56,7 @@ test('объём по регионам складывает группы одн�
 });
 
 test('записи для библиотеки: по одной на пару упражнение и группа', () => {
-  const rows = exerciseEntries(legs, 'strength').filter(e => e.key === 'rdl');
+  const rows = exerciseEntries(legs, ['strength']).filter(e => e.key === 'rdl');
   assert.equal(rows.length, 3);
   const byRegion = new Map(rows.map(r => [r.muscles[0], r.frequency]));
   assert.equal(byRegion.get('hamstring'), 2);    // load 1 × 2 круга
@@ -66,7 +66,7 @@ test('записи для библиотеки: по одной на пару у
 });
 
 test('дробный объём округляется до целого, минимум один подход', () => {
-  const rows = exerciseEntries(legs, 'warmup');
+  const rows = exerciseEntries(legs, ['warmup']);
   const byKeyRegion = new Map();
   for (const r of rows) {
     const k = `${r.key}:${r.muscles[0]}`;
@@ -95,7 +95,37 @@ test('дробный объём округляется до целого, мин
     'доля 0.5 при одном круге обязана дать один подход, а не ноль');
 });
 
-test('палитра закрывает максимальный объём по всем тренировкам', () => {
+// Несколько типов сразу — это второй режим карты («вся нагрузка»).
+test('записи нескольких типов идут в порядке упражнений тренировки, а не по типам', () => {
+  // Порядок важен не сам по себе: список упражнений из exerciseEntries
+  // показывается человеку в подборе под картой, и клик по строке прокручивает
+  // страницу к упражнению. В legs-mwf блоки идут «разминка → силовые →
+  // заминка», поэтому склейка по типам совпала бы там с порядком страницы
+  // случайно. Фикстура ставит силовой блок перед разминочным — на ней склейка
+  // по типам видна сразу.
+  const workout = {
+    blocks: [
+      { rounds: 1, items: [{ kind: 'strength', load: { chest: 1 }, name: 'Силовое', key: 's' }] },
+      { rounds: 1, items: [{ kind: 'warmup', load: { chest: 1 }, name: 'Разминочное', key: 'w' }] },
+    ],
+  };
+  assert.deepEqual(
+    exerciseEntries(workout, ['warmup', 'strength']).map(e => e.name),
+    ['Силовое', 'Разминочное'],
+  );
+});
+
+test('вся нагрузка складывает разминку, силовые и заминку в один список', () => {
+  const all = exerciseEntries(legs, ['warmup', 'strength', 'cooldown']).filter(e => e.muscles[0] === 'calves');
+  assert.deepEqual(all.map(e => e.key), ['chinese-squat', 'knee-raise', 'glute-bridge', 'leg-press']);
+  // 0.5×3=1.5 → 2, 0.5×3=1.5 → 2, 0.5×2=1, 0.5×2=1. Библиотека сложит это в 6,
+  // хотя точный объём по setsByGroup — 5: округление идёт по каждому
+  // упражнению отдельно, и в режиме «вся нагрузка» его видно сильнее.
+  assert.deepEqual(all.map(e => e.frequency), [2, 2, 1, 1]);
+  assert.equal(setsByGroup(legs, 'warmup').get('calves') + setsByGroup(legs, 'strength').get('calves'), 5);
+});
+
+test('палитра закрывает максимальный силовой объём по всем тренировкам', () => {
   let maxVolume = 0;
   for (const workout of Object.values(WORKOUTS)) {
     const regions = setsByRegion(workout, 'strength');

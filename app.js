@@ -8,7 +8,7 @@ import { createStorage } from './storage.js';
 import { initTelegram } from './telegram.js';
 import { createTimer, formatTime } from './timer.js';
 import { setupPlayers } from './player.js';
-import { createBodyMap, warmupOnlyGroups, idleGroups } from './bodymap.js';
+import { createBodyMap, warmupOnlyGroups, idleGroups, isMode, DEFAULT_MODE } from './bodymap.js';
 import { muscleLabel } from './muscles.js';
 
 // Отсчёт сверяется с часами часто, чтобы экран не отставал от них больше чем
@@ -82,20 +82,42 @@ export function startApp(win = globalThis.window) {
   const mapToggle = document.querySelector('.bodymap-toggle');
   const mapBody = document.querySelector('.bodymap-body');
   const mapPick = document.querySelector('.bodymap-pick');
+  const mapModeButtons = [...document.querySelectorAll('.bodymap-modes button')];
   const MAP_KEY = 'bodymap-open';
+  const MODE_KEY = 'bodymap-mode';
   let bodyMap = null;
+  let mapMode = DEFAULT_MODE;
 
   const listGroups = groups => groups.map(muscleLabel).join(', ');
 
   function fillNotes() {
     const warm = warmupOnlyGroups(workout);
-    document.querySelector('.bodymap-note').textContent = warm.length
-      ? `Цветом показаны силовые подходы. Только в разминке и заминке работают: ${listGroups(warm)}.`
+    // Подпись обязана описывать выбранный режим. В режиме всей нагрузки
+    // «цветом показаны силовые подходы» было бы прямой неправдой, а перечень
+    // warmupOnlyGroups перестаёт объяснять бледность этих групп — они как раз
+    // раскрашены. Сам факт при этом остаётся верным и нужным: только по нему
+    // на раскрашенной карте видно, что нагрузка у группы не силовая.
+    const about = mapMode === 'all'
+      ? 'Цветом показана вся нагрузка: разминка, силовые и заминка вместе.'
       : 'Цветом показаны силовые подходы.';
+    const aboutWarm = mapMode === 'all'
+      ? `Силовых подходов нет у этих групп: ${listGroups(warm)}.`
+      : `Только в разминке и заминке работают: ${listGroups(warm)}.`;
+    document.querySelector('.bodymap-note').textContent = warm.length ? `${about} ${aboutWarm}` : about;
+    // Этот список от режима не зависит: idleGroups перебирает все типы
+    // упражнений сразу, и группа попадает в него, только если её нет ни в
+    // одном load. Речь именно о разметке, а не о теле: хват резинки в шести
+    // упражнениях есть, но предплечьям он не размечен (см. docs/muscle-map.md).
     const idle = idleGroups(workout);
     document.querySelector('.bodymap-idle').textContent = idle.length
-      ? `Светлым — то, что эта тренировка не затрагивает: ${listGroups(idle)}.`
+      ? `Светлым — то, что в этой тренировке не размечено как нагрузка: ${listGroups(idle)}.`
       : '';
+  }
+
+  function paintModeButtons() {
+    for (const button of mapModeButtons) {
+      button.setAttribute('aria-pressed', String(button.dataset.mode === mapMode));
+    }
   }
 
   function showPick({ label, sets, exercises }) {
@@ -128,8 +150,8 @@ export function startApp(win = globalThis.window) {
         anteriorHost: document.querySelector('.bodymap-anterior'),
         posteriorHost: document.querySelector('.bodymap-posterior'),
         onPick: showPick,
+        mode: mapMode,
       });
-      fillNotes();
     }
   }
 
@@ -146,8 +168,36 @@ export function startApp(win = globalThis.window) {
   mapToggle.addEventListener('click', () =>
     setMapOpen(mapToggle.getAttribute('aria-expanded') !== 'true'));
 
+  for (const button of mapModeButtons) {
+    button.addEventListener('click', () => {
+      mapMode = button.dataset.mode;
+      // bodyMap здесь заведомо построен, без ?.: кнопки режима лежат внутри
+      // .bodymap-body, а он скрыт атрибутом hidden, пока карту не раскрыли, —
+      // до нажатия скрытой кнопки не доходит ни мышь, ни Tab. Раскрытие же
+      // строит карту сразу (setMapOpen → openMap), в том же обработчике.
+      bodyMap.setMode(mapMode);
+      // Прежний подбор относится к прежнему режиму: в нём и число подходов, и
+      // список упражнений уже не те. Обновить его нечем — состав подбора
+      // приходит от библиотеки в ответ на клик, а не запрашивается по региону.
+      mapPick.replaceChildren();
+      paintModeButtons();
+      fillNotes();
+      try { win.localStorage.setItem(MODE_KEY, mapMode); } catch { /* приватный режим */ }
+    });
+  }
+
   let mapWasOpen = false;
   try { mapWasOpen = win.localStorage.getItem(MAP_KEY) === '1'; } catch { /* см. выше */ }
+  // Режим из хранилища проверяем: там переживает и смена версии приложения, и
+  // правка руками, а неизвестное значение обрушило бы построение карты.
+  try {
+    const savedMode = win.localStorage.getItem(MODE_KEY);
+    if (isMode(savedMode)) mapMode = savedMode;
+  } catch { /* см. выше */ }
+  paintModeButtons();
+  // Подписи не ждут раскрытия: они не стоят ничего, а зависят от режима, а не
+  // от построенной карты.
+  fillNotes();
   if (mapWasOpen) setMapOpen(true);
 
   const marks = new Set();

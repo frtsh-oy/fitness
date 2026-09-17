@@ -18,6 +18,14 @@
    показывала серый фон страницы под голубоватой кнопкой. */
 .bodymap-toggle[aria-expanded=true]{border-color:#d8e1eb;background:#e4edf8;border-radius:10px 10px 0 0}
 .bodymap-body{border:1px solid #d8e1eb;border-top:0;border-radius:0 0 10px 10px;padding:14px;background:white}
+/* Переключатель режима: что считает карта — одни силовые подходы или всю
+   нагрузку. Выбранный режим тёмный, как активная кнопка блока в .block-nav, —
+   на этой странице так уже выглядит «сейчас показано вот это». Кнопки обычные,
+   поэтому фокусную рамку им даёт общее правило button:focus-visible. */
+.bodymap-modes{display:flex;gap:6px;max-width:340px;margin:0 auto 14px}
+.bodymap-modes button{flex:1;min-height:44px;padding:9px 12px;border:1px solid #cad6e4;border-radius:8px;
+  background:#f3f7fc;color:#193d6a;font-size:14px;font-weight:650}
+.bodymap-modes button[aria-pressed=true]{background:#152d4a;border-color:#152d4a;color:white}
 .bodymap-views{display:flex;gap:14px;justify-content:center}
 .bodymap-views>div{flex:1;min-width:0;max-width:220px}
 /* .bodymap-scope — статичная подпись из index.html про то, что области схемы

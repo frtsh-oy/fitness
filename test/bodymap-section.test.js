@@ -69,7 +69,8 @@ test('после раскрытия ключ раскрытия карты за�
   const { window } = mount();
   window.document.querySelector('.bodymap-toggle').click();
   const saved = Object.keys(window.localStorage).filter(k => k.includes('bodymap'));
-  assert.equal(saved.length, 1, 'состояние секции не сохранено');
+  assert.deepEqual(saved, ['bodymap-open'],
+    'раскрытие секции не сохранено (а режим карты, которого человек не трогал, сохраняться и не должен)');
 });
 
 test('свежее окно с заранее раскрытым состоянием открывается с раскрытой картой', () => {
@@ -224,4 +225,147 @@ test('повторное раскрытие не рисует карту зан�
     'повторное раскрытие нарисовало передний вид ещё раз');
   assert.equal(d.querySelectorAll('.bodymap-posterior svg').length, 1,
     'повторное раскрытие нарисовало задний вид ещё раз');
+});
+
+// Ниже — переключатель режима карты (Task 7). Силовой режим — как было:
+// цветом только силовые подходы. Второй режим складывает разминку, силовые и
+// заминку в одно число. Икроножные — самая наглядная пара чисел: 2 против 6.
+
+// Кнопка режима по значению data-mode. Ищем по нему, а не по тексту: подпись
+// кнопки — вопрос вёрстки, а data-mode — то, что уходит в bodymap.js и в
+// localStorage.
+function modeButton(d, mode) {
+  return d.querySelector(`.bodymap-modes button[data-mode="${mode}"]`);
+}
+
+function pressed(d) {
+  return [...d.querySelectorAll('.bodymap-modes button')]
+    .filter(b => b.getAttribute('aria-pressed') === 'true')
+    .map(b => b.dataset.mode);
+}
+
+test('переключатель режима есть в раскрытой секции, по умолчанию выбраны силовые', () => {
+  const { window } = mount();
+  const d = window.document;
+  d.querySelector('.bodymap-toggle').click();
+  const buttons = [...d.querySelectorAll('.bodymap-modes button')];
+  assert.deepEqual(buttons.map(b => b.dataset.mode), ['strength', 'all'],
+    'в переключателе должны быть ровно два режима в этом порядке');
+  for (const button of buttons) {
+    assert.equal(button.type, 'button', 'режим переключают обычной кнопкой — она доступна с клавиатуры');
+  }
+  assert.deepEqual(pressed(d), ['strength'], 'по умолчанию нажат ровно один режим — силовой');
+});
+
+test('режим «вся нагрузка» меняет число подходов и список упражнений в подборе', () => {
+  const { window } = mount();
+  const d = window.document;
+  d.querySelector('.bodymap-toggle').click();
+
+  assert.equal(pickByTitle(d, window, 'Икроножные'), 'Икроножные — 2 подх.');
+  assert.deepEqual([...d.querySelectorAll('.bodymap-pick button')].map(b => b.textContent),
+    ['Ягодичный мост', 'Жим двумя ногами лёжа']);
+
+  modeButton(d, 'all').click();
+  assert.deepEqual(pressed(d), ['all']);
+  assert.equal(pickByTitle(d, window, 'Икроножные'), 'Икроножные — 6 подх.');
+  assert.deepEqual([...d.querySelectorAll('.bodymap-pick button')].map(b => b.textContent), [
+    '«Китайское» приседание с подъёмом таза и разворотом',
+    'Подъём колена с лёгкой резинкой',
+    'Ягодичный мост',
+    'Жим двумя ногами лёжа',
+  ]);
+});
+
+test('подпись под картой говорит про тот режим, который выбран', () => {
+  const { window } = mount();
+  const d = window.document;
+  d.querySelector('.bodymap-toggle').click();
+  const note = () => d.querySelector('.bodymap-note').textContent;
+
+  assert.match(note(), /Цветом показаны силовые подходы/);
+  assert.match(note(), /Только в разминке и заминке работают: .*Сгибатели бедра/);
+
+  modeButton(d, 'all').click();
+  assert.doesNotMatch(note(), /Цветом показаны силовые подходы/,
+    'в режиме всей нагрузки цвет — это уже не только силовые подходы');
+  assert.match(note(), /Цветом показана вся нагрузка/);
+  // Те же группы, но сказанные иначе: они раскрашены, и объяснять их бледность
+  // больше нечем — зато у них по-прежнему нет ни одного силового подхода.
+  assert.match(note(), /Силовых подходов нет у этих групп: .*Сгибатели бедра/);
+
+  modeButton(d, 'strength').click();
+  assert.match(note(), /Цветом показаны силовые подходы/, 'возврат в силовой режим обязан вернуть и подпись');
+});
+
+test('подпись про неразмеченные группы от режима не зависит', () => {
+  const { window } = mount();
+  const d = window.document;
+  d.querySelector('.bodymap-toggle').click();
+  const before = d.querySelector('.bodymap-idle').textContent;
+  assert.match(before, /Предплечья/);
+  modeButton(d, 'all').click();
+  assert.equal(d.querySelector('.bodymap-idle').textContent, before,
+    'предплечий нет ни в одном типе нагрузки, поэтому подпись одна на оба режима');
+});
+
+test('смена режима убирает прежний подбор, а не оставляет числа другого режима', () => {
+  const { window } = mount();
+  const d = window.document;
+  d.querySelector('.bodymap-toggle').click();
+  assert.equal(pickByTitle(d, window, 'Ягодичные'), 'Ягодичные — 6 подх.');
+  modeButton(d, 'all').click();
+  assert.equal(d.querySelector('.bodymap-pick').textContent, '',
+    'подбор со старыми числами обязан исчезнуть при смене режима');
+});
+
+test('смена режима не рисует силуэт заново', () => {
+  const { window } = mount();
+  const d = window.document;
+  d.querySelector('.bodymap-toggle').click();
+  modeButton(d, 'all').click();
+  modeButton(d, 'strength').click();
+  assert.equal(d.querySelectorAll('.bodymap-anterior svg').length, 1);
+  assert.equal(d.querySelectorAll('.bodymap-posterior svg').length, 1);
+});
+
+test('свежее окно с сохранённым режимом «вся нагрузка» открывается в нём', () => {
+  const { window } = makeDom(html);
+  window.localStorage.setItem('bodymap-mode', 'all');
+  startApp(window);
+  const d = window.document;
+  d.querySelector('.bodymap-toggle').click();
+  assert.deepEqual(pressed(d), ['all']);
+  assert.equal(pickByTitle(d, window, 'Икроножные'), 'Икроножные — 6 подх.',
+    'сохранённый режим обязан дойти до самой карты, а не только до кнопок');
+});
+
+// Мутацией показано: запись всегда одного значения (например, 'all') не роняет
+// ни один тест выше — сохранение проверялось только в одну сторону. Возврат к
+// силовым обязан перезаписать ключ, иначе режим по умолчанию перестанет быть
+// режимом по умолчанию после первого же переключения.
+test('возврат к силовым тоже сохраняется', () => {
+  const { window } = mount();
+  const d = window.document;
+  d.querySelector('.bodymap-toggle').click();
+  modeButton(d, 'all').click();
+  modeButton(d, 'strength').click();
+
+  const fresh = makeDom(html).window;
+  fresh.localStorage.setItem('bodymap-mode', window.localStorage.getItem('bodymap-mode'));
+  startApp(fresh);
+  fresh.document.querySelector('.bodymap-toggle').click();
+  assert.deepEqual(pressed(fresh.document), ['strength']);
+});
+
+test('незнакомое значение режима в хранилище не ломает карту: остаются силовые', () => {
+  // localStorage переживает и смену версии приложения, и правку руками, так
+  // что прочитать оттуда можно что угодно.
+  const { window } = makeDom(html);
+  window.localStorage.setItem('bodymap-mode', 'чепуха');
+  startApp(window);
+  const d = window.document;
+  d.querySelector('.bodymap-toggle').click();
+  assert.deepEqual(pressed(d), ['strength']);
+  assert.equal(pickByTitle(d, window, 'Икроножные'), 'Икроножные — 2 подх.');
 });

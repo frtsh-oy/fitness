@@ -27,6 +27,33 @@ const IDLE_COLOR = '#cdd8e5';
 // ошибкой.
 const KNOWN_REGIONS = new Set(Object.values(MUSCLES).map(m => m.region));
 
+// Два режима карты и типы упражнений, которые каждый считает. Ключи уходят
+// наружу как есть: app.js кладёт их в localStorage и в data-mode кнопок, —
+// поэтому список режимов живёт здесь, рядом с картой, а не дублируется в
+// разметке страницы.
+export const MODE_KINDS = {
+  strength: ['strength'],
+  all: ['warmup', 'strength', 'cooldown'],
+};
+
+// Режим по умолчанию: карта показывает силовые подходы, как и до появления
+// переключателя.
+export const DEFAULT_MODE = 'strength';
+
+// Для вызывающего кода, который берёт режим из ненадёжного источника
+// (localStorage переживает и смену версии приложения, и правку руками).
+export function isMode(mode) {
+  return Object.hasOwn(MODE_KINDS, mode);
+}
+
+function kindsOfMode(mode) {
+  // Молча отдать пустой набор типов было бы хуже всего: карта нарисовалась бы
+  // целиком бледной, будто тренировка ничего не нагружает. Как и в muscles.js,
+  // неизвестное значение — повод упасть.
+  if (!isMode(mode)) throw new Error(`Неизвестный режим карты: ${mode}`);
+  return MODE_KINDS[mode];
+}
+
 export function warmupOnlyGroups(workout) {
   const strength = setsByGroup(workout, 'strength');
   // Явно Set ключей, а не new Map([...a, ...b]): нас интересует только
@@ -38,16 +65,20 @@ export function warmupOnlyGroups(workout) {
   return [...soft].filter(group => !strength.has(group));
 }
 
+// Группы, которых нет ни в одном упражнении любого типа. От режима карты этот
+// список не зависит — он и есть «ни в одном типе», то есть объединение обоих
+// режимов, — поэтому берёт типы режима «вся нагрузка».
 export function idleGroups(workout) {
   const touched = new Set();
-  for (const kind of ['strength', 'warmup', 'cooldown']) {
+  for (const kind of MODE_KINDS.all) {
     for (const group of setsByGroup(workout, kind).keys()) touched.add(group);
   }
   return Object.keys(MUSCLES).filter(group => !touched.has(group));
 }
 
-export function createBodyMap({ workout, anteriorHost, posteriorHost, onPick }) {
-  const data = exerciseEntries(workout, 'strength');
+export function createBodyMap({ workout, anteriorHost, posteriorHost, onPick, mode = DEFAULT_MODE }) {
+  const dataForMode = next => exerciseEntries(workout, kindsOfMode(next));
+  const data = dataForMode(mode);
 
   const handle = ({ muscle, data: stats }) => {
     if (!onPick || !KNOWN_REGIONS.has(muscle)) return;
@@ -86,6 +117,16 @@ export function createBodyMap({ workout, anteriorHost, posteriorHost, onPick }) 
   ];
 
   return {
+    // Смена режима — это update() библиотеки, а не «уничтожить и создать
+    // заново»: update перестраивает полигоны внутри того же svg и того же
+    // узла-обёртки (vendor/body-highlighter.esm.js: n() заменяет детей, а l()
+    // вставляет обёртку, только если её ещё нет в контейнере). Пара
+    // destroy()/createBodyMap() дала бы тот же экран, но силуэт при каждом
+    // переключении пересоздавался бы целиком.
+    setMode(next) {
+      const nextData = dataForMode(next);
+      for (const view of views) view.update({ data: nextData });
+    },
     // Повторный вызов не бросает — это гарантирует destroy() самой библиотеки
     // (пустой список детей и уже отсоединённый узел — оба no-op), а не флаг
     // на нашей стороне: мутацией показано, что свой флаг здесь ничем не
