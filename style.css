@@ -22,7 +22,10 @@
    нагрузку. Выбранный режим тёмный, как активная кнопка блока в .block-nav, —
    на этой странице так уже выглядит «сейчас показано вот это». Кнопки обычные,
    поэтому фокусную рамку им даёт общее правило button:focus-visible. */
-.bodymap-modes{display:flex;gap:6px;max-width:340px;margin:0 auto 14px}
+/* Зазор 10px, а не 6: общая фокусная рамка страницы — outline 3px с отступом
+   4px, то есть выходит за кнопку на 7px, и на 6px рамка «Силовых» упиралась в
+   границу соседа. */
+.bodymap-modes{display:flex;gap:10px;max-width:340px;margin:0 auto 14px}
 .bodymap-modes button{flex:1;min-height:44px;padding:9px 12px;border:1px solid #cad6e4;border-radius:8px;
   background:#f3f7fc;color:#193d6a;font-size:14px;font-weight:650}
 .bodymap-modes button[aria-pressed=true]{background:#152d4a;border-color:#152d4a;color:white}

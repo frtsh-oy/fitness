@@ -5,6 +5,7 @@ import { createBodyMap, PALETTE, warmupOnlyGroups, idleGroups, isMode, MODE_KIND
 import { PALETTE_STEPS, setsByRegion } from '../volume.js';
 import { MUSCLES } from '../muscles.js';
 import legs from '../workouts/legs-mwf.js';
+import { KINDS } from '../workouts/schema.js';
 
 function hosts() {
   const { document } = makeDom('<!doctype html><html><body><div id="a"></div><div id="b"></div></body></html>');
@@ -207,12 +208,21 @@ test('клик по анатомии вне модели (шея, голова, 
 
 // Ниже — режимы карты (Task 7). Силовой режим отвечает на вопрос «что тут
 // нагружается по программе», режим всей нагрузки — «что эта тренировка вообще
-// задевает»; разница между ними видна на икроножных: 2 подхода против 6.
+// задевает»; разница между ними видна на икроножных: 2 подхода против 5.
 
 test('режим карты: известны ровно два, силовые и вся нагрузка', () => {
   assert.deepEqual(Object.keys(MODE_KINDS), ['strength', 'all']);
   assert.deepEqual(MODE_KINDS.strength, ['strength']);
   assert.deepEqual([...MODE_KINDS.all].sort(), ['cooldown', 'strength', 'warmup']);
+  // И то же самое, но привязкой к схеме, а не к повтору литерала: «вся
+  // нагрузка» обязана означать ВСЕ типы упражнений. Появится в схеме четвёртый
+  // тип — этот режим, подпись «разминка, силовые и заминка вместе» (app.js) и
+  // idleGroups перестанут быть правдой, и упадёт вот эта строка, а не
+  // пользователь.
+  assert.deepEqual([...MODE_KINDS.all].sort(), [...KINDS].sort());
+  for (const kind of MODE_KINDS.strength) {
+    assert.ok(KINDS.includes(kind), `${kind} — не тип упражнения из схемы`);
+  }
   assert.ok(isMode('strength') && isMode('all'));
   assert.ok(!isMode('нет-такого'), 'чужое значение режимом быть не должно');
   assert.ok(!isMode(null), 'отсутствие значения режимом быть не должно');
@@ -339,21 +349,35 @@ test('дробный объём региона округляется до це�
   assert.equal(biceps.style.fill, hexToRgb(PALETTE[1]), '1.5 подхода округляется вверх, до второго оттенка');
 });
 
-// Мутацией найдено: с `views[0].update(...)` вместо цикла по views все тесты
-// оставались зелёными — задний вид никто не проверял после переключения, а на
-// нём ягодичные, спина и задняя поверхность бедра. Половина карты показывала
-// бы числа и цвета прежнего режима.
+// Тест утверждает ЦВЕТ полигонов заднего вида, и это принципиально. Первая его
+// версия сверяла число из подбора и была беззубой: число приходит из summary в
+// замыкании, оно обновляется в setMode до цикла по видам, поэтому клик по
+// НЕ перерисованному полигону всё равно отдавал верное число. Мутация
+// «обновлять только views[0]» оставляла все 310 тестов зелёными, хотя весь
+// задний силуэт оставался в цветах прежнего режима — задняя дельта серая при
+// трёх подходах. Цвет живёт только в отрисованном полигоне, подделать его
+// нечем.
 test('смена режима перерисовывает и задний вид, а не только передний', () => {
   const { a, b } = hosts();
   const picks = [];
   const map = createBodyMap({ workout: legs, anteriorHost: a, posteriorHost: b, onPick: p => picks.push(p) });
 
-  assert.ok(findByRegion([b], picks, 'gluteal'), 'регион gluteal должен быть кликабелен на заднем виде');
-  assert.equal(picks[0].sets, 6, 'силовой режим: 6 подходов на ягодичные');
+  // Обе области живут на заднем виде, и обе меняют оттенок вместе с режимом.
+  // Задняя дельта: силовой нагрузки нет вовсе (разведение резинки — разминка),
+  // поэтому цвет фона мышц; во всей нагрузке 3 подхода — третий оттенок.
+  // '#cdd8e5' — значение IDLE_COLOR в bodymap.js, наружу оно не экспортировано.
+  // Верх спины: 5 подходов в силовом — пятый оттенок; 5.5 во всей нагрузке, и
+  // это последний оттенок, потому что цвет берётся от округлённого числа.
+  // Заодно это опора для подписи под картой: «самый тёмный — 6 и больше, то
+  // есть уже с 5,5» (см. test/bodymap-section.test.js).
+  assert.equal(findByRegion([b], picks, 'back-deltoids').style.fill, hexToRgb('#cdd8e5'));
+  assert.equal(findByRegion([b], picks, 'upper-back').style.fill, hexToRgb(PALETTE[4]));
 
   map.setMode('all');
-  assert.ok(findByRegion([b], picks, 'gluteal'), 'после смены режима регион gluteal должен остаться кликабельным');
-  assert.equal(picks[0].sets, 9.5, 'вся нагрузка: 6 силовых + 3 разминочных + 0.5 заминочных');
+  assert.equal(findByRegion([b], picks, 'back-deltoids').style.fill, hexToRgb(PALETTE[2]),
+    'задний вид остался в цветах силового режима: задняя дельта серая при трёх подходах');
+  assert.equal(findByRegion([b], picks, 'upper-back').style.fill, hexToRgb(PALETTE[PALETTE_STEPS - 1]),
+    '5.5 подхода округляется до шести, то есть до последнего оттенка');
 });
 
 test('смена режима перерисовывает те же виды, а не добавляет вторые', () => {
