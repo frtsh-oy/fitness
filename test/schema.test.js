@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { validateWorkout, countMarks } from '../workouts/schema.js';
+import { validateWorkout, countMarks, PATTERNS, NO_LOAD_PATTERN } from '../workouts/schema.js';
 
 function minimalWorkout(overrides = {}) {
   return {
@@ -73,9 +73,12 @@ test('неизвестный инвентарь попадает в отчёт',
   assert.match(validateWorkout(w).join('\n'), /kettlebell/);
 });
 
-// Пустой load запрещён любому упражнению, а не только силовому: разметка —
-// это ещё и «какие упражнения есть на эту мышцу» для будущей карты тела,
-// а разминку и заминку от объёма отделяет kind.
+// Пустой load запрещён упражнению любого типа, а не только силовому: разметка —
+// это ещё и «какие упражнения есть на эту мышцу» для карты тела, а разминку и
+// заминку от объёма отделяет kind. Единственное исключение ниже — pattern
+// NO_LOAD_PATTERN, и оно намеренно привязано к pattern, а не к kind: заминка —
+// это в основном растяжки, и разрешить пустоту всем заминкам значило бы
+// сделать их разметку необязательной, то есть терять растяжки на карте молча.
 test('разминочному упражнению пустой load запрещён', () => {
   const w = minimalWorkout();
   w.blocks[0].items[0].kind = 'warmup';
@@ -94,6 +97,36 @@ test('силовому упражнению пустой load запрещён',
   const w = minimalWorkout();
   w.blocks[0].items[0].load = {};
   assert.match(validateWorkout(w).join('\n'), /load/);
+});
+
+// Восстановительное упражнение («Спокойное дыхание») не тренирует ничего, и
+// разметка, придуманная ради правила, была бы хуже её отсутствия. Пустоту
+// разрешает явная пометка pattern, по которой видно, что нагрузки нет
+// намеренно.
+test('упражнению с pattern для восстановления пустой load разрешён', () => {
+  const w = minimalWorkout();
+  w.blocks[0].items[0].kind = 'cooldown';
+  w.blocks[0].items[0].pattern = NO_LOAD_PATTERN;
+  w.blocks[0].items[0].load = {};
+  assert.deepEqual(validateWorkout(w), []);
+});
+
+// Тест выше прошёл бы и при NO_LOAD_PATTERN, забытом в словаре PATTERNS, —
+// нет: забытый дал бы «неизвестный pattern». Зато он прошёл бы при
+// послаблении, привязанном к kind === 'cooldown', поэтому парой к нему стоит
+// «заминочному упражнению пустой load запрещён» выше: там тот же kind, но
+// обычный pattern.
+test('pattern для восстановления есть в словаре PATTERNS', () => {
+  assert.ok(PATTERNS.includes(NO_LOAD_PATTERN), `${NO_LOAD_PATTERN} нет в PATTERNS`);
+});
+
+// Послабление касается только пустоты: если восстановительному упражнению
+// всё-таки разметили нагрузку, это обычная разметка и проверяется как обычная.
+test('у восстановительного упражнения непустой load проверяется как у любого другого', () => {
+  const w = minimalWorkout();
+  w.blocks[0].items[0].pattern = NO_LOAD_PATTERN;
+  w.blocks[0].items[0].load = { nonexistent: 1 };
+  assert.match(validateWorkout(w).join('\n'), /nonexistent/);
 });
 
 // key: устойчивый идентификатор упражнения, из которого строится идентификатор
