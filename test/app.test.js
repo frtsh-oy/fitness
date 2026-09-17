@@ -1280,3 +1280,44 @@ test('клик в списке упражнений не оставляет не
   assert.equal(document.getElementById('progress-text').textContent, `Сегодня: 0 из ${TOTAL} отметок`);
   assert.equal(exercise.querySelector('.howto-toggle').getAttribute('aria-expanded'), 'true');
 });
+
+// Медиазапрос специфичности не добавляет: объявление внутри @media print
+// перекрывается любым ПОЗЖЕ объявленным правилом с тем же селектором и тем же
+// свойством. Именно так и вышло с кнопкой раскрытия: display:none стоял в общем
+// блоке печати, а display:flex — в новых правилах карточки, дописанных в конец
+// файла, и кнопка печаталась бы на каждой из девятнадцати карточек.
+//
+// Проверка общая, а не про одно правило: новые стили в этом файле дописывают в
+// конец, значит следующий такой случай появится там же. Сверяется только
+// style.css — правила player.css идут после него целиком, перекрыть их из
+// style.css нельзя.
+test('ни одно правило печати не перекрыто более поздним правилом style.css', () => {
+  const { document } = makeDom();
+  const style = document.createElement('style');
+  style.textContent = readFileSync(fileURLToPath(new URL('../style.css', import.meta.url)), 'utf8');
+  document.head.append(style);
+
+  const printed = [];
+  const rest = [];
+  [...document.styleSheets[0].cssRules].forEach((rule, order) => {
+    const into = rule.media ? (rule.media.mediaText === 'print' ? printed : rest) : rest;
+    const rules = rule.media ? [...rule.cssRules] : [rule];
+    for (const r of rules) {
+      if (!r.style) continue;
+      into.push({ order, selectors: r.selectorText.split(',').map(s => s.trim()), props: [...r.style] });
+    }
+  });
+  assert.ok(printed.length > 0, 'блок @media print в style.css найден');
+
+  const shadowed = [];
+  for (const rule of printed) {
+    for (const selector of rule.selectors) {
+      for (const prop of rule.props) {
+        const later = rest.find(other => other.order > rule.order
+          && other.selectors.includes(selector) && other.props.includes(prop));
+        if (later) shadowed.push(`печать «${selector}{${prop}}» перекрыта правилом «${later.selectors.join(',')}» ниже в файле`);
+      }
+    }
+  }
+  assert.deepEqual(shadowed, []);
+});
