@@ -2,7 +2,7 @@
 // соединяются здесь и больше нигде. Точка входа — index.html, который импортирует
 // startApp и зовёт её; сам модуль ничего не делает при импорте, поэтому связывание
 // проверяется тестами на jsdom.
-import { getWorkout } from './workouts/index.js';
+import { getWorkout, WORKOUTS } from './workouts/index.js';
 import { renderWorkout, renderIntro } from './render.js';
 import { createStorage } from './storage.js';
 import { initTelegram } from './telegram.js';
@@ -10,6 +10,7 @@ import { createTimer, formatTime } from './timer.js';
 import { setupPlayers } from './player.js';
 import { createBodyMap, warmupOnlyGroups, idleGroups, isMode, DEFAULT_MODE } from './bodymap.js';
 import { muscleLabel, regionGroups } from './muscles.js';
+import { renderWeekly } from './weekly-view.js';
 
 // Отсчёт сверяется с часами часто, чтобы экран не отставал от них больше чем
 // на глаз: на границе секунды подпись меняется в пределах пятой доли.
@@ -287,6 +288,36 @@ export function startApp(win = globalThis.window) {
   // от построенной карты.
   fillNotes();
   if (mapWasOpen) setMapOpen(true);
+
+  // Секция недельного объёма. Устроена как секция карты выше: рисуется при
+  // первом раскрытии, состояние помнится. Повторное раскрытие не
+  // перерисовывает — renderWeekly очистил бы host и собрал те же строки заново.
+  const WEEKLY_KEY = 'weekly-open';
+  const weeklyToggle = document.querySelector('.weekly-toggle');
+  const weeklyBody = document.querySelector('.weekly-body');
+  let weeklyDrawn = false;
+
+  function drawWeekly() {
+    if (weeklyDrawn) return;
+    renderWeekly({ host: weeklyBody, workouts: Object.values(WORKOUTS) });
+    weeklyDrawn = true;
+  }
+
+  function setWeeklyOpen(open) {
+    weeklyToggle.setAttribute('aria-expanded', String(open));
+    weeklyBody.hidden = !open;
+    if (open) drawWeekly();
+    // try/catch по месту — как у MAP_KEY выше: он гасит и бросающий геттер
+    // localStorage, и его отсутствие, второй защиты поверх не нужно.
+    try { win.localStorage.setItem(WEEKLY_KEY, open ? '1' : '0'); } catch { /* приватный режим */ }
+  }
+
+  weeklyToggle.addEventListener('click', () =>
+    setWeeklyOpen(weeklyToggle.getAttribute('aria-expanded') !== 'true'));
+
+  let weeklyWasOpen = false;
+  try { weeklyWasOpen = win.localStorage.getItem(WEEKLY_KEY) === '1'; } catch { /* см. выше */ }
+  if (weeklyWasOpen) setWeeklyOpen(true);
 
   const marks = new Set();
   const progress = document.getElementById('progress');

@@ -148,3 +148,23 @@
   .exercise{padding:14px}
   .exercise h3{font-size:17px;line-height:22px}
 }
+
+/* Секция недельного объёма — устроена как .bodymap выше (кнопка + панель),
+   но проще: одна колонка строк, без переключателя режима и подбора. */
+.weekly{margin:14px 0 0;border:1px solid #cad6e4;border-radius:12px;overflow:hidden;background:#fff}
+.weekly-toggle{width:100%;min-height:44px;display:flex;align-items:center;justify-content:space-between;gap:8px;background:#fff;border:0;padding:0 14px;font-family:inherit;font-size:15px;font-weight:600;color:#152d4a;text-align:left;cursor:pointer}
+.weekly-toggle[aria-expanded=true]{background:#e4edf8;border-bottom:1px solid #d8e1eb}
+.weekly-body{padding:12px 14px 14px}
+.weekly-head,.weekly-note{margin:0 0 10px;font-size:13px;line-height:1.5;color:#526278}
+.weekly-note{margin:10px 0 0}
+.weekly-row{display:grid;grid-template-columns:1fr auto auto;gap:4px 10px;align-items:baseline;padding:8px 0;border-top:1px solid #e8edf4}
+.weekly-name{font-size:14px;font-weight:600}
+.weekly-main{font-size:15px;font-weight:700;font-variant-numeric:tabular-nums}
+.weekly-ours{font-size:13px;color:#657289;font-variant-numeric:tabular-nums}
+.weekly-verdict{grid-column:1/-1;font-size:12px;color:#526278}
+/* Пометка «наша линия»: у части вердиктов граница — не число из источника, а
+   наша (см. weekly-view.js, basis). Пилюля того же кегля, что и сам вердикт
+   (12px — не мельче, чтобы не читаться сноской), но с цветом и весом, иначе
+   различие потерялось бы среди двадцати одинаковых с виду строк. Янтарный —
+   тот же оттенок предупреждения, что у .care ниже по странице. */
+.weekly-basis{display:inline-block;margin-left:6px;padding:1px 7px;border-radius:999px;background:#fbe4bd;color:#7a4a06;font-size:12px;font-weight:700}
