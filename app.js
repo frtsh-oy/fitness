@@ -306,7 +306,12 @@ export function startApp(win = globalThis.window) {
   function setWeeklyOpen(open) {
     weeklyToggle.setAttribute('aria-expanded', String(open));
     weeklyBody.hidden = !open;
-    if (open) drawWeekly();
+    // Без if (open): открыть можно только кликом по свёрнутой кнопке, а он
+    // всегда даёт open=true (aria-expanded стартует 'false' и меняется только
+    // здесь) — значит к моменту любого setWeeklyOpen(false) drawWeekly уже
+    // отработал и weeklyDrawn уже true. Условие тут было недостижимо ложным и
+    // ничего не решало — сторожит уже сам drawWeekly() своим if (weeklyDrawn).
+    drawWeekly();
     // try/catch по месту — как у MAP_KEY выше: он гасит и бросающий геттер
     // localStorage, и его отсутствие, второй защиты поверх не нужно.
     try { win.localStorage.setItem(WEEKLY_KEY, open ? '1' : '0'); } catch { /* приватный режим */ }

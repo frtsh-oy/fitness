@@ -152,7 +152,7 @@
 /* Секция недельного объёма — устроена как .bodymap выше (кнопка + панель),
    но проще: одна колонка строк, без переключателя режима и подбора. */
 .weekly{margin:14px 0 0;border:1px solid #cad6e4;border-radius:12px;overflow:hidden;background:#fff}
-.weekly-toggle{width:100%;min-height:44px;display:flex;align-items:center;justify-content:space-between;gap:8px;background:#fff;border:0;padding:0 14px;font-family:inherit;font-size:15px;font-weight:600;color:#152d4a;text-align:left;cursor:pointer}
+.weekly-toggle{width:100%;min-height:44px;background:#fff;border:0;padding:11px 14px;font-size:15px;font-weight:600;color:#152d4a;text-align:left;cursor:pointer}
 .weekly-toggle[aria-expanded=true]{background:#e4edf8;border-bottom:1px solid #d8e1eb}
 .weekly-body{padding:12px 14px 14px}
 .weekly-head,.weekly-note{margin:0 0 10px;font-size:13px;line-height:1.5;color:#526278}
