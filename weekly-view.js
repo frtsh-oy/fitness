@@ -1,8 +1,8 @@
-// Экран недельного объёма: собирает разметку из чисел (weekly.js), полос
-// (load-bands.js) и названий групп (muscles.js). Своего расчёта здесь нет.
-import { weeklySets } from './weekly.js';
-import { verdictFor } from './load-bands.js';
-import { muscleLabel } from './muscles.js';
+// Экран недельного объёма: собирает разметку по строкам из weekly-rows.js —
+// расчёт, вердикт, подпись группы и сортировка уже соединены и посчитаны там,
+// общим кодом с отчётом (tools/muscle-report.js). Своего расчёта и сортировки
+// здесь нет.
+import { weeklyRows } from './weekly-rows.js';
 
 // Дробные значения бывают только у нашего числа: вспомогательная доля 0.5 на
 // нечётном числе кругов даёт половину. Сопоставимое всегда целое.
@@ -71,23 +71,13 @@ export function renderWeekly({ host, workouts }) {
   const document = host.ownerDocument;
   host.textContent = '';
 
-  const rows = [...weeklySets(workouts)]
-    .map(([group, sets]) => ({ group, ...sets, band: verdictFor(sets.comparable) }))
-    // По убыванию сопоставимого: вердикт считается по нему, и сверху должно
-    // быть самое нагруженное. При равенстве — по нашему числу, потом по
-    // названию, чтобы порядок не зависел от порядка словаря: на сегодняшних
-    // данных ничья — норма (шесть строк на 12, пять на 6, девять на 0), и оба
-    // тай-брейкера меняют порядок внутри неё (test/weekly-section.test.js,
-    // «порядок внутри равного объёма»).
-    .sort((a, b) => b.comparable - a.comparable
-      || b.ours - a.ours
-      || muscleLabel(a.group).localeCompare(muscleLabel(b.group), 'ru'));
+  const rows = weeklyRows(workouts);
 
   const list = el(document, 'div', 'weekly-list');
   for (const row of rows) {
     const line = el(document, 'div', 'weekly-row');
     line.append(
-      el(document, 'span', 'weekly-name', muscleLabel(row.group)),
+      el(document, 'span', 'weekly-name', row.label),
       el(document, 'span', 'weekly-main', formatSets(row.comparable)),
       el(document, 'span', 'weekly-ours', formatSets(row.ours)),
       verdictCell(document, row.band),
