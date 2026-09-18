@@ -70,6 +70,48 @@ test('дорисованное складывается в одну группу
   assert.ok(children.length > before.length, 'дорисованного нет вовсе');
 });
 
+test('голова со спины дорисовывается ПОД полигонами библиотеки, стопы и кисти — поверх', () => {
+  const { svg, before } = freshSvg(2);
+  decorate(svg, { type: 'posterior', fill: '#cdd8e5' });
+  const children = [...svg.firstChild.childNodes];
+
+  // Эллипс головы заходит на задние трапеции. Последним ребёнком он закрашивал
+  // 14.6 ед² — 2.2% их площади, серый клин у основания шеи поверх цвета
+  // нагрузки (замерено растеризацией). Первым — не закрывает ничего, а высоту
+  // головы не теряет: у трапеций посередине вырез под шею.
+  assert.equal(children[0].tagName, 'ellipse', 'эллипс головы обязан идти первым ребёнком');
+  for (const [i, node] of before.entries()) {
+    assert.equal(children[i + 1], node, 'полигоны библиотеки обязаны идти сразу за эллипсом');
+  }
+  // Стопы и кисти дорисовывают силуэт там, где у библиотеки ничего нет, и
+  // остаются поверх.
+  assert.equal(children.length, before.length + 5);
+  for (const node of children.slice(before.length + 1)) {
+    assert.equal(node.tagName, 'polygon', 'поверх схемы библиотеки лежат только стопы и кисти');
+  }
+});
+
+test('дорисованное не перехватывает клики', () => {
+  // Своих слушателей у этих фигур нет, но кисти заходят на предплечья (1.35 ед²,
+  // 0.29% их площади), а эллипс головы — на трапеции: без pointer-events там
+  // была бы мёртвая зона, по которой мышца не выбирается и курсор-рука не
+  // показывается. Сам промах в jsdom не проверить — там клик рассылается прямо
+  // по узлу, — поэтому тест сторожит атрибут.
+  for (const type of ['anterior', 'posterior']) {
+    const { svg, before } = freshSvg(1);
+    decorate(svg, { type, fill: '#cdd8e5' });
+    const extras = [...svg.firstChild.childNodes].filter(node => !before.includes(node));
+    assert.ok(extras.length > 0, `${type}: дорисованного нет вовсе`);
+    for (const shape of extras) {
+      assert.equal(shape.getAttribute('pointer-events'), 'none', `${type}/${shape.tagName} перехватывает клик`);
+    }
+    // А полигонам библиотеки атрибут не приписан: их кликабельность — её дело.
+    for (const node of before) {
+      assert.equal(node.getAttribute('pointer-events'), null, `${type}: полигон библиотеки перестал быть кликабельным`);
+    }
+  }
+});
+
 test('передний вид: сдвинут на 11 вниз, задний не сдвинут', () => {
   const anterior = freshSvg().svg;
   decorate(anterior, { type: 'anterior', fill: '#cdd8e5' });
@@ -113,7 +155,13 @@ test('стопы, кисти и голова заднего вида — ров�
   );
 });
 
-test('дорисованное залито переданным цветом — тем же, которым библиотека красит незатронутую мышцу', () => {
+// Тест про цвет здесь ровно один и обещает ровно одно: что переданный цвет
+// доходит до каждой дорисованной фигуры. Что это именно цвет незатронутой
+// мышцы, отсюда не видно — цвет тут свой же литерал, — поэтому связь с
+// IDLE_COLOR из bodymap.js сторожит тест на уровне карты («дорисованное залито
+// тем же серым...» в test/bodymap.test.js). До него мутация «красить
+// дорисованное в #ff0000» оставляла все 359 тестов зелёными.
+test('дорисованное залито переданным цветом', () => {
   const { svg, before } = freshSvg(1);
   decorate(svg, { type: 'posterior', fill: '#cdd8e5' });
   const extras = [...svg.firstChild.childNodes].filter(node => !before.includes(node));
