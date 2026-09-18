@@ -455,10 +455,12 @@ function mount() {
 }
 
 test('секция есть в разметке и свёрнута по умолчанию', () => {
-  const { document } = mount();
-  startApp(mount().window);
+  const { window, document } = mount();
+  startApp(window);
   const section = document.querySelector('.weekly');
   assert.ok(section, 'секции .weekly нет');
+  assert.equal(section.querySelector('.weekly-body').hidden, true);
+  assert.equal(section.querySelector('.weekly-toggle').getAttribute('aria-expanded'), 'false');
 });
 
 test('нажатие раскрывает секцию и рисует строки по всем группам', () => {
@@ -734,8 +736,9 @@ test('в отчёте есть раздел недельного объёма с
 
 test('раздел отчёта называет обе оговорки счёта', () => {
   const text = buildReportLines().join('\n');
-  assert.match(text, /только целевые/);
-  assert.match(text, /по сторонам/);
+  assert.match(text, /односторонние считаются по сторонам/);
+  assert.match(text, /вспомогательная работа идёт половиной/);
+  assert.match(text, /наше чтение, а не цитата/);
 });
 ```
 
