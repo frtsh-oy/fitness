@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { makeDom } from './setup.js';
-import { createBodyMap, PALETTE, warmupOnlyGroups, idleGroups, isMode, MODE_KINDS } from '../bodymap.js';
+import { createBodyMap, PALETTE, SELECTED_COLOR, warmupOnlyGroups, idleGroups, isMode, MODE_KINDS } from '../bodymap.js';
 import { PALETTE_STEPS, setsByRegion } from '../volume.js';
 import { MUSCLES } from '../muscles.js';
 import legs from '../workouts/legs-mwf.js';
@@ -40,16 +40,31 @@ function clickAndCollectErrors(win, run) {
 // никаких data-* (см. комментарий к тесту про клик ниже), поэтому ищем тот,
 // клик по которому отдал в onPick нужный регион. picks — общий с вызывающим
 // тестом список, чтобы после находки в нём лежал pick именно этого полигона.
+//
+// Отдаём не узел, а цвет, снятый ДО клика. Клик выбирает область, а карта сразу
+// заливает выбранную синим и заменяет все полигоны новыми, — значит по
+// найденному узлу цвет невыбранной области уже не прочитать: он отсоединён от
+// документа и остался с прежним style.fill. Прежний он именно потому, что
+// querySelectorAll отдаёт снимок: все полигоны перебора — из той отрисовки,
+// которая была на экране до первого клика по этому виду. Цвет выбранной
+// области проверяется отдельно, по живой разметке (blueCount ниже).
 function findByRegion(hosts, picks, region) {
   for (const host of hosts) {
     const win = host.ownerDocument.defaultView;
     for (const polygon of host.querySelectorAll('polygon')) {
+      const fill = polygon.style.fill;
       picks.length = 0;
       polygon.dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
-      if (picks[0]?.region === region) return polygon;
+      if (picks[0]?.region === region) return { fill };
     }
   }
   return null;
+}
+
+// Сколько полигонов вида залито цветом выбора прямо сейчас.
+function blueCount(host) {
+  return [...host.querySelectorAll('polygon')]
+    .filter(polygon => polygon.style.fill === hexToRgb(SELECTED_COLOR)).length;
 }
 
 test('палитра ровно на число уровней объёма', () => {
@@ -150,6 +165,14 @@ test('клик работает, даже если onPick не передан', 
     target.dispatchEvent(new win.MouseEvent('click', { bubbles: true }));
   });
   assert.deepEqual(errors, [], 'клик без onPick не должен бросать исключение внутри обработчика');
+  // И заливка выбора появляется: она состояние самой картинки, а не ответ
+  // слушателю, поэтому от onPick не зависит. Первый полигон переднего вида —
+  // грудные (см. комментарий к тесту выше), их там два, а на заднем виде этой
+  // области нет вовсе. Без этой проверки условие в handle можно было бы
+  // вернуть к прежнему виду (`!onPick || !KNOWN_REGIONS.has(muscle)`), и ни
+  // один тест бы не заметил — проверено мутацией.
+  assert.equal(blueCount(a), 2, 'клик без onPick обязан залить выбранную область');
+  assert.equal(blueCount(b), 0, 'грудных на заднем виде нет — заливать там нечего');
 });
 
 test('цвет мышцы на верхней границе объёма — последний оттенок палитры', () => {
@@ -163,7 +186,7 @@ test('цвет мышцы на верхней границе объёма — п
   const target = findByRegion([b], picks, 'gluteal');
   assert.ok(target, 'регион gluteal должен быть кликабелен на заднем виде');
   assert.equal(picks[0].sets, PALETTE_STEPS, 'проверка границы палитры опирается на регион с максимальным объёмом');
-  assert.equal(target.style.fill, hexToRgb(PALETTE[PALETTE_STEPS - 1]), 'на верхней границе объёма должен быть последний оттенок палитры');
+  assert.equal(target.fill, hexToRgb(PALETTE[PALETTE_STEPS - 1]), 'на верхней границе объёма должен быть последний оттенок палитры');
 });
 
 test('клик по незадействованной мышце даёт пустой результат и цвет фона мышц', () => {
@@ -178,7 +201,7 @@ test('клик по незадействованной мышце даёт пу�
   assert.equal(picks[0].sets, 0);
   assert.deepEqual(picks[0].exercises, []);
   // '#cdd8e5' — значение IDLE_COLOR в bodymap.js; наружу константа не экспортирована.
-  assert.equal(target.style.fill, hexToRgb('#cdd8e5'), 'незадействованная мышца должна быть в цвете фона мышц');
+  assert.equal(target.fill, hexToRgb('#cdd8e5'), 'незадействованная мышца должна быть в цвете фона мышц');
 });
 
 test('клик по анатомии вне модели (шея, голова, колени, камбаловидная) не бросает и не долетает до onPick', () => {
@@ -266,11 +289,11 @@ test('смена режима меняет цвет области', () => {
   // а не последний: сумма округлений по упражнениям дала бы 6 и последний
   // оттенок, и икры выглядели бы как квадрицепсы с их 12.5.
   // Полигон после update() другой, поэтому ищем заново.
-  assert.equal(findByRegion([a], picks, 'calves').style.fill, hexToRgb(PALETTE[1]));
+  assert.equal(findByRegion([a], picks, 'calves').fill, hexToRgb(PALETTE[1]));
   map.setMode('all');
-  assert.equal(findByRegion([a], picks, 'calves').style.fill, hexToRgb(PALETTE[4]));
+  assert.equal(findByRegion([a], picks, 'calves').fill, hexToRgb(PALETTE[4]));
   map.setMode('strength');
-  assert.equal(findByRegion([a], picks, 'calves').style.fill, hexToRgb(PALETTE[1]),
+  assert.equal(findByRegion([a], picks, 'calves').fill, hexToRgb(PALETTE[1]),
     'возврат в силовой режим обязан вернуть и цвет');
 });
 
@@ -280,8 +303,8 @@ test('смена режима меняет цвет области', () => {
 // не на одной показательной мышце.
 // Раньше число приходило из аккумулятора библиотеки, который складывал частоты,
 // округлённые по каждому упражнению: в режиме всей нагрузки расходилась
-// половина регионов (пресс 8 вместо 7, косые 5 вместо 4), в силовом — ни один,
-// потому что там все вклады целые.
+// половина регионов (восемь из шестнадцати — например, пресс 7 вместо 6,5 и
+// косые 5 вместо 4), в силовом — ни один, потому что там все вклады целые.
 test('в обоих режимах клик отдаёт точный объём по каждому региону, а не сумму округлений', () => {
   const { a, b } = hosts();
   const picks = [];
@@ -341,12 +364,12 @@ test('дробный объём региона округляется до це�
   const chest = findByRegion([a, b], picks, 'chest');
   assert.ok(chest, 'регион chest должен быть кликабелен');
   assert.equal(picks[0].sets, 0.5, 'в подборе — точный объём, без округления');
-  assert.equal(chest.style.fill, hexToRgb(PALETTE[0]), 'пол-подхода — это первый оттенок, а не цвет фона');
+  assert.equal(chest.fill, hexToRgb(PALETTE[0]), 'пол-подхода — это первый оттенок, а не цвет фона');
 
   const biceps = findByRegion([a, b], picks, 'biceps');
   assert.ok(biceps, 'регион biceps должен быть кликабелен');
   assert.equal(picks[0].sets, 1.5);
-  assert.equal(biceps.style.fill, hexToRgb(PALETTE[1]), '1.5 подхода округляется вверх, до второго оттенка');
+  assert.equal(biceps.fill, hexToRgb(PALETTE[1]), '1.5 подхода округляется вверх, до второго оттенка');
 });
 
 // Тест утверждает ЦВЕТ полигонов заднего вида, и это принципиально. Первая его
@@ -368,15 +391,17 @@ test('смена режима перерисовывает и задний ви�
   // '#cdd8e5' — значение IDLE_COLOR в bodymap.js, наружу оно не экспортировано.
   // Верх спины: 5 подходов в силовом — пятый оттенок; 5.5 во всей нагрузке, и
   // это последний оттенок, потому что цвет берётся от округлённого числа.
-  // Заодно это опора для подписи под картой: «самый тёмный — 6 и больше, то
-  // есть уже с 5,5» (см. test/bodymap-section.test.js).
-  assert.equal(findByRegion([b], picks, 'back-deltoids').style.fill, hexToRgb('#cdd8e5'));
-  assert.equal(findByRegion([b], picks, 'upper-back').style.fill, hexToRgb(PALETTE[4]));
+  // Заодно это опора для объяснения шкалы в README: «самый тёмный означает
+  // шесть и больше, то есть уже с 5,5». Подписью под картой этот текст был
+  // раньше, с экрана его убрали по просьбе владельца программы, и
+  // test/bodymap-section.test.js теперь прямо запрещает ему там появиться.
+  assert.equal(findByRegion([b], picks, 'back-deltoids').fill, hexToRgb('#cdd8e5'));
+  assert.equal(findByRegion([b], picks, 'upper-back').fill, hexToRgb(PALETTE[4]));
 
   map.setMode('all');
-  assert.equal(findByRegion([b], picks, 'back-deltoids').style.fill, hexToRgb(PALETTE[2]),
+  assert.equal(findByRegion([b], picks, 'back-deltoids').fill, hexToRgb(PALETTE[2]),
     'задний вид остался в цветах силового режима: задняя дельта серая при трёх подходах');
-  assert.equal(findByRegion([b], picks, 'upper-back').style.fill, hexToRgb(PALETTE[PALETTE_STEPS - 1]),
+  assert.equal(findByRegion([b], picks, 'upper-back').fill, hexToRgb(PALETTE[PALETTE_STEPS - 1]),
     '5.5 подхода округляется до шести, то есть до последнего оттенка');
 });
 
@@ -392,4 +417,239 @@ test('смена режима перерисовывает те же виды, �
   map.setMode('strength');
   assert.equal(a.querySelectorAll('svg').length, 1);
   assert.equal(b.querySelectorAll('svg').length, 1);
+});
+
+// Ниже — заливка выбора и дорисованная фигура (Task 10).
+//
+// Выбранную область заливаем, а не обводим: на экране 375px обводка почти не
+// видна. Сделано седьмым цветом палитры, который библиотека берёт по частоте 7,
+// потому что правкой style.fill у полигонов было бы нельзя — какой полигон
+// какая мышца, из разметки не видно, data-* библиотека не ставит.
+
+// Столько полигонов библиотека рисует на каждый вид: 33 спереди и 33 сзади
+// (замерено по её моделям). Дорисованное их не подменяет, а добавляется.
+const LIBRARY_POLYGONS = 33;
+
+// Те же координаты, что в test/figure.test.js, — здесь они нужны, чтобы
+// отличить «дорисованное вернулось» от «в разметке появились четыре
+// каких-нибудь полигона».
+const EXTRAS = {
+  anterior: [
+    '20.8,195.5 26.9,195.5 28.4,202.5 26.8,208.8 19.4,208.8 17.8,202.5',
+    '79.2,195.5 72.7,195.5 71.2,202.5 72.8,208.8 80.2,208.8 81.8,202.5',
+    '0.4,98.9 6.6,102.1 5.0,107.5 0.3,113.5 -5.3,110.5 -3.5,103.5',
+    '99.6,98.9 93.4,102.1 95.0,107.5 99.7,113.5 105.3,110.5 103.5,103.5',
+  ],
+  posterior: [
+    '27.5,213 33.5,213 34.5,222 33.0,230.5 27.8,230.5 26.3,222',
+    '72.5,213 66.5,213 65.5,222 67.0,230.5 72.2,230.5 73.7,222',
+    '0.4,106.4 6.6,109.6 5.0,115.0 0.3,121.0 -5.3,118.0 -3.5,111.0',
+    '99.6,106.4 93.4,109.6 95.0,115.0 99.7,121.0 105.3,118.0 103.5,111.0',
+  ],
+};
+
+// Границы всего нарисованного в виде, в единицах бокса и уже со сдвигом
+// группы, — то есть то, что видно на экране, а не то, что записано в
+// координатах фигур.
+function drawnBounds(host) {
+  const layer = host.querySelector('svg > g');
+  const shift = Number(layer.getAttribute('transform').match(/^translate\(0,(-?[\d.]+)\)$/)[1]);
+  const box = { minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity };
+  const add = (x, y) => {
+    box.minX = Math.min(box.minX, x);
+    box.maxX = Math.max(box.maxX, x);
+    box.minY = Math.min(box.minY, y + shift);
+    box.maxY = Math.max(box.maxY, y + shift);
+  };
+  for (const polygon of layer.querySelectorAll('polygon')) {
+    const flat = polygon.getAttribute('points').trim().split(/[\s,]+/).map(Number);
+    for (let i = 0; i < flat.length; i += 2) add(flat[i], flat[i + 1]);
+  }
+  for (const ellipse of layer.querySelectorAll('ellipse')) {
+    const num = name => Number(ellipse.getAttribute(name));
+    add(num('cx') - num('rx'), num('cy') - num('ry'));
+    add(num('cx') + num('rx'), num('cy') + num('ry'));
+  }
+  return box;
+}
+
+test('выбранная область заливается синим — на всех своих полигонах и на обоих видах', () => {
+  const { a, b } = hosts();
+  const picks = [];
+  createBodyMap({ workout: legs, anteriorHost: a, posteriorHost: b, onPick: p => picks.push(p) });
+  assert.equal(blueCount(a) + blueCount(b), 0, 'до клика выбранной области нет');
+
+  // Икроножные библиотека рисует и спереди, и сзади, по четыре полигона на вид:
+  // заливка обязана появиться на обеих схемах целиком, а не на одном полигоне.
+  assert.ok(findByRegion([a], picks, 'calves'), 'регион calves должен быть кликабелен');
+  assert.equal(picks[0].region, 'calves');
+  assert.equal(blueCount(a), 4, 'на переднем виде залиты не все полигоны икроножных');
+  assert.equal(blueCount(b), 4, 'задний вид не залился вовсе');
+});
+
+test('выбранная область без нагрузки в этом режиме тоже заливается', () => {
+  // forearm — единственный регион без нагрузки любого типа (idleGroups выше),
+  // поэтому его нет в сводке режима. Записи для библиотеки на него не
+  // находится, и без отдельной её добавки выбранные предплечья остались бы
+  // серыми: клик по ним показывал бы подбор с нулём подходов, а на карте не
+  // было бы видно, куда человек попал.
+  const { a, b } = hosts();
+  const picks = [];
+  createBodyMap({ workout: legs, anteriorHost: a, posteriorHost: b, onPick: p => picks.push(p) });
+  assert.ok(findByRegion([a, b], picks, 'forearm'), 'регион forearm должен быть кликабелен');
+  assert.equal(picks[0].sets, 0, 'проверка опирается на регион без нагрузки');
+  assert.equal(blueCount(a), 4, 'предплечья переднего вида не залились');
+  assert.equal(blueCount(b), 4, 'предплечья заднего вида не залились');
+});
+
+test('объём выше шкалы красится последним оттенком, а не цветом выбора', () => {
+  // Библиотека берёт цвет как LIBRARY_COLORS[min(len-1, частота-1)], а в
+  // палитре теперь семь цветов — значит без ограничения частоты шестёркой
+  // любая область с семью и больше подходами получила бы индекс 6, то есть
+  // синий, и выглядела бы выбранной. У квадрицепсов в режиме всей нагрузки
+  // 12.5 подхода.
+  const { a, b } = hosts();
+  const picks = [];
+  createBodyMap({ workout: legs, anteriorHost: a, posteriorHost: b, onPick: p => picks.push(p), mode: 'all' });
+  assert.equal(blueCount(a) + blueCount(b), 0, 'до первого клика синей области быть не может');
+
+  const quads = findByRegion([a], picks, 'quadriceps');
+  assert.ok(quads, 'регион quadriceps должен быть кликабелен на переднем виде');
+  assert.equal(picks[0].sets, 12.5, 'проверка опирается на объём выше шкалы палитры');
+  assert.equal(quads.fill, hexToRgb(PALETTE[PALETTE_STEPS - 1]),
+    'объём выше шкалы обязан остаться последним оттенком объёма, а не стать цветом выбора');
+});
+
+test('смена режима снимает выбор', () => {
+  // Подбор под картой app.js при смене режима убирает: в новом режиме у области
+  // и число подходов, и список упражнений другие. Залитая синим область без
+  // подбора осталась бы ответом на вопрос, которого уже нет на экране.
+  const { a, b } = hosts();
+  const picks = [];
+  const map = createBodyMap({ workout: legs, anteriorHost: a, posteriorHost: b, onPick: p => picks.push(p) });
+  assert.ok(findByRegion([a], picks, 'calves'), 'регион calves должен быть кликабелен');
+  assert.equal(blueCount(a) + blueCount(b), 8, 'выбор не залился — проверять снятие нечего');
+  map.setMode('all');
+  assert.equal(blueCount(a) + blueCount(b), 0, 'после смены режима залитая область осталась');
+});
+
+// Главная опасность этой правки: библиотека при каждой отрисовке заменяет
+// содержимое своей схемы целиком (S(i, g) в vendor/body-highlighter.esm.js),
+// поэтому стопы, кисти и голова со спины исчезли бы при первом же переключении
+// режима. Тест смотрит в разметку ПОСЛЕ setMode, а не на факт вызова функции:
+// мутации «дорисовать только при создании» и «дорисовать до update(), а не
+// после» обязаны его ронять.
+test('дорисованные стопы, кисти и голова остаются в разметке после смены режима', () => {
+  const { a, b } = hosts();
+  const map = createBodyMap({ workout: legs, anteriorHost: a, posteriorHost: b });
+  const views = [[a, 'anterior'], [b, 'posterior']];
+
+  for (const mode of ['all', 'strength', 'all']) {
+    map.setMode(mode);
+    for (const [host, type] of views) {
+      const svg = host.querySelector('svg');
+      const points = [...svg.querySelectorAll('polygon')].map(p => p.getAttribute('points'));
+      assert.equal(points.length, LIBRARY_POLYGONS + EXTRAS[type].length,
+        `${mode}/${type}: в разметке не столько полигонов, сколько рисуют библиотека и дорисовка вместе`);
+      assert.deepEqual(points.slice(-EXTRAS[type].length), EXTRAS[type],
+        `${mode}/${type}: после смены режима дорисованных стоп и кистей в разметке нет`);
+      assert.equal(svg.querySelectorAll('svg > g').length, 1,
+        `${mode}/${type}: группа со сдвигом либо пропала, либо появилась второй`);
+    }
+    assert.equal(b.querySelectorAll('ellipse').length, 1,
+      `${mode}: после смены режима голова со спины снова сплющена — эллипса нет`);
+    assert.equal(a.querySelectorAll('ellipse').length, 0,
+      `${mode}: голову спереди библиотека рисует сама, дорисовывать её нечем`);
+  }
+});
+
+test('выбор области не теряет дорисованное', () => {
+  // Клик тоже перерисовывает схему библиотекой (заливка выбора идёт через её
+  // данные), значит дорисованное надо возвращать и после него.
+  const { a, b } = hosts();
+  const picks = [];
+  createBodyMap({ workout: legs, anteriorHost: a, posteriorHost: b, onPick: p => picks.push(p) });
+  assert.ok(findByRegion([a], picks, 'calves'), 'регион calves должен быть кликабелен');
+  for (const [host, type] of [[a, 'anterior'], [b, 'posterior']]) {
+    const points = [...host.querySelectorAll('polygon')].map(p => p.getAttribute('points'));
+    assert.deepEqual(points.slice(-EXTRAS[type].length), EXTRAS[type], `${type}: клик снёс дорисованное`);
+  }
+  assert.equal(b.querySelectorAll('ellipse').length, 1, 'клик снёс дорисованную голову со спины');
+});
+
+test('дорисованное залито тем же серым, которым библиотека красит незатронутую мышцу', () => {
+  // Обещание про цвет было единственным незакрытым во всей правке: мутация
+  // «передать в decorate #ff0000» оставляла все 359 тестов зелёными, потому что
+  // цвет проверялся только в test/figure.test.js — против литерала, который тот
+  // же тест и передавал. Режим отказа — человечек с красными стопами.
+  // Поэтому здесь оба цвета берутся из живой разметки и сравниваются друг с
+  // другом, а не с записанной в тест константой.
+  const { a, b } = hosts();
+  const picks = [];
+  createBodyMap({ workout: legs, anteriorHost: a, posteriorHost: b, onPick: p => picks.push(p) });
+
+  // Всё до единого клика: цвета первой отрисовки, в ней выбранного нет.
+  const drawn = [
+    ...[...a.querySelectorAll('polygon')].slice(-4),
+    ...[...b.querySelectorAll('polygon')].slice(-4),
+    ...b.querySelectorAll('ellipse'),
+  ].map(shape => shape.style.fill);
+  assert.equal(drawn.length, 9, 'дорисовано не девять фигур: четыре стопы, четыре кисти и голова');
+  const libraryFills = [...a.querySelectorAll('polygon')].slice(0, -4).map(p => p.style.fill);
+
+  // forearm — единственный регион без нагрузки любого типа (idleGroups выше),
+  // то есть гарантированно окрашенный цветом фона мышц. Цвет снимаем через
+  // findByRegion, потому что он тоже берёт его до клика.
+  const idle = findByRegion([a], picks, 'forearm');
+  assert.ok(idle, 'регион forearm должен быть кликабелен на переднем виде');
+  assert.ok(libraryFills.includes(idle.fill), 'цвет незатронутой мышцы снят не с полигона библиотеки');
+  // Иначе проверка была бы слепой: на схеме, залитой одним цветом целиком,
+  // совпадение ничего не значило бы.
+  assert.ok(libraryFills.some(fill => fill !== idle.fill),
+    'на переднем виде нет ни одной окрашенной мышцы — сравнивать не с чем');
+
+  for (const fill of drawn) {
+    assert.equal(fill, idle.fill, 'дорисованное залито не цветом незатронутой мышцы');
+  }
+});
+
+test('бокс отрисовки поднят на обоих видах и остаётся поднятым после смены режима', () => {
+  const { a, b } = hosts();
+  const map = createBodyMap({ workout: legs, anteriorHost: a, posteriorHost: b });
+  for (const host of [a, b]) {
+    assert.equal(host.querySelector('svg').getAttribute('viewBox'), '-8 0 116 232');
+  }
+  map.setMode('all');
+  for (const host of [a, b]) {
+    assert.equal(host.querySelector('svg').getAttribute('viewBox'), '-8 0 116 232',
+      'после смены режима бокс вернулся к библиотечному, и низ ноги снова обрезан');
+  }
+});
+
+test('в бокс влезает вся фигура, включая ту часть, которую библиотека обрезала', () => {
+  const { a, b } = hosts();
+  createBodyMap({ workout: legs, anteriorHost: a, posteriorHost: b });
+  const boxes = {};
+  for (const [host, type] of [[a, 'anterior'], [b, 'posterior']]) {
+    const svg = host.querySelector('svg');
+    const [minX, minY, width, height] = svg.getAttribute('viewBox').split(' ').map(Number);
+    const drawn = drawnBounds(host);
+    assert.ok(drawn.minX >= minX, `${type}: слева обрезано (${drawn.minX} < ${minX})`);
+    assert.ok(drawn.maxX <= minX + width, `${type}: справа обрезано (${drawn.maxX} > ${minX + width})`);
+    assert.ok(drawn.minY >= minY, `${type}: сверху обрезано (${drawn.minY} < ${minY})`);
+    assert.ok(drawn.maxY <= minY + height, `${type}: снизу обрезано (${drawn.maxY} > ${minY + height})`);
+    boxes[type] = drawn;
+  }
+  // Без этих двух проверка была бы слепой: у библиотечного бокса `0 0 100 200`
+  // обрезаны были именно кисти (они уходят за x=0 и x=100) и низ задней ноги
+  // (полигоны голени идут до y=220, а сзади дорисована ещё и стопа).
+  assert.ok(boxes.anterior.minX < 0 && boxes.anterior.maxX > 100,
+    'кисти не выходят за библиотечный бокс — проверять обрезку по бокам нечем');
+  assert.ok(boxes.posterior.maxY > 200,
+    'задний вид не рисует ниже библиотечного бокса — проверять обрезку снизу нечем');
+  // И оба вида стоят на одной высоте: передний вид у библиотеки короче заднего,
+  // и без сдвига на двух схемах рядом получались бы люди разного роста.
+  const center = box => (box.minY + box.maxY) / 2;
+  assert.ok(Math.abs(center(boxes.anterior) - center(boxes.posterior)) < 0.2,
+    `середины фигур разошлись: ${center(boxes.anterior)} против ${center(boxes.posterior)}`);
 });

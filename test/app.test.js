@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { makeDom } from './setup.js';
-import { startApp } from '../app.js';
+import { startApp, PHONE_MAX_WIDTH } from '../app.js';
 import { storageKey, currentDay } from '../storage.js';
 import { markId, scheduleShort, scheduleLong } from '../render.js';
 import { getWorkout } from '../workouts/index.js';
@@ -118,9 +118,29 @@ function installFakeClock(t, window) {
   };
 }
 
-function mount(t, { marks = null, webApp = null, freezeTimers = false, fakeClock = false, denyStorage = false } = {}) {
+// Окно заданной ширины: matchMedia отвечает на запросы о ширине так, как
+// ответил бы экран в screenWidth пикселей, а на остальные — как обычный стаб
+// окружения, то есть «нет». Разбор запроса, а не «всегда да»: приложение тем
+// же matchMedia спрашивает и про prefers-reduced-motion, и стаб-«да» отвечал бы
+// заодно и на него.
+function widthMatchMedia(screenWidth) {
+  return query => {
+    const max = query.match(/max-width:\s*(\d+)px/);
+    return {
+      media: query,
+      matches: max ? screenWidth <= Number(max[1]) : false,
+      addEventListener() {},
+      removeEventListener() {},
+    };
+  };
+}
+
+function mount(t, { marks = null, webApp = null, freezeTimers = false, fakeClock = false, denyStorage = false, screenWidth = null } = {}) {
   const { window, document } = makeDom(PAGE);
   t.after(() => window.close());
+  // Ширину окна подменяем до startApp: по ней приложение решает при отрисовке,
+  // раскрывать ли описания упражнений.
+  if (screenWidth !== null) window.matchMedia = widthMatchMedia(screenWidth);
   if (marks) window.localStorage.setItem(todayKey(), JSON.stringify(marks));
   // Приватный режим Safari и урезанный WebView: обращение к localStorage
   // бросает ещё до первого getItem.
@@ -1077,4 +1097,347 @@ test('навигация подсвечивает блок, о котором с
   // не переносит, иначе она уезжала бы на блок, которого на экране уже нет.
   observer.intersect(document.getElementById('finish'), false);
   assert.deepEqual([...document.querySelectorAll('.block-nav a.active')].map(link => link.hash), ['#legs1']);
+});
+
+// ЗАДАЧА 9: описания упражнений под нажатием. Что в свёрнутой карточке лежит
+// внутри области раскрытия, а что снаружи, проверяет render.test.js; здесь —
+// поведение на настоящей странице: решение по ширине окна, нажатие и то, что
+// сворачивание не задело ни отметки, ни счётчик, ни навигацию.
+
+const howtoPairs = document => [...document.querySelectorAll('#workout .exercise')].map(article => {
+  const button = article.querySelector('.howto-toggle');
+  return { button, region: document.getElementById(button.getAttribute('aria-controls')) };
+});
+
+// Телефон 375px против окна 800px: на узком экране места нет, на широком
+// прятать текст незачем. Порог — PHONE_MAX_WIDTH, и обе стороны от него здесь
+// проверены на одной и той же странице.
+test('на телефоне описания свёрнуты, а в широком окне раскрыты', t => {
+  const phone = mount(t, { screenWidth: 375 }).document;
+  const wide = mount(t, { screenWidth: 800 }).document;
+
+  const phonePairs = howtoPairs(phone);
+  assert.equal(phonePairs.length, 19);
+  for (const { button, region } of phonePairs) {
+    assert.equal(button.getAttribute('aria-expanded'), 'false');
+    assert.equal(region.hidden, true);
+  }
+
+  const widePairs = howtoPairs(wide);
+  assert.equal(widePairs.length, 19);
+  for (const { button, region } of widePairs) {
+    assert.equal(button.getAttribute('aria-expanded'), 'true');
+    assert.equal(region.hidden, false);
+  }
+});
+
+// Окно ровно на пороге считается телефоном: в style.css правила телефона
+// включает max-width, то есть границу он включает тоже.
+test('окно ровно по порогу получает телефонную раскладку описаний', t => {
+  const { document } = mount(t, { screenWidth: PHONE_MAX_WIDTH });
+  assert.equal(document.querySelector('.howto-toggle').getAttribute('aria-expanded'), 'false');
+  const { document: wider } = mount(t, { screenWidth: PHONE_MAX_WIDTH + 1 });
+  assert.equal(wider.querySelector('.howto-toggle').getAttribute('aria-expanded'), 'true');
+});
+
+// Порог живёт в двух местах: в style.css (размеры) и в app.js (раскрытие
+// описаний при отрисовке, медиазапросом атрибут не задать). Разъехавшись, они
+// дали бы телефонные размеры с раскрытым текстом или наоборот — на экране это
+// выглядит как «просто так получилось», и причину пришлось бы искать в двух
+// файлах сразу.
+//
+// Сверяется условие ИМЕННО ТОГО блока, который задаёт телефонные размеры, а не
+// присутствие числа где-нибудь в файле: медиазапросов в style.css шесть, и
+// среди них уже есть 520px (силуэты карты) — то самое число, на которое телефонный
+// порог скорее всего однажды и поднимут. Прежняя версия теста искала число по
+// всем медиазапросам и на PHONE_MAX_WIDTH = 520 оставалась зелёной.
+//
+// Блок опознаётся по правилу, которого нет ни в одном другом медиазапросе:
+// размер названия упражнения. Стили читаются разбором CSSOM, а не регулярным
+// выражением по тексту, поэтому условие берётся у настоящего разобранного
+// правила.
+test('телефонные размеры лежат в медиазапросе ровно на PHONE_MAX_WIDTH', () => {
+  const { document } = makeDom();
+  const style = document.createElement('style');
+  style.textContent = readFileSync(fileURLToPath(new URL('../style.css', import.meta.url)), 'utf8');
+  document.head.append(style);
+
+  const media = [...document.styleSheets[0].cssRules].filter(rule => rule.media);
+  const marked = media.filter(rule => [...rule.cssRules].some(r => r.selectorText === '.exercise h3'));
+  assert.equal(marked.length, 1,
+    `блок с телефонным размером .exercise h3 должен быть один, найдено ${marked.length}`);
+
+  const condition = marked[0].media.mediaText;
+  const max = /^\(max-width:\s*(\d+)px\)$/.exec(condition);
+  assert.ok(max, `условие блока должно быть «(max-width: Npx)», а оно «${condition}»`);
+  assert.equal(Number(max[1]), PHONE_MAX_WIDTH,
+    `телефонные размеры включаются на ${max[1]}px, а app.js считает порогом ${PHONE_MAX_WIDTH}px`);
+});
+
+// Минимальная высота нажимаемого. Требование владельца программы: всё, во что
+// тыкают пальцем, не ниже 44px — приложением пользуются между подходами, и
+// промах стоит дороже лишних пикселей.
+//
+// До этого теста требование держалось на одном комментарии в style.css:
+// возврат `.timer button{min-height:43px}` в блок 720px и возврат
+// `.check{min-height:36px}` оставляли все тесты зелёными.
+const MIN_TAP_HEIGHT = 44;
+
+// Всё нажимаемое страницы. Список — из требования Task 9 («чипы блоков, кнопки
+// режимов карты, видео, отметка, пресеты таймера, кнопка раскрытия секции»)
+// плюс кнопка «Как выполнять», сброс отметок, мышцы в подборе и обе кнопки
+// плеера, которым высоту задаёт player.css.
+//
+// Кого здесь нет и почему:
+// - `.check input` (19×19) — сам чекбокс лежит ВНУТРИ метки `.check`, а палец
+//   попадает по метке целиком: тап по любому её месту переключает отметку;
+// - `a.brand` в шапке и `.player-external` в подвале плеера — им высота в
+//   стилях не задана вовсе, она набирается содержимым. В требовании владельца
+//   их нет, и придумывать им проверку значит придумывать требование;
+// - `.block-number` — не нажимаемое, это номер блока (по медиазапросам он
+//   как раз и уезжает 44 → 38 → 34px).
+const TAP_TARGETS = [
+  '.block-nav a',
+  '.text-button',
+  '.video',
+  '.check',
+  '.timer button',
+  '.bodymap-toggle',
+  '.bodymap-modes button',
+  '.bodymap-pick button',
+  '.howto-toggle',
+  'button.extra-link',
+  '.player-close',
+];
+
+const HEIGHT_PROPS = ['min-height', 'height', 'max-height'];
+
+// Проверять можно только пиксели: процент считается от родителя, vh — от окна,
+// и «не ниже 44px» о них ничего не говорит. Поэтому не-пиксельное значение у
+// нажимаемого — это падение с объяснением, а не молчаливый пропуск.
+const tapPixels = (value, where) => {
+  const px = /^(\d+(?:\.\d+)?)px$/.exec(value.trim());
+  assert.ok(px, `высота нажимаемого задана не в пикселях, проверить её нельзя: ${where}`);
+  return Number(px[1]);
+};
+
+// Живую раскладку в jsdom не посчитать, поэтому сверяются сами объявления —
+// так же, как в тестах про порог телефона и про порядок правил печати.
+//
+// Объявления подбираются НЕ по совпадению строки селектора, а примеркой на
+// настоящие узлы страницы (`node.matches`): правило под другим селектором
+// (`.presets button` вместо `.timer button`) или внутри медиазапроса накрывает
+// те же кнопки, и сравнение строк его бы не заметило.
+//
+// Узлы берутся с отрисованной страницы ещё и затем, чтобы сторож не остался
+// беззубым молча: селектор, переставший что-либо накрывать (переименованный
+// класс), роняет тест на пустой выборке.
+test(`ни одно правило не опускает нажимаемое ниже ${MIN_TAP_HEIGHT}px`, t => {
+  const { window, document } = mount(t, { screenWidth: 375 });
+  // Подбор мышцы и плеер появляются только после нажатий: без них выборки
+  // `.bodymap-pick button` и `.player-close` были бы пустыми.
+  document.querySelector('.bodymap-toggle').click();
+  document.querySelector('.bodymap-anterior polygon')
+    .dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+  document.querySelector('button.video').click();
+
+  const declarations = [];
+  for (const file of ['style.css', 'player.css']) {
+    const style = document.createElement('style');
+    style.textContent = readFileSync(fileURLToPath(new URL(`../${file}`, import.meta.url)), 'utf8');
+    document.head.append(style);
+    for (const rule of [...style.sheet.cssRules]) {
+      const scope = rule.media ? `@media ${rule.media.mediaText} ` : '';
+      for (const inner of rule.media ? [...rule.cssRules] : [rule]) {
+        if (!inner.style) continue;
+        for (const prop of HEIGHT_PROPS) {
+          const value = inner.style.getPropertyValue(prop);
+          if (!value) continue;
+          declarations.push({
+            prop,
+            value,
+            selectors: inner.selectorText.split(',').map(s => s.trim()),
+            where: `${file} ${scope}${inner.selectorText}{${prop}:${value}}`,
+          });
+        }
+      }
+    }
+  }
+  const low = [];
+  for (const selector of TAP_TARGETS) {
+    const nodes = [...document.querySelectorAll(selector)];
+    assert.ok(nodes.length > 0,
+      `«${selector}» на странице ничего не накрывает — сторож высоты нажимаемого стал беззубым`);
+
+    const applied = declarations.filter(
+      declaration => nodes.some(node => declaration.selectors.some(s => node.matches(s))));
+    // Высота обязана быть задана: снятое `min-height` вернуло бы высоту по
+    // содержимому, и одной проверкой «ни одно объявление не ниже 44px» такое
+    // снятие прошло бы мимо — объявлять стало бы нечего.
+    const floors = applied.filter(declaration => declaration.prop === 'min-height'
+      && tapPixels(declaration.value, declaration.where) >= MIN_TAP_HEIGHT);
+    assert.ok(floors.length > 0,
+      `у «${selector}» нет объявления min-height не ниже ${MIN_TAP_HEIGHT}px`);
+
+    for (const declaration of applied) {
+      if (tapPixels(declaration.value, declaration.where) < MIN_TAP_HEIGHT) low.push(declaration.where);
+    }
+  }
+  assert.deepEqual(low, []);
+});
+
+test('нажатие на «Как выполнять» раскрывает описание, повторное — сворачивает', t => {
+  const { document } = mount(t, { screenWidth: 375 });
+  const [{ button, region }] = howtoPairs(document);
+
+  button.click();
+  assert.equal(button.getAttribute('aria-expanded'), 'true');
+  assert.equal(region.hidden, false);
+
+  button.click();
+  assert.equal(button.getAttribute('aria-expanded'), 'false');
+  assert.equal(region.hidden, true);
+});
+
+// Нажимают не по подписи, а по кнопке целиком, и палец часто попадает в
+// уголок: у обработчика цель — сам значок, а не кнопка.
+test('нажатие по значку-уголку раскрывает описание так же, как по подписи', t => {
+  const { document } = mount(t, { screenWidth: 375 });
+  const [{ button, region }] = howtoPairs(document);
+
+  button.querySelector('.howto-caret').dispatchEvent(
+    new document.defaultView.MouseEvent('click', { bubbles: true }));
+  assert.equal(button.getAttribute('aria-expanded'), 'true');
+  assert.equal(region.hidden, false);
+});
+
+// Не аккордеон: человек вправе раскрыть сразу несколько упражнений — например
+// оба упражнения силовой пары, которые делает по кругу одно за другим.
+test('раскрытие одного упражнения не сворачивает остальные', t => {
+  const { document } = mount(t, { screenWidth: 375 });
+  const pairs = howtoPairs(document);
+
+  pairs[0].button.click();
+  pairs[1].button.click();
+
+  assert.deepEqual(pairs.slice(0, 2).map(p => p.button.getAttribute('aria-expanded')), ['true', 'true']);
+  assert.deepEqual(pairs.slice(0, 2).map(p => p.region.hidden), [false, false]);
+  assert.equal(pairs.slice(2).filter(p => p.region.hidden).length, 17, 'остальные так и свёрнуты');
+});
+
+// Ревью прошлой итерации ловило дефект «счётчик считал отметки за пределами
+// экрана»: в наборе оказывались отметки, которых на странице нет. Сворачивание
+// описаний — ровно тот случай, когда отметка могла уехать под hidden: тогда
+// счётчик считал бы её, а палец до неё не дотянулся бы.
+test('в свёрнутом виде ни одна отметка и ни одно видео не спрятаны под hidden', t => {
+  const { document, app } = mount(t, { screenWidth: 375 });
+
+  assert.equal(app.total, TOTAL, 'счётчик знает про все отметки тренировки');
+  assert.equal(boxes(document).length, TOTAL);
+  assert.equal(boxes(document).filter(box => box.closest('[hidden]')).length, 0);
+
+  const videos = [...document.querySelectorAll('#workout button.video')];
+  assert.equal(videos.length, 18, 'плеер подменил все ссылки на видео');
+  assert.equal(videos.filter(button => button.closest('[hidden]')).length, 0);
+});
+
+test('отметка в свёрнутой карточке работает и двигает счётчик', t => {
+  const { document, app } = mount(t, { screenWidth: 375 });
+  const exercise = document.querySelector('#legs1 .exercise');
+  const [first, second] = [...exercise.querySelectorAll('input[data-mark]')];
+
+  first.click();
+  second.click();
+
+  assert.equal(app.marks.size, 2);
+  assert.equal(exercise.classList.contains('completed'), true);
+  assert.equal(document.getElementById('progress').value, 2);
+  assert.equal(document.getElementById('progress-text').textContent, `Сегодня: 2 из ${TOTAL} отметок`);
+});
+
+// Навигация следит за появлением блоков на экране, а не за упражнениями:
+// сворачивание описаний не должно было ни убрать блок из-под наблюдения, ни
+// сбить подсветку.
+test('навигация по блокам работает и при свёрнутых описаниях', t => {
+  const { window, document } = mount(t, { screenWidth: 375 });
+  const [observer] = window.intersectionObservers;
+
+  assert.equal(observer.targets.length, WORKOUT.blocks.length);
+  observer.intersect(document.getElementById('upper2'));
+  assert.deepEqual([...document.querySelectorAll('.block-nav a.active')].map(link => link.hash), ['#upper2']);
+});
+
+// Обработчик раскрытия висит на всём списке упражнений и видит каждый клик
+// внутри него — по отметке, по её подписи, по кнопке видео, по заголовку.
+// Без раннего выхода (closest вернул null) он падал бы с TypeError на каждом
+// таком клике, и ни один тест этого бы не увидел: исключение из обработчика
+// события не доходит до вызова click(). На телефоне оно осталось бы только
+// ошибкой в консоли, которую никто не читает, — поэтому ловим необработанные
+// исключения окна явно.
+test('клик в списке упражнений не оставляет необработанных исключений', t => {
+  const { window, document } = mount(t, { screenWidth: 375 });
+  const errors = [];
+  window.addEventListener('error', event => errors.push(String(event.error ?? event.message)));
+  const exercise = document.querySelector('#legs1 .exercise');
+
+  exercise.querySelector('input[data-mark]').click();
+  exercise.querySelector('label.check span').click();
+  exercise.querySelector('button.video').click();
+  exercise.querySelector('h3').click();
+  exercise.querySelector('.howto-toggle').click();
+
+  assert.deepEqual(errors, []);
+  // Клики по отметке и по её подписи — это два переключения одного чекбокса,
+  // то есть набор снова пуст: проверка заодно сторожит, что клики дошли.
+  assert.equal(document.getElementById('progress-text').textContent, `Сегодня: 0 из ${TOTAL} отметок`);
+  assert.equal(exercise.querySelector('.howto-toggle').getAttribute('aria-expanded'), 'true');
+});
+
+// Медиазапрос специфичности не добавляет: объявление внутри @media print
+// перекрывается любым ПОЗЖЕ объявленным правилом с тем же селектором и тем же
+// свойством. Именно так и вышло с кнопкой раскрытия: display:none стоял в общем
+// блоке печати, а display:flex — в новых правилах карточки, дописанных в конец
+// файла, и кнопка печаталась бы на каждой из девятнадцати карточек.
+//
+// Проверка общая, а не про одно правило: новые стили в этом файле дописывают в
+// конец, значит следующий такой случай появится там же. Сверяется только
+// style.css — правила player.css идут после него целиком, перекрыть их из
+// style.css нельзя.
+test('ни одно правило печати не перекрыто более поздним правилом style.css', () => {
+  const { document } = makeDom();
+  const style = document.createElement('style');
+  style.textContent = readFileSync(fileURLToPath(new URL('../style.css', import.meta.url)), 'utf8');
+  document.head.append(style);
+
+  const printed = [];
+  const rest = [];
+  [...document.styleSheets[0].cssRules].forEach((rule, order) => {
+    const into = rule.media ? (rule.media.mediaText === 'print' ? printed : rest) : rest;
+    const rules = rule.media ? [...rule.cssRules] : [rule];
+    for (const r of rules) {
+      if (!r.style) continue;
+      into.push({ order, selectors: r.selectorText.split(',').map(s => s.trim()), props: [...r.style] });
+    }
+  });
+  assert.ok(printed.length > 0, 'блок @media print в style.css найден');
+
+  const shadowed = [];
+  for (const rule of printed) {
+    for (const selector of rule.selectors) {
+      for (const prop of rule.props) {
+        const later = rest.find(other => other.order > rule.order
+          && other.selectors.includes(selector) && other.props.includes(prop));
+        if (later) shadowed.push(`печать «${selector}{${prop}}» перекрыта правилом «${later.selectors.join(',')}» ниже в файле`);
+      }
+    }
+  }
+  assert.deepEqual(shadowed, []);
+
+  // И само правило на месте: на бумаге кнопка не нужна (в блоке печати рядом
+  // так же скрыты отметки), а текст техники печатается, хотя на экране он
+  // свёрнут атрибутом hidden. Без этой проверки удаление всего блока печати
+  // прошло бы мимо теста: перекрывать стало бы нечего.
+  const declared = printed.flatMap(rule => rule.selectors.map(selector => `${selector}{${rule.props.join(',')}}`));
+  assert.ok(declared.includes('.howto-toggle{display}'), `.howto-toggle не скрыт при печати: ${declared.join(' ')}`);
+  assert.ok(declared.includes('.howto-body{display}'), `.howto-body не раскрыт при печати: ${declared.join(' ')}`);
 });

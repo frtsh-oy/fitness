@@ -1,4 +1,4 @@
-*{box-sizing:border-box}html{scroll-behavior:smooth;scroll-padding-top:82px}body{margin:0;background:#f4f6f9;color:#152d4a;font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif}button,a,input{-webkit-tap-highlight-color:transparent}button,input{font:inherit}button,a{touch-action:manipulation}button{cursor:pointer}a{color:inherit}button:focus-visible,a:focus-visible,summary:focus-visible,input:focus-visible{outline:3px solid #4267cb;outline-offset:4px}.wrap{max-width:1040px;margin:auto;padding:0 28px}.masthead{background:#152d4a;color:white}.mastrow{height:70px;display:flex;align-items:center;justify-content:space-between;gap:15px}.brand{text-decoration:none;display:flex;align-items:center;gap:10px;font-size:14px;font-weight:750;letter-spacing:.07em}.brand-icon{font-size:32px;color:#ceef69;line-height:1}.schedule{font-size:14px;color:#ceef69;white-space:nowrap}.intro{display:grid;grid-template-columns:1.4fr 1fr;gap:40px;padding:38px 0 30px;align-items:center}.eyebrow{font-size:12px;letter-spacing:.15em;font-weight:750;margin:0 0 10px;color:#53637a}h1{font-size:clamp(34px,5vw,55px);line-height:1.12;letter-spacing:-.04em;margin:0 0 16px}h1 span{color:#486386}.intro-copy{max-width:460px;margin:0;color:#526278}.facts{display:grid;grid-template-columns:1fr 1fr;gap:18px}.facts div{border-left:3px solid #aac94d;padding-left:17px}.facts strong{display:block;font-size:33px;font-weight:650;letter-spacing:-.04em}.facts span{display:block;font-size:14px;line-height:1.5;color:#526278}.block-nav{display:flex;gap:7px;overflow-x:auto;padding:12px 0;position:sticky;top:0;z-index:3;background:#f4f6f9;border-bottom:1px solid #d9e0e9;scrollbar-width:thin}.block-nav a{white-space:nowrap;text-decoration:none;padding:9px 16px;border:1px solid #d4dde8;border-radius:30px;background:white;font-size:14px;font-weight:600}.block-nav a:hover,.block-nav a.active{background:#152d4a;border-color:#152d4a;color:white}.progress-row{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-top:20px;font-size:14px}.text-button{border:0;background:none;color:#53637a;text-decoration:underline;font-size:14px;min-height:44px;padding:5px}progress{display:block;width:100%;height:6px;border:0;border-radius:8px;overflow:hidden;background:#dbe3ed}progress::-webkit-progress-bar{background:#dbe3ed}progress::-webkit-progress-value{background:#557126}progress::-moz-progress-bar{background:#557126}.storage-note{font-size:12px;color:#657289;margin:8px 0 18px}.equipment{padding:14px 18px;border-radius:10px;background:#e8edf4;font-size:14px}.workout-block{margin-top:38px;scroll-margin-top:12px}.block-heading{display:flex;align-items:flex-start;gap:16px;margin-bottom:16px}.block-number{background:#152d4a;color:#ceef69;min-width:44px;height:44px;border-radius:12px;display:grid;place-items:center;font-size:18px;font-weight:650}.block-heading h2{margin:0;font-size:25px;letter-spacing:-.025em;line-height:1.3}.block-heading p{margin:4px 0 0;font-size:14px;color:#526278}.round-tag{margin-left:auto;white-space:nowrap;background:#e0edc2;padding:6px 10px;border-radius:6px;font-size:14px;font-weight:650}.block-note{font-size:14px;color:#53637a;background:#e8edf4;border-radius:10px;padding:13px 16px;margin:0 0 14px}.cards{display:grid;grid-template-columns:1fr 1fr;gap:14px}.exercise{background:#fff;border:1px solid #d8e1eb;border-radius:15px;padding:22px;display:flex;flex-direction:column;transition:border-color .2s}.exercise.completed{border-color:#a3bc65}.exercise-top{display:flex;justify-content:space-between;gap:14px;align-items:baseline;margin-bottom:10px}.exercise-index{font-size:12px;letter-spacing:.1em;color:#61748b;font-weight:650}.muscles{font-size:12px;color:#657289;text-align:right}.exercise h3{font-size:21px;line-height:1.35;letter-spacing:-.02em;margin:0 0 9px}.reps{font-size:16px;font-weight:700;color:#39571b;margin:0 0 17px}.technique{margin:0 0 18px;color:#46566b;font-size:16px;line-height:1.65}.exercise details{border-top:1px solid #e3e8ee;padding-top:10px;margin:0 0 15px;font-size:14px;color:#526278}summary{cursor:pointer;font-weight:600;min-height:40px;display:list-item;padding-top:7px}details p{margin:8px 0 0}.video{display:flex;align-items:center;justify-content:center;gap:9px;text-decoration:none;min-height:46px;border-radius:8px;border:1px solid #cad6e4;color:#193d6a;background:#f3f7fc;font-size:14px;font-weight:650;margin-top:auto}.video:hover{background:#e4edf8}.video svg{width:17px;height:17px;fill:currentColor;flex-shrink:0}.extra-link{display:block;font-size:14px;margin-top:10px;text-underline-offset:3px}.checks{display:flex;gap:8px;flex-wrap:wrap;margin-top:17px}.check{display:flex;align-items:center;gap:7px;font-size:14px;min-height:44px;padding:6px 10px;border-radius:8px;background:#f2f5f8;cursor:pointer}.check:has(input:checked){background:#e6f0d1;color:#345316}.check input{width:19px;height:19px;margin:0;accent-color:#4b6a22;cursor:pointer}.pair-rules{margin:35px 0 0;background:#152d4a;color:white;border-radius:15px;padding:25px}.pair-rules h2{font-size:22px;margin:0 0 10px}.pair-rules p{margin:8px 0;color:#e0e8f3;font-size:15px}.pair-rules strong{color:#ceef69}.guide{margin-top:40px;background:white;border:1px solid #d8e1eb;border-radius:15px;padding:26px}.guide h2,.care h2{font-size:23px;line-height:1.3;margin:0 0 14px}.guide ol{padding-left:23px;margin:0}.guide li+li{margin-top:12px}.care{margin-top:24px;padding:24px;border-left:3px solid #c49346;background:#fff8ed;border-radius:0 12px 12px 0}.care p{font-size:14px;color:#665846;margin:10px 0 0}footer{padding:32px 0 190px;font-size:14px;color:#53637a}footer span{display:block}.timer{position:fixed;bottom:0;left:0;right:0;background:#152d4a;color:white;z-index:5;box-shadow:0 -5px 25px #142a461a;padding-bottom:env(safe-area-inset-bottom)}.timer-inner{max-width:984px;margin:auto;display:flex;justify-content:space-between;align-items:center;gap:20px;padding:15px 20px}.timer-head{display:flex;align-items:center;gap:16px}.timer-head>span:first-child{font-size:12px;letter-spacing:.12em;color:#d7e0ed}.timer-head output{font-size:28px;font-variant-numeric:tabular-nums;line-height:1.2;font-weight:650}.timer-head>span:last-child{font-size:12px;color:#d7e0ed;max-width:100px;line-height:1.3}.timer-controls{display:flex;gap:8px;align-items:center}.presets{display:flex;gap:5px}.timer button{min-height:44px;border-radius:8px;padding:9px 13px;font-size:14px;border:1px solid #526982;color:#edf3fb;background:transparent}.timer button[aria-pressed=true]{background:#344e70;border-color:#7089a8}.timer .timer-start{background:#ceef69;color:#162c19;border-color:#ceef69;font-weight:700;min-width:80px}.timer .timer-reset{font-size:22px;padding:3px 12px}.timer.done{background:#294525}.timer.done .timer-head output{color:#ceef69}@media(max-width:720px){.wrap{padding:0 18px}.mastrow{height:60px}.brand{font-size:12px;letter-spacing:.035em}.schedule{font-size:12px}.intro{display:block;padding:27px 0 22px}.intro h1{font-size:39px}.intro-copy{font-size:16px}.facts{margin-top:24px;gap:15px;max-width:430px}.facts strong{font-size:26px}.facts span{font-size:14px}.block-nav{margin:0 -18px;padding:10px 18px}.block-nav a{padding:9px 15px}.cards{grid-template-columns:1fr}.exercise{padding:20px}.block-heading{gap:10px}.block-heading h2{font-size:22px}.round-tag{font-size:12px;padding:6px 8px}.block-number{min-width:38px;height:38px;border-radius:10px;font-size:16px}.block-heading p{font-size:14px}.timer-inner{display:block;padding:10px 18px 12px}.timer-head{justify-content:space-between;gap:10px;margin-bottom:8px}.timer-head>span:last-child{max-width:none}.timer-head output{font-size:25px}.timer-controls{justify-content:space-between;gap:7px}.presets{flex:1}.presets button{flex:1;padding:7px 8px}.timer .timer-start{min-width:77px}.timer button{min-height:43px}.workout-block{margin-top:30px}.pair-rules{padding:21px}.guide,.care{padding:21px}footer{padding-bottom:185px}}@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}*{transition:none!important}}@media print{.timer,.masthead,.block-nav,.progress-row,progress,.storage-note,.checks{display:none}.intro{padding:0}.cards{display:block}.exercise{break-inside:avoid;margin-bottom:15px}.video{margin:0;justify-content:flex-start;border:0}.video:after{content:attr(href);font-size:10px}footer{padding-bottom:0}body{background:white}}
+*{box-sizing:border-box}html{scroll-behavior:smooth;scroll-padding-top:82px}body{margin:0;background:#f4f6f9;color:#152d4a;font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif}button,a,input{-webkit-tap-highlight-color:transparent}button,input{font:inherit}button,a{touch-action:manipulation}button{cursor:pointer}a{color:inherit}button:focus-visible,a:focus-visible,input:focus-visible{outline:3px solid #4267cb;outline-offset:4px}.wrap{max-width:1040px;margin:auto;padding:0 28px}.masthead{background:#152d4a;color:white}.mastrow{height:70px;display:flex;align-items:center;justify-content:space-between;gap:15px}.brand{text-decoration:none;display:flex;align-items:center;gap:10px;font-size:14px;font-weight:750;letter-spacing:.07em}.brand-icon{font-size:32px;color:#ceef69;line-height:1}.schedule{font-size:14px;color:#ceef69;white-space:nowrap}.intro{display:grid;grid-template-columns:1.4fr 1fr;gap:40px;padding:38px 0 30px;align-items:center}.eyebrow{font-size:12px;letter-spacing:.15em;font-weight:750;margin:0 0 10px;color:#53637a}h1{font-size:clamp(34px,5vw,55px);line-height:1.12;letter-spacing:-.04em;margin:0 0 16px}h1 span{color:#486386}.intro-copy{max-width:460px;margin:0;color:#526278}.facts{display:grid;grid-template-columns:1fr 1fr;gap:18px}.facts div{border-left:3px solid #aac94d;padding-left:17px}.facts strong{display:block;font-size:33px;font-weight:650;letter-spacing:-.04em}.facts span{display:block;font-size:14px;line-height:1.5;color:#526278}.block-nav{display:flex;gap:7px;overflow-x:auto;padding:12px 0;position:sticky;top:0;z-index:3;background:#f4f6f9;border-bottom:1px solid #d9e0e9;scrollbar-width:thin}.block-nav a{white-space:nowrap;text-decoration:none;display:flex;align-items:center;min-height:44px;padding:9px 16px;border:1px solid #d4dde8;border-radius:30px;background:white;font-size:14px;font-weight:600}.block-nav a:hover,.block-nav a.active{background:#152d4a;border-color:#152d4a;color:white}.progress-row{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-top:20px;font-size:14px}.text-button{border:0;background:none;color:#53637a;text-decoration:underline;font-size:14px;min-height:44px;padding:5px}progress{display:block;width:100%;height:6px;border:0;border-radius:8px;overflow:hidden;background:#dbe3ed}progress::-webkit-progress-bar{background:#dbe3ed}progress::-webkit-progress-value{background:#557126}progress::-moz-progress-bar{background:#557126}.storage-note{font-size:12px;color:#657289;margin:8px 0 18px}.equipment{padding:14px 18px;border-radius:10px;background:#e8edf4;font-size:14px}.workout-block{margin-top:38px;scroll-margin-top:12px}.block-heading{display:flex;align-items:flex-start;gap:16px;margin-bottom:16px}.block-number{background:#152d4a;color:#ceef69;min-width:44px;height:44px;border-radius:12px;display:grid;place-items:center;font-size:18px;font-weight:650}.block-heading h2{margin:0;font-size:25px;letter-spacing:-.025em;line-height:1.3}.block-heading p{margin:4px 0 0;font-size:14px;color:#526278}.round-tag{margin-left:auto;white-space:nowrap;background:#e0edc2;padding:6px 10px;border-radius:6px;font-size:14px;font-weight:650}.block-note{font-size:14px;color:#53637a;background:#e8edf4;border-radius:10px;padding:13px 16px;margin:0 0 14px}.cards{display:grid;grid-template-columns:1fr 1fr;gap:14px}.exercise{background:#fff;border:1px solid #d8e1eb;border-radius:15px;padding:22px;display:flex;flex-direction:column;transition:border-color .2s}.exercise.completed{border-color:#a3bc65}.exercise-top{display:flex;justify-content:space-between;gap:14px;align-items:baseline;margin-bottom:10px}.exercise-index{font-size:12px;letter-spacing:.1em;color:#61748b;font-weight:650}.muscles{font-size:12px;color:#657289;text-align:right}.exercise h3{font-size:21px;line-height:1.35;letter-spacing:-.02em;margin:0 0 9px}.reps{font-size:16px;font-weight:700;color:#39571b;margin:0 0 17px}.technique{margin:0;color:#46566b;font-size:16px;line-height:1.65}.video{display:flex;align-items:center;justify-content:center;gap:9px;text-decoration:none;min-height:46px;border-radius:8px;border:1px solid #cad6e4;color:#193d6a;background:#f3f7fc;font-size:14px;font-weight:650;padding:0 12px}.video:hover{background:#e4edf8}.video svg{width:17px;height:17px;fill:currentColor;flex-shrink:0}.extra-link{display:block;font-size:14px;margin-top:10px;text-underline-offset:3px}.checks{display:flex;gap:8px;flex-wrap:wrap;margin-top:auto;padding-top:17px}.check{display:flex;align-items:center;gap:7px;font-size:14px;min-height:44px;padding:6px 10px;border-radius:8px;background:#f2f5f8;cursor:pointer}.check:has(input:checked){background:#e6f0d1;color:#345316}.check input{width:19px;height:19px;margin:0;accent-color:#4b6a22;cursor:pointer}.pair-rules{margin:35px 0 0;background:#152d4a;color:white;border-radius:15px;padding:25px}.pair-rules h2{font-size:22px;margin:0 0 10px}.pair-rules p{margin:8px 0;color:#e0e8f3;font-size:15px}.pair-rules strong{color:#ceef69}.guide{margin-top:40px;background:white;border:1px solid #d8e1eb;border-radius:15px;padding:26px}.guide h2,.care h2{font-size:23px;line-height:1.3;margin:0 0 14px}.guide ol{padding-left:23px;margin:0}.guide li+li{margin-top:12px}.care{margin-top:24px;padding:24px;border-left:3px solid #c49346;background:#fff8ed;border-radius:0 12px 12px 0}.care p{font-size:14px;color:#665846;margin:10px 0 0}footer{padding:32px 0 190px;font-size:14px;color:#53637a}footer span{display:block}.timer{position:fixed;bottom:0;left:0;right:0;background:#152d4a;color:white;z-index:5;box-shadow:0 -5px 25px #142a461a;padding-bottom:env(safe-area-inset-bottom)}.timer-inner{max-width:984px;margin:auto;display:flex;justify-content:space-between;align-items:center;gap:20px;padding:15px 20px}.timer-head{display:flex;align-items:center;gap:16px}.timer-head>span:first-child{font-size:12px;letter-spacing:.12em;color:#d7e0ed}.timer-head output{font-size:28px;font-variant-numeric:tabular-nums;line-height:1.2;font-weight:650}.timer-head>span:last-child{font-size:12px;color:#d7e0ed;max-width:100px;line-height:1.3}.timer-controls{display:flex;gap:8px;align-items:center}.presets{display:flex;gap:5px}.timer button{min-height:44px;border-radius:8px;padding:9px 13px;font-size:14px;border:1px solid #526982;color:#edf3fb;background:transparent}.timer button[aria-pressed=true]{background:#344e70;border-color:#7089a8}.timer .timer-start{background:#ceef69;color:#162c19;border-color:#ceef69;font-weight:700;min-width:80px}.timer .timer-reset{font-size:22px;padding:3px 12px}.timer.done{background:#294525}.timer.done .timer-head output{color:#ceef69}@media(max-width:720px){.wrap{padding:0 18px}.mastrow{height:60px}.brand{font-size:12px;letter-spacing:.035em}.schedule{font-size:12px}.intro{display:block;padding:27px 0 22px}.intro h1{font-size:39px}.intro-copy{font-size:16px}.facts{margin-top:24px;gap:15px;max-width:430px}.facts strong{font-size:26px}.facts span{font-size:14px}.block-nav{margin:0 -18px;padding:10px 18px}.block-nav a{padding:9px 15px}.cards{grid-template-columns:1fr}.exercise{padding:20px}.block-heading{gap:10px}.block-heading h2{font-size:22px}.round-tag{font-size:12px;padding:6px 8px}.block-number{min-width:38px;height:38px;border-radius:10px;font-size:16px}.block-heading p{font-size:14px}.timer-inner{display:block;padding:10px 18px 12px}.timer-head{justify-content:space-between;gap:10px;margin-bottom:8px}.timer-head>span:last-child{max-width:none}.timer-head output{font-size:25px}.timer-controls{justify-content:space-between;gap:7px}.presets{flex:1}.presets button{flex:1;padding:7px 8px}.timer .timer-start{min-width:77px}.workout-block{margin-top:30px}.pair-rules{padding:21px}.guide,.care{padding:21px}footer{padding-bottom:185px}}@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}*{transition:none!important}}@media print{.timer,.masthead,.block-nav,.progress-row,progress,.storage-note,.checks{display:none}.intro{padding:0}.cards{display:block}.exercise{break-inside:avoid;margin-bottom:15px}.video{margin:0;justify-content:flex-start;border:0}.video:after{content:attr(href);font-size:10px}footer{padding-bottom:0}body{background:white}}
 /* Нижняя панель таймера не должна уходить под системную полосу iPhone и под
    панель Telegram. Вне Telegram переменных --tg-* нет, остаётся env(), как было.
    Берём максимум, а не сумму: env() и --tg-safe-area-inset-bottom описывают одну
@@ -25,21 +25,126 @@
 /* Зазор 10px, а не 6: общая фокусная рамка страницы — outline 3px с отступом
    4px, то есть выходит за кнопку на 7px, и на 6px рамка «Силовых» упиралась в
    границу соседа. */
-.bodymap-modes{display:flex;gap:10px;max-width:340px;margin:0 auto 14px}
-.bodymap-modes button{flex:1;min-height:44px;padding:9px 12px;border:1px solid #cad6e4;border-radius:8px;
+/* Ширина — по содержимому. Прежние flex:1 в полосе шириной до 340px растягивали
+   обе кнопки на всю её ширину (на экране 375px это 150px каждая), и короткое
+   слово «Силовые» получало столько же места, сколько «Вся нагрузка». Высота
+   остаётся 44px: в кнопки тыкают пальцем. */
+.bodymap-modes{display:flex;gap:10px;justify-content:center;margin:0 auto 14px}
+.bodymap-modes button{min-height:44px;padding:9px 12px;border:1px solid #cad6e4;border-radius:8px;
   background:#f3f7fc;color:#193d6a;font-size:14px;font-weight:650}
 .bodymap-modes button[aria-pressed=true]{background:#152d4a;border-color:#152d4a;color:white}
 .bodymap-views{display:flex;gap:14px;justify-content:center}
 .bodymap-views>div{flex:1;min-width:0;max-width:220px}
-/* .bodymap-scope — статичная подпись из index.html про то, что области схемы
-   крупнее наших групп. Оформлена вместе с соседними подписями, но отдельным
-   классом: содержимое .bodymap-note и .bodymap-idle пишет app.js по выборке
-   класса, и второй элемент с тем же классом сломал бы её. */
-.bodymap-note,.bodymap-idle,.bodymap-scope{font-size:13px;line-height:1.5;color:#526278;margin:10px 0 0}
+/* Две подписи под схемой: .bodymap-note — про то, что красит цвет в выбранном
+   режиме, .bodymap-groups — оговорки про отдельные группы мышц. Содержимое
+   обеих пишет app.js по выборке класса, поэтому второй элемент с тем же
+   классом сломал бы выборку. .bodymap-shared — объяснение про общую область
+   схемы; его app.js создаёт внутри подбора, и только когда область объединяет
+   несколько групп мышц, поэтому в index.html его нет. */
+.bodymap-note,.bodymap-groups,.bodymap-shared{font-size:13px;line-height:1.5;color:#526278}
+.bodymap-note,.bodymap-groups{margin:10px 0 0}
 .bodymap-pick:not(:empty){margin-top:12px;padding-top:12px;border-top:1px solid #e2e9f2}
 .bodymap-pick h3{font-size:15px;margin:0 0 6px}
+.bodymap-shared{margin:0 0 8px}
 .bodymap-pick button{display:block;width:100%;text-align:left;border:0;background:none;font:inherit;
   font-size:14px;color:#193d6a;text-decoration:underline;text-underline-offset:3px;
   min-height:44px;padding:6px 0;cursor:pointer}
 @media (max-width:520px){.bodymap-views{flex-direction:column;align-items:center}
   .bodymap-views>div{max-width:260px;width:100%}}
+
+/* Описания упражнений — под кнопкой. Карточка упражнения была высотой от 309
+   до 636px (в середине — 500), и девятнадцать таких карточек растягивали
+   страницу телефона 375×812 на шестнадцать экранов. Высота кнопки — не меньше
+   44px: по ней тыкают пальцем между подходами. */
+/* Кнопка раскрытия стоит в строке рядом со ссылкой на видео, поэтому и
+   выглядит её парой: та же рамка, тот же фон, тот же радиус и тот же кегль.
+   Прежняя форма — текст во всю ширину с линейкой сверху — рядом с кнопкой
+   видео читалась бы как подпись, а не как вторая кнопка. */
+.howto-toggle{display:flex;align-items:center;justify-content:space-between;gap:8px;
+  min-height:44px;margin:0;padding:9px 12px;border:1px solid #cad6e4;border-radius:8px;
+  background:#f3f7fc;font:inherit;font-size:14px;font-weight:650;color:#193d6a;text-align:left}
+.howto-caret{width:12px;height:12px;flex-shrink:0;fill:currentColor;transition:transform .2s}
+.howto-toggle[aria-expanded=true] .howto-caret{transform:rotate(180deg)}
+/* Строка справочного: «Как выполнять» и видео. Отметки в неё не входят — им
+   своя строка ниже, во всю ширину (ими пользуются между подходами, и промах по
+   ним стоит дороже всего). Тремя элементами строка не собирается ни на одной
+   карточке с видео: отметок от одной до трёх, и с подписями «Круг N» трём
+   элементам нужно от 348 до 591px при 317 доступных на экране 375px.
+   Обе кнопки растут, заполняя строку. Когда вместе они в неё не влезают,
+   строка переносится и каждая встаёт во всю ширину, как стояла до правки: так
+   на экране 375px ведут себя два упражнения, у которых подпись видео с
+   пояснением (например «Видео · 0:00–0:02 · внизу экрана»).
+   Основа именно max-content, а не auto: плеер подменяет ссылку на видео
+   кнопкой, а у той в player.css стоит width:100% (в прежнем столбике кнопка
+   обязана была тянуться во всю ширину). При основе auto эта ширина и
+   становится основой — 317px, — и строка переносится ВСЕГДА, на всех
+   восемнадцати карточках с видео. Проверено замером: было ровно так.
+   Сжатие оставлено разрешённым (shrink 1). На поддерживаемых ширинах оно
+   ненаблюдаемо — при flex-wrap раскладка сначала переносит строку, и до сжатия
+   дело доходит только если элемент шире строки один. Но ниже 346px кнопка
+   видео «Жима двумя ногами лёжа» шире строки именно одна, и с запретом сжатия
+   она вылезала за содержимое карточки (при 320px — на 10,6px). Пусть лучше
+   подпись ляжет в две строки внутри кнопки. */
+.exercise-refs{display:flex;flex-wrap:wrap;gap:8px}
+.exercise-refs>*{flex:1 1 max-content}
+/* Своего правила ширины встроенному плееру не нужно, хотя player.js и вставляет
+   панель внутрь этой строки — сразу ЗА кнопкой видео (button.after(panel)).
+   Панель на строке всегда одна: её собственный max-content — 468px, и вместе с
+   двумя кнопками перед ней она не влезает ни в одну поддерживаемую строку
+   (самая широкая — 642px при экране 720px). А один на строке элемент занимает
+   её целиком при любой основе: растёт за счёт flex-grow, сжимается за счёт
+   flex-shrink и .player-shell{min-width:0} из player.css.
+   Здесь стояло .exercise-refs>.player-shell{flex-basis:100%}; снято как
+   мёртвое. Проверено в браузере: без него ни ширина панели, ни её положение, ни
+   ширина страницы не меняются ни на одной из 20 ширин от 320 до 1440 и ни на
+   одной из 18 карточек с видео. Замер, которым правило обосновывали («панель
+   468px, страница 497px при экране 375px»), воспроизводится только при ЗАПРЕТЕ
+   сжатия (flex:1 0 max-content) — при раскладке, которой здесь больше нет. */
+/* Отступ сверху — про раскрытый вид: в свёрнутом область скрыта атрибутом
+   hidden, то есть display:none, и пустоты от неё не остаётся. Первый абзац
+   области — .technique (крупнее и темнее), за ним подробности и прогрессия;
+   их вид сохранён от прежнего <details>. */
+.howto-body{margin:12px 0 0}
+.howto-body p+p{margin:8px 0 0;font-size:14px;color:#526278}
+/* Печать этих же двух узлов — здесь, а НЕ в общем блоке @media print выше.
+   Медиазапрос специфичности не добавляет, а плоские правила .howto-toggle и
+   .howto-body стоят в файле позже общего блока и перекрывали бы его: кнопка
+   печаталась бы на листе, хотя в @media print у неё стояло display:none.
+   Проверено подменой print на screen — правило не действовало. На бумаге
+   кнопка не нужна, а текст техники печатается так же, как печатался до
+   сворачивания. */
+@media print{.howto-toggle{display:none}.howto-body{display:block}}
+
+/* Порог телефона. Мобильный порог в проекте был один — max-width:720px, и
+   экран 375px получал ровно те же размеры, что почти вдвое более широкий:
+   владелец программы сказал «раскладка и все кнопки очень крупные». Размеры
+   ниже — из согласованного с ним макета; 480px покрывает 375, 390, 414 и 430.
+   То же число знает app.js (PHONE_MAX_WIDTH), потому что раскрытие описаний
+   задаётся атрибутом, а атрибут медиазапросом не поставить.
+   Уменьшены ТОЛЬКО тексты и отступы: высота нажимаемого не уменьшается здесь
+   ни у чего. Требование владельца — не ниже 44px у всего, чем пользуются по
+   ходу тренировки: промах между подходами стоит дороже лишних пикселей.
+   Теперь это требование под тестом, а не под одним обещанием: список
+   нажимаемого и сама проверка — в test/app.test.js (TAP_TARGETS, тест «ни одно
+   правило не опускает нажимаемое ниже 44px»).
+   В список не вошли два узла, которым высоту не задаёт ни одно правило, — она
+   у них от содержимого: ссылка-логотип в шапке (замерено 32px при 375px) и
+   «Открыть в YouTube» в подвале плеера (33px). Оба вне того, чем пользуются
+   между подходами: логотип ведёт на верх страницы, а «Открыть в YouTube» —
+   запасной ход, когда встроенный плеер видео не показывает. */
+@media (max-width:480px){
+  .wrap{padding:0 14px}
+  /* Полоса блоков тянется от края до края экрана, поэтому её отрицательное
+     поле обязано совпадать с отступом .wrap: с прежними 18px она вылезала бы
+     на 4px за экран с каждой стороны и давала горизонтальную прокрутку
+     (проверено снятием правила: страница становилась шире экрана на 4px). */
+  .block-nav{margin:0 -14px;padding:10px 14px}
+  .intro h1{font-size:28px;letter-spacing:-.03em;line-height:32px}
+  .intro-copy{font-size:15px}
+  .facts strong{font-size:22px}
+  .facts span{font-size:13px}
+  .block-heading h2{font-size:19px}
+  .block-number{min-width:34px;height:34px}
+  .exercise{padding:14px}
+  .exercise h3{font-size:17px;line-height:22px}
+}

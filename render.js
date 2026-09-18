@@ -51,19 +51,32 @@ const el = (document, tag, className, text) => {
   return node;
 };
 
-// Значок play внутри ссылки на видео — как в src-original/app.js (переменная play).
-function renderPlayIcon(document) {
-  const NS = 'http://www.w3.org/2000/svg';
-  const svg = document.createElementNS(NS, 'svg');
+const SVG_NS = 'http://www.w3.org/2000/svg';
+
+// Значок — путь, а не символ шрифта: «треугольник» и «уголок» системные шрифты
+// рисуют каждый по-своему, разного размера и с разными боковыми просветами,
+// и подпись рядом с ними съезжала бы от системы к системе.
+function renderIcon(document, d) {
+  const svg = document.createElementNS(SVG_NS, 'svg');
   svg.setAttribute('viewBox', '0 0 24 24');
   svg.setAttribute('aria-hidden', 'true');
-  const path = document.createElementNS(NS, 'path');
-  path.setAttribute('d', 'M8 5v14l12-7z');
+  const path = document.createElementNS(SVG_NS, 'path');
+  path.setAttribute('d', d);
   svg.append(path);
   return svg;
 }
 
-function renderItem(document, block, item, itemIndex) {
+// Значок play внутри ссылки на видео — как в src-original/app.js (переменная play).
+const PLAY_PATH = 'M8 5v14l12-7z';
+// Уголок в кнопке «Как выполнять»: смотрит вниз, а в раскрытом виде style.css
+// поворачивает его на 180° — по aria-expanded самой кнопки.
+const CARET_PATH = 'M12 16 4 8h16z';
+
+// Подпись кнопки, под которой лежат тексты техники. Не «Техника»: кнопка
+// отвечает на вопрос, который задают, глядя на незнакомое упражнение.
+const HOWTO_LABEL = 'Как выполнять';
+
+function renderItem(document, block, item, itemIndex, expandDescriptions) {
   const article = el(document, 'article', 'exercise');
 
   const top = el(document, 'div', 'exercise-top');
@@ -73,15 +86,50 @@ function renderItem(document, block, item, itemIndex) {
 
   article.append(el(document, 'h3', null, item.name));
   article.append(el(document, 'p', 'reps', item.reps));
-  article.append(el(document, 'p', 'technique', item.text));
 
-  if (item.detail || item.extra) {
-    const details = document.createElement('details');
-    details.append(el(document, 'summary', null, item.extra ? 'Техника и прогрессия' : 'Техника'));
-    if (item.detail) details.append(el(document, 'p', null, item.detail));
-    if (item.extra) details.append(el(document, 'p', null, item.extra));
-    article.append(details);
-  }
+  // Тексты техники — под кнопкой. Карточка упражнения была высотой от 309 до
+  // 636px (в середине — 500), и девятнадцать таких карточек растягивали
+  // страницу телефона 375×812 на шестнадцать экранов. Техника нужна в первые
+  // разы, а по ходу тренировки пользуются названием, повторами, мышцами, видео
+  // и отметкой — они и остаются на виду.
+  //
+  // Идентификатор области — из id блока и key упражнения, как у отметок
+  // (markId): он обязан быть уникальным на всю страницу, иначе aria-controls
+  // и getElementById привели бы кнопку в чужую карточку, а уникальность именно
+  // этой пары сторожит валидатор (workouts/schema.js: id блоков не повторяются,
+  // key не повторяется внутри блока). Кнопка есть у каждого упражнения, потому
+  // что text — обязательное поле; необязательны только detail и extra.
+  const regionId = `howto-${block.id}-${item.key}`;
+  const toggle = el(document, 'button', 'howto-toggle');
+  toggle.type = 'button';
+  toggle.setAttribute('aria-expanded', String(expandDescriptions));
+  toggle.setAttribute('aria-controls', regionId);
+  // Имя для диктора называет упражнение — как у ссылки на видео и у каждой
+  // отметки ниже: иначе при обходе по кнопкам подряд девятнадцать раз звучит
+  // «Как выполнять», и какое из упражнений раскрывается, на слух не отличить.
+  // Видимая подпись стоит в начале имени, поэтому голосовое управление по ней
+  // кнопку по-прежнему находит.
+  toggle.setAttribute('aria-label', `${HOWTO_LABEL}: ${item.name}`);
+  const caret = renderIcon(document, CARET_PATH);
+  // Класс атрибутом, а не присваиванием в className: у SVG это не строка, а
+  // SVGAnimatedString, причём свойство только для чтения, и присваивание в
+  // модуле (строгий режим) бросило бы TypeError — то есть уронило бы отрисовку
+  // карточки целиком, а не потеряло бы один класс. По этому классу style.css и
+  // поворачивает уголок в раскрытом виде.
+  caret.setAttribute('class', 'howto-caret');
+  toggle.append(el(document, 'span', null, HOWTO_LABEL), caret);
+
+  // Кнопка раскрытия и ссылка на видео — в одну строку: и то и другое
+  // справочное, нужное в первые разы. Отметки в эту строку не идут и остаются
+  // своей строкой ниже, во всю ширину: ими пользуются между подходами, попасть
+  // по ним пальцем должно быть легко, а промах стоит дороже всего.
+  //
+  // Тремя элементами строка не собирается ни на одной карточке с видео:
+  // отметок от одной до трёх, и с подписями «Круг N» трём элементам нужно от
+  // 348 до 591px при 317 доступных внутри карточки на экране 375px (замер
+  // getBoundingClientRect, см. отчёт задачи).
+  const refs = el(document, 'div', 'exercise-refs');
+  refs.append(toggle);
 
   if (item.v) {
     const link = el(document, 'a', 'video');
@@ -89,9 +137,20 @@ function renderItem(document, block, item, itemIndex) {
     link.target = '_blank';
     link.rel = 'noopener noreferrer';
     link.setAttribute('aria-label', `Видео: ${item.name}, ${item.v[2]}`);
-    link.append(renderPlayIcon(document), document.createTextNode(` Видео · ${item.v[2]}`));
-    article.append(link);
+    link.append(renderIcon(document, PLAY_PATH), document.createTextNode(` Видео · ${item.v[2]}`));
+    refs.append(link);
   }
+  article.append(refs);
+
+  // Область с текстом — следом за строкой, а не внутри неё: внутри раскрытие
+  // разрывало бы строку между кнопкой и видео.
+  const howto = el(document, 'div', 'howto-body');
+  howto.id = regionId;
+  howto.hidden = !expandDescriptions;
+  howto.append(el(document, 'p', 'technique', item.text));
+  if (item.detail) howto.append(el(document, 'p', null, item.detail));
+  if (item.extra) howto.append(el(document, 'p', null, item.extra));
+  article.append(howto);
 
   for (const extra of item.links ?? []) {
     // Форма элемента — [id, start, caption], как у v: workouts/legs-mwf.js
@@ -135,7 +194,11 @@ function renderPreamble(document, preamble) {
   return section;
 }
 
-export function renderWorkout(workout, document) {
+// expandDescriptions — раскрыты ли описания упражнений в момент отрисовки.
+// Решает это связывание (app.js) по ширине окна: атрибут раскрытия
+// медиазапросом не задать, а сам рендерер про окно ничего не знает. По
+// умолчанию свёрнуто — это состояние телефона, под который приложение и сделано.
+export function renderWorkout(workout, document, { expandDescriptions = false } = {}) {
   const fragment = document.createDocumentFragment();
 
   for (const block of workout.blocks) {
@@ -156,7 +219,8 @@ export function renderWorkout(workout, document) {
     if (block.note) section.append(el(document, 'p', 'block-note', block.note));
 
     const cards = el(document, 'div', 'cards');
-    block.items.forEach((item, index) => cards.append(renderItem(document, block, item, index)));
+    block.items.forEach((item, index) =>
+      cards.append(renderItem(document, block, item, index, expandDescriptions)));
     section.append(cards);
 
     fragment.append(section);

@@ -55,6 +55,19 @@ export function toRegions(load) {
   return regions;
 }
 
+// Группы, попавшие в один регион картинки, в порядке словаря. На этом стоит и
+// regionLabel, и подпись в подборе под картой: она появляется, только когда
+// область объединяет больше одной группы.
+//
+// Отдаём идентификаторы, а не число и не готовую строку. Считать группы по
+// строке regionLabel нельзя: это оформленный для показа текст, и запятые в нём
+// — оформление, а не данные.
+export function regionGroups(region) {
+  const ids = Object.keys(MUSCLES).filter(id => MUSCLES[id].region === region);
+  if (ids.length === 0) throw new Error(`Неизвестный регион: ${region}`);
+  return ids;
+}
+
 // Регион картинки может покрывать несколько наших групп (upper-back это и
 // широчайшие, и верх спины), поэтому перечисляем все — иначе человек решит,
 // что клик показал не то. Первое название остаётся как есть, названия после
@@ -62,7 +75,6 @@ export function toRegions(load) {
 // заглавные буквы внутри перечисления читались бы как отдельные подписи
 // (например: «Широчайшие, верх спины — 5 подх.»).
 export function regionLabel(region) {
-  const names = Object.values(MUSCLES).filter(m => m.region === region).map(m => m.ru);
-  if (names.length === 0) throw new Error(`Неизвестный регион: ${region}`);
+  const names = regionGroups(region).map(id => MUSCLES[id].ru);
   return names.map((n, i) => (i === 0 ? n : n.toLowerCase())).join(', ');
 }

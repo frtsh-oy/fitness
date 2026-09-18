@@ -4,14 +4,28 @@
 import createBodyHighlighter, { ModelType } from './vendor/body-highlighter.esm.js';
 import { regionSummary, setsByGroup } from './volume.js';
 import { MUSCLES, regionLabel } from './muscles.js';
+import { decorate, VIEW_BOX } from './figure.js';
 
 // Шесть оттенков от бледного к насыщенному. Библиотека выбирает цвет как
-// PALETTE[min(len-1, подходы-1)], поэтому порядок здесь и есть шкала.
+// LIBRARY_COLORS[min(len-1, частота-1)], поэтому порядок здесь и есть шкала.
 // Длина обязана равняться PALETTE_STEPS из volume.js — это держит тест
-// «палитра ровно на число уровней объёма», а не срез при передаче в
-// библиотеку: если бы длины разошлись, тест уже упал бы раньше, чем срез
-// успел бы что-то скрыть.
+// «палитра ровно на число уровней объёма».
 export const PALETTE = ['#eaf6cb', '#ddf0a8', '#d2ec86', '#c6e765', '#a9d248', '#8ab82f'];
+
+// Цвет выбранной области — брендовый синий страницы. Выбор именно заливается, а
+// не обводится: на экране 375px обводка почти не видна.
+export const SELECTED_COLOR = '#193d6a';
+
+// Что уходит в библиотеку: шкала объёма плюс синий выбора седьмым цветом.
+// Красит она сама, полигоны нам не адресуемы (какой из них какая мышца, из
+// разметки не видно, data-* она не ставит) — поэтому цвет выбора задаётся
+// через ту же палитру и частоту, а не правкой style.fill у полигона.
+const LIBRARY_COLORS = [...PALETTE, SELECTED_COLOR];
+
+// Частота, по которой библиотека берёт последний цвет палитры: она красит
+// область как LIBRARY_COLORS[min(len-1, frequency-1)] (b() в
+// vendor/body-highlighter.esm.js), значит седьмой цвет достаётся частоте 7.
+const SELECTED_FREQUENCY = LIBRARY_COLORS.length;
 
 // Мышцы без нагрузки в выбранном режиме: заметно светлее фона секции, но не
 // белые — они есть на схеме, просто не работают.
@@ -87,10 +101,10 @@ export function createBodyMap({ workout, anteriorHost, posteriorHost, onPick, mo
   // региона, поэтому запись должна быть одна и уже с итогом.
   //
   // Округляем здесь, а не в volume.js: целая частота нужна библиотеке (цвет
-  // выбирается как PALETTE[min(len-1, frequency-1)]), человеку же показывается
-  // точная сумма. И округляем один раз от суммы, а не по каждому упражнению:
-  // сумма округлений давала бы другое число — у пресса 8 вместо 7, у косых 5
-  // вместо 4.
+  // выбирается как LIBRARY_COLORS[min(len-1, frequency-1)]), человеку же
+  // показывается точная сумма. И округляем один раз от суммы, а не по каждому
+  // упражнению: сумма округлений давала бы библиотеке другое число — у косых 5
+  // вместо 4, у икроножных 6 вместо 5.
   //
   // name не передаём: библиотека кладёт его только в свой список упражнений,
   // а подбор мы собираем из summary и этот список больше не читаем.
@@ -99,20 +113,45 @@ export function createBodyMap({ workout, anteriorHost, posteriorHost, onPick, mo
   // наименьший вклад — доля 0.5 (LOAD_VALUES) на один круг, а Math.round(0.5)
   // даёт 1. Это важно: внутри библиотеки стоит `frequency || 1`, и запись с
   // нулём она покрасила бы как один подход.
-  const dataOf = rows => [...rows].map(([region, row]) => ({
-    muscles: [region],
-    frequency: Math.round(row.sets),
-  }));
+  //
+  // chosen — выбранная кликом область или null. Ей ставится частота, за которой
+  // в палитре стоит синий; остальным частота ограничивается длиной шкалы
+  // объёма, иначе синий достался бы и им: у квадрицепсов в режиме всей нагрузки
+  // 12.5 подхода, то есть частота 13 и тот же последний индекс палитры.
+  // Ограничение верх шкалы не двигает — шесть подходов и так последний оттенок.
+  const dataOf = (rows, chosen) => {
+    const data = [...rows].map(([region, row]) => ({
+      muscles: [region],
+      frequency: region === chosen ? SELECTED_FREQUENCY : Math.min(PALETTE.length, Math.round(row.sets)),
+    }));
+    // Выбранной области может не быть в сводке: предплечья не размечены ни в
+    // одном упражнении, у задней дельты нет силовых подходов. Заливать её всё
+    // равно надо, поэтому запись для неё добавляется отдельно.
+    if (chosen !== null && !rows.has(chosen)) {
+      data.push({ muscles: [chosen], frequency: SELECTED_FREQUENCY });
+    }
+    return data;
+  };
+
+  // Область, выбранная последним кликом. Живёт здесь, а не в app.js: это
+  // состояние картинки, и красит её библиотека по данным, которые готовим мы.
+  let chosen = null;
+
+  const svgOf = view => view.element.querySelector('svg');
 
   const handle = ({ muscle }) => {
-    if (!onPick || !KNOWN_REGIONS.has(muscle)) return;
+    if (!KNOWN_REGIONS.has(muscle)) return;
+    // Заливка выбора — дело самой карты, поэтому она не ждёт onPick: по клику
+    // область заливается синим и без слушателя.
+    chosen = muscle;
+    repaint();
     // Регион без нагрузки в этом режиме в summary отсутствует — по клику это
     // обычный случай (предплечья, а в силовом режиме и задняя дельта), а не
     // край: ноль подходов и пустой список.
     const row = summary.get(muscle) ?? { sets: 0, exercises: [] };
     // Наружу отдаём русское название, а не идентификатор региона: вызывающий
     // код показывает это человеку, и «gluteal» его только запутает.
-    onPick({
+    onPick?.({
       region: muscle,
       label: regionLabel(muscle),
       sets: row.sets,
@@ -121,17 +160,39 @@ export function createBodyMap({ workout, anteriorHost, posteriorHost, onPick, mo
   };
 
   const common = {
-    data: dataOf(summary),
+    data: dataOf(summary, chosen),
     bodyColor: IDLE_COLOR,
-    highlightedColors: PALETTE,
+    highlightedColors: LIBRARY_COLORS,
     onClick: handle,
     style: { width: '100%' },
   };
 
   const views = [
-    createBodyHighlighter({ ...common, container: anteriorHost, type: ModelType.ANTERIOR }),
-    createBodyHighlighter({ ...common, container: posteriorHost, type: ModelType.POSTERIOR }),
+    { type: ModelType.ANTERIOR, view: createBodyHighlighter({ ...common, container: anteriorHost, type: ModelType.ANTERIOR }) },
+    { type: ModelType.POSTERIOR, view: createBodyHighlighter({ ...common, container: posteriorHost, type: ModelType.POSTERIOR }) },
   ];
+
+  // Бокс поднимаем один раз на вид: update() библиотеки переставляет только
+  // детей своего svg и его атрибут style (n() и C() в
+  // vendor/body-highlighter.esm.js), а viewBox она ставит при создании и
+  // больше не трогает. Повторная установка после каждой отрисовки была бы
+  // мёртвой — это показано мутацией, и потому её здесь нет; что бокс остаётся
+  // поднятым после смены режима, сторожит тест.
+  for (const { type, view } of views) {
+    svgOf(view).setAttribute('viewBox', VIEW_BOX);
+    decorate(svgOf(view), { type, fill: IDLE_COLOR });
+  }
+
+  // Отрисовка библиотекой плюс возврат дорисованного. Порядок обязателен:
+  // update() сносит детей svg целиком, вместе со стопами, кистями и головой, —
+  // поэтому decorate идёт ПОСЛЕ него, а не до.
+  function repaint() {
+    const data = dataOf(summary, chosen);
+    for (const { type, view } of views) {
+      view.update({ data });
+      decorate(svgOf(view), { type, fill: IDLE_COLOR });
+    }
+  }
 
   return {
     // Смена режима — это update() библиотеки, а не «уничтожить и создать
@@ -142,15 +203,19 @@ export function createBodyMap({ workout, anteriorHost, posteriorHost, onPick, mo
     // переключении пересоздавался бы целиком.
     setMode(next) {
       summary = regionSummary(workout, kindsOfMode(next));
-      const nextData = dataOf(summary);
-      for (const view of views) view.update({ data: nextData });
+      // Выбор снимаем: в новом режиме у области другое число подходов и другой
+      // список упражнений, поэтому подбор под картой app.js тоже убирает.
+      // Залитая синим область осталась бы на экране без ответа на вопрос,
+      // который человек уже не задавал.
+      chosen = null;
+      repaint();
     },
     // Повторный вызов не бросает — это гарантирует destroy() самой библиотеки
     // (пустой список детей и уже отсоединённый узел — оба no-op), а не флаг
     // на нашей стороне: мутацией показано, что свой флаг здесь ничем не
     // отличался бы от его отсутствия. См. тест в test/bodymap.test.js.
     destroy() {
-      for (const view of views) view.destroy();
+      for (const { view } of views) view.destroy();
     },
   };
 }

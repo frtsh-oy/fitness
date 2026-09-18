@@ -276,3 +276,213 @@ test('тренировка с другими днями получает сво�
   assert.match(document.querySelector('footer').textContent,
     /Между тренировками — день восстановления\.$/, 'примечание в подвале потерялось');
 });
+
+// ЗАДАЧА 9: описания упражнений под нажатием. Карточка была высотой от 309 до
+// 636px, и девятнадцать таких карточек растягивали страницу телефона 375×812
+// на шестнадцать экранов. Под кнопку ушли только тексты техники (text, detail,
+// extra) — то, что нужно в первые разы; всё, чем пользуются по ходу
+// тренировки, осталось на виду.
+
+// Область раскрытия ищем внутри фрагмента, а не через document.getElementById:
+// фрагмент в документ не вставлен, и getElementById его содержимого не видит.
+// Селектор по атрибуту, а не #id: ключи упражнений бывают с кириллицей
+// (см. тест про вставку упражнения выше), и её пришлось бы экранировать.
+function howtoOf(fragment, article) {
+  const button = article.querySelector('.howto-toggle');
+  assert.ok(button, 'у упражнения есть кнопка раскрытия');
+  const id = button.getAttribute('aria-controls');
+  return { button, region: fragment.querySelector(`[id="${id}"]`) };
+}
+
+test('у каждого из 19 упражнений есть кнопка «Как выполнять» с aria-expanded', () => {
+  const { document } = makeDom();
+  const fragment = renderWorkout(legsMwf, document);
+  const buttons = [...fragment.querySelectorAll('.exercise .howto-toggle')];
+  assert.equal(buttons.length, 19);
+  for (const button of buttons) {
+    assert.equal(button.tagName, 'BUTTON');
+    assert.equal(button.type, 'button');
+    assert.match(button.textContent, /^Как выполнять/);
+    assert.ok(button.hasAttribute('aria-expanded'), 'кнопка несёт aria-expanded');
+  }
+
+  // Имя для диктора называет упражнение — как у ссылки на видео и у отметок.
+  // Без этого при обходе по кнопкам девятнадцать раз подряд звучит одно и то
+  // же «Как выполнять». Видимая подпись стоит в начале имени: так кнопку
+  // находит и голосовое управление.
+  const names = buttons.map(button => button.getAttribute('aria-label'));
+  assert.equal(new Set(names).size, 19, 'имена кнопок различны');
+  for (const [index, article] of [...fragment.querySelectorAll('.exercise')].entries()) {
+    assert.equal(names[index], `Как выполнять: ${article.querySelector('h3').textContent}`);
+  }
+});
+
+// Если бы уголок нарисовали текстом или забыли, поворачивать в раскрытом виде
+// было бы нечего: поворот задан в style.css селектором по этому классу.
+test('в кнопке раскрытия есть значок-уголок, спрятанный от диктора', () => {
+  const { document } = makeDom();
+  const fragment = renderWorkout(legsMwf, document);
+  const caret = fragment.querySelector('.exercise .howto-toggle .howto-caret');
+  assert.ok(caret, 'уголок нарисован');
+  assert.equal(caret.getAttribute('aria-hidden'), 'true');
+});
+
+// Главная проверка: текст техники лежит ВНУТРИ управляемой области и больше
+// нигде. Без второй половины (в остатке карточки текста нет) тест прошёл бы и
+// на карточке, где абзацы просто продублированы наружу, — то есть где
+// сворачивание ничего не сворачивает.
+test('text, detail и extra лежат внутри области, которой управляет кнопка', () => {
+  const { document } = makeDom();
+  const fragment = renderWorkout(legsMwf, document);
+  const item = legsMwf.blocks.find(block => block.id === 'legs1').items
+    .find(candidate => candidate.key === 'adduction');
+  const article = [...fragment.querySelectorAll('#legs1 .exercise')]
+    .find(node => node.querySelector('h3').textContent === item.name);
+  const { region } = howtoOf(fragment, article);
+
+  assert.ok(region, 'aria-controls указывает на существующий узел');
+  for (const [field, text] of [['text', item.text], ['detail', item.detail], ['extra', item.extra]]) {
+    assert.ok(region.textContent.includes(text), `${field} внутри области раскрытия`);
+  }
+
+  const rest = article.cloneNode(true);
+  rest.querySelector(`[id="${region.id}"]`).remove();
+  for (const [field, text] of [['text', item.text], ['detail', item.detail], ['extra', item.extra]]) {
+    assert.ok(!rest.textContent.includes(text), `${field} нигде, кроме области раскрытия`);
+  }
+});
+
+test('у упражнения без detail и extra в области раскрытия ровно один абзац', () => {
+  const { document } = makeDom();
+  const fragment = renderWorkout(legsMwf, document);
+  const item = legsMwf.blocks.find(block => block.id === 'finish').items
+    .find(candidate => candidate.key === 'breathing');
+  assert.equal(item.detail, undefined, 'у дыхания и правда нет подробностей');
+  const article = [...fragment.querySelectorAll('#finish .exercise')]
+    .find(node => node.querySelector('h3').textContent === item.name);
+  const { region } = howtoOf(fragment, article);
+
+  const paragraphs = [...region.querySelectorAll('p')];
+  assert.equal(paragraphs.length, 1, 'пустых абзацев не рисуется');
+  assert.equal(paragraphs[0].textContent, item.text);
+});
+
+// Кнопка обязана управлять своей областью: одинаковые id развели бы
+// aria-controls по чужим карточкам, и диктор с уголком показывали бы соседа.
+test('каждая кнопка управляет областью своего упражнения', () => {
+  const { document } = makeDom();
+  const fragment = renderWorkout(legsMwf, document);
+  const articles = [...fragment.querySelectorAll('.exercise')];
+  const ids = [];
+  for (const article of articles) {
+    const { button, region } = howtoOf(fragment, article);
+    ids.push(button.getAttribute('aria-controls'));
+    assert.ok(region, `область ${button.getAttribute('aria-controls')} существует`);
+    assert.equal(region.closest('.exercise'), article, 'область лежит в своей карточке');
+  }
+  assert.equal(new Set(ids).size, 19, 'все идентификаторы областей разные');
+});
+
+// Требование владельца: в свёрнутом виде остаются название, повторы, мышцы,
+// ссылка на видео и отметка. Ревью прошлой итерации ловило дефект «счётчик
+// считал отметки за пределами экрана» — этот тест сторожит ровно его причину:
+// ни одна отметка и ни одна ссылка на видео не должна оказаться под hidden.
+test('свёрнутая карточка скрывает только тексты техники', () => {
+  const { document } = makeDom();
+  const fragment = renderWorkout(legsMwf, document, { expandDescriptions: false });
+  const articles = [...fragment.querySelectorAll('.exercise')];
+  assert.equal(articles.length, 19);
+
+  for (const article of articles) {
+    const { button, region } = howtoOf(fragment, article);
+    assert.equal(button.getAttribute('aria-expanded'), 'false');
+    assert.equal(region.hidden, true, 'область текста скрыта');
+
+    for (const selector of ['h3', '.reps', '.muscles', 'a.video', 'input[data-mark]', '.howto-toggle']) {
+      for (const node of article.querySelectorAll(selector)) {
+        assert.equal(node.closest('[hidden]'), null, `${selector} остался на виду`);
+      }
+    }
+  }
+  // Ровно то, что ниже проверяется поимённо: отметок на странице столько же,
+  // сколько их всего у тренировки, и ни одна не спрятана.
+  const marks = [...fragment.querySelectorAll('input[data-mark]')];
+  assert.equal(marks.length, countMarks(legsMwf));
+  assert.equal(marks.filter(box => box.closest('[hidden]')).length, 0);
+});
+
+test('на широком экране описания отрисованы раскрытыми', () => {
+  const { document } = makeDom();
+  const fragment = renderWorkout(legsMwf, document, { expandDescriptions: true });
+  const articles = [...fragment.querySelectorAll('.exercise')];
+  assert.equal(articles.length, 19);
+  for (const article of articles) {
+    const { button, region } = howtoOf(fragment, article);
+    assert.equal(button.getAttribute('aria-expanded'), 'true');
+    assert.equal(region.hidden, false, 'область текста видна');
+  }
+});
+
+// Значение по умолчанию — это обещание в сигнатуре renderWorkout: вызов без
+// параметров рисует телефонное состояние. Без этой проверки обещание держалось
+// бы только на словах комментария: все остальные тесты передают флаг явно.
+test('renderWorkout без параметров рисует описания свёрнутыми', () => {
+  const { document } = makeDom();
+  const fragment = renderWorkout(legsMwf, document);
+  const { button, region } = howtoOf(fragment, fragment.querySelector('.exercise'));
+  assert.equal(button.getAttribute('aria-expanded'), 'false');
+  assert.equal(region.hidden, true);
+});
+
+// РАУНД ПРАВОК 2: кнопка «Как выполнять» и ссылка на видео — в одну строку,
+// отметки — своей строкой ниже. Строка из трёх (с отметками) не влезает никогда:
+// отметок на карточке от одной до трёх, и с подписями «Круг N» трём элементам
+// нужно от 348 до 591px при 317 доступных на экране 375px.
+//
+// Раскладку в jsdom не посчитать, поэтому тест сторожит то, на чём она держится:
+// состав строки. Видео за её пределами вернуло бы столбик, а отметки внутри —
+// раскладку, которая по ширине не сходится и у которой палец промахивается.
+test('в строке карточки только кнопка «Как выполнять» и видео, отметки — снаружи', () => {
+  const { document } = makeDom();
+  const fragment = renderWorkout(legsMwf, document);
+  const articles = [...fragment.querySelectorAll('.exercise')];
+  assert.equal(articles.length, 19);
+
+  let withVideo = 0;
+  for (const article of articles) {
+    const refs = article.querySelector('.exercise-refs');
+    assert.ok(refs, 'строка есть у каждого упражнения');
+    assert.equal(refs.firstElementChild, article.querySelector('.howto-toggle'),
+      'кнопка раскрытия — первая в строке');
+
+    const video = article.querySelector('a.video');
+    if (video) {
+      withVideo += 1;
+      assert.equal(video.parentNode, refs, 'ссылка на видео лежит в той же строке');
+      assert.equal(refs.children.length, 2, 'в строке ровно два элемента');
+      assert.equal(refs.lastElementChild, video, 'видео — второе, а не перед кнопкой');
+    } else {
+      assert.equal(refs.children.length, 1, 'без видео в строке остаётся одна кнопка');
+    }
+
+    // Отметки — своей строкой: ни одна не внутри строки, и .checks — прямой
+    // ребёнок карточки, а не её часть.
+    assert.equal(refs.querySelectorAll('input[data-mark]').length, 0);
+    assert.equal(refs.querySelector('.checks'), null);
+    assert.equal(article.querySelector('.checks').parentNode, article);
+  }
+  assert.equal(withVideo, 18, 'видео есть у восемнадцати упражнений из девятнадцати');
+});
+
+// Область с текстом раскрывается ПОД строкой, а не между кнопкой и видео:
+// иначе раскрытие разрывало бы строку пополам.
+test('область раскрытия стоит следом за строкой, а не внутри неё', () => {
+  const { document } = makeDom();
+  const fragment = renderWorkout(legsMwf, document);
+  for (const article of [...fragment.querySelectorAll('.exercise')]) {
+    const { region } = howtoOf(fragment, article);
+    const refs = article.querySelector('.exercise-refs');
+    assert.equal(region.parentNode, article, 'область — прямой ребёнок карточки');
+    assert.equal(refs.nextElementSibling, region, 'область идёт сразу за строкой');
+  }
+});

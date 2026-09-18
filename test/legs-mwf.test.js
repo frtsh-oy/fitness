@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { validateWorkout, countMarks } from '../workouts/schema.js';
+import { validateWorkout, countMarks, NO_LOAD_PATTERN } from '../workouts/schema.js';
 import legsMwf from '../workouts/legs-mwf.js';
 import { getWorkout, DEFAULT_WORKOUT_ID, WORKOUTS } from '../workouts/index.js';
 
@@ -41,9 +41,23 @@ test('всего 37 отметок, как на исходном сайте', ()
 });
 
 // Разметка есть у КАЖДОГО упражнения, включая растяжки и подвижность: иначе
-// клик по мышце на будущей карте тела не покажет растяжку на неё.
-test('у каждого упражнения непустая разметка мышц', () => {
-  for (const item of legsMwf.blocks.flatMap(b => b.items)) {
+// клик по мышце на карте тела не покажет растяжку на неё.
+//
+// Исключение одно — восстановительное упражнение, помеченное
+// NO_LOAD_PATTERN: оно не тренирует ничего, и пустой load у него утверждение,
+// а не пропуск. Список таких упражнений тест держит дословно: пометить этим
+// pattern ещё одно упражнение можно только осознанно, а не мимоходом, обойдя
+// правило схемы.
+test('непустая разметка мышц у каждого упражнения, кроме восстановительного', () => {
+  const items = legsMwf.blocks.flatMap(b => b.items);
+  const noLoad = items.filter(i => i.pattern === NO_LOAD_PATTERN);
+  assert.deepEqual(noLoad.map(i => i.key), ['breathing']);
+  for (const item of items) {
+    if (item.pattern === NO_LOAD_PATTERN) {
+      assert.deepEqual(item.load, {},
+        `«${item.name}»: восстановительное упражнение не должно нагружать ничего`);
+      continue;
+    }
     assert.ok(Object.keys(item.load).length > 0, `«${item.name}»: пустой load`);
   }
 });

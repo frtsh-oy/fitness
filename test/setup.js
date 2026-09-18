@@ -34,11 +34,14 @@ function fillBrowserGaps(window) {
   };
 }
 
-export function makeDom(html = '<!doctype html><html><body></body></html>') {
+// url задаётся параметром, потому что приложение читает из адреса выбор
+// тренировки: `?w=<id>` (telegram.js). По умолчанию адрес без запроса — это
+// открытие тренировки по умолчанию, как в большинстве тестов.
+export function makeDom(html = '<!doctype html><html><body></body></html>', { url = 'https://example.test/' } = {}) {
   // pretendToBeVisual: страница считается видимой (document.hidden === false,
   // как во вкладке на переднем плане) и появляется requestAnimationFrame,
   // без которого не открывается плеер.
-  const dom = new JSDOM(html, { url: 'https://example.test/', pretendToBeVisual: true });
+  const dom = new JSDOM(html, { url, pretendToBeVisual: true });
   fillBrowserGaps(dom.window);
 
   // Наш код document/window нигде не читает как глобаль — всюду они приходят
