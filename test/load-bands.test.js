@@ -11,14 +11,14 @@ test('ноль — отдельная полоса, а не «мало»', () =>
 
 test('границы полос: каждое число попадает туда, куда задумано', () => {
   const at = n => verdictFor(n).verdict;
-  assert.equal(at(1), 'ниже минимума');
-  assert.equal(at(3), 'ниже минимума');
-  assert.equal(at(4), 'поддержание');
-  assert.equal(at(9), 'поддержание');
+  assert.equal(at(1), 'работает, но не оптимально');
+  assert.equal(at(4), 'работает, но не оптимально');
+  assert.equal(at(5), 'поддержание и слабый рост');
+  assert.equal(at(9), 'поддержание и слабый рост');
   assert.equal(at(10), 'рабочий объём');
   assert.equal(at(20), 'рабочий объём');
-  assert.equal(at(21), 'у предела восстановления');
-  assert.equal(at(100), 'у предела восстановления');
+  assert.equal(at(21), 'выше изученного');
+  assert.equal(at(100), 'выше изученного');
 });
 
 test('полосы идут по возрастанию и покрывают всё без разрывов', () => {
@@ -27,10 +27,23 @@ test('полосы идут по возрастанию и покрывают в
   assert.equal(maxes.at(-1), Infinity);
 });
 
-test('у каждой полосы есть обоснование и источник', () => {
+// «Ноль» — единственная полоса без источника, и это осознанное решение
+// (определение, а не вывод исследования), а не пропуск: проверяется отдельно
+// и явно, а не молчаливым допуском пустого массива у всех подряд.
+test('у каждой полосы есть обоснование и basis; источники — у всех, кроме «ноль», и это осознанно', () => {
   for (const band of LOAD_BANDS) {
     assert.ok(band.why.length > 0, `у полосы «${band.verdict}» нет обоснования`);
-    assert.ok(band.source.startsWith('https://'), `у полосы «${band.verdict}» нет ссылки`);
+    assert.ok(band.basis.length > 0, `у полосы «${band.verdict}» не указан basis`);
+  }
+  const zero = LOAD_BANDS.find(band => band.max === 0);
+  assert.equal(zero.sources.length, 0,
+    'у полосы «ноль» источников не должно быть — это определение, а не вывод исследования');
+  for (const band of LOAD_BANDS) {
+    if (band === zero) continue;
+    assert.ok(band.sources.length > 0, `у полосы «${band.verdict}» нет источника`);
+    for (const source of band.sources) {
+      assert.ok(source.startsWith('https://'), `у полосы «${band.verdict}» ссылка не похожа на URL: ${source}`);
+    }
   }
 });
 
