@@ -10,7 +10,7 @@ import { writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { MUSCLES, muscleLabel } from '../muscles.js';
 import { WORKOUTS } from '../workouts/index.js';
-import { weeklyRows } from '../weekly-rows.js';
+import { weeklyRows, formatSets } from '../weekly-rows.js';
 
 const KIND_LABELS = { warmup: 'Разминка', strength: 'Силовое', cooldown: 'Заминка' };
 
@@ -135,17 +135,10 @@ function weeklyLines(workouts) {
     '|---|---|---|---|---|',
   ];
   for (const row of rows) {
-    lines.push(`| ${row.label} | ${fmt(row.comparable)} | ${fmt(row.ours)} | ${row.band.verdict} | ${row.band.basis} |`);
+    lines.push(`| ${row.label} | ${formatSets(row.comparable)} | ${formatSets(row.ours)} | ${row.band.verdict} | ${row.band.basis} |`);
   }
   lines.push('');
   return lines;
-}
-
-// Как formatSets в weekly-view.js: дробным бывает только «наше» число
-// (вспомогательная доля на нечётном числе кругов), сопоставимое — всегда
-// целое. Разделитель дробной части — запятая, как в остальном тексте отчёта.
-function fmt(sets) {
-  return String(sets).replace('.', ',');
 }
 
 export function buildReportLines(workouts = WORKOUTS) {

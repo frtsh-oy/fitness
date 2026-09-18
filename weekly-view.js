@@ -2,18 +2,12 @@
 // расчёт, вердикт, подпись группы и сортировка уже соединены и посчитаны там,
 // общим кодом с отчётом (tools/muscle-report.js). Своего расчёта и сортировки
 // здесь нет.
-import { weeklyRows } from './weekly-rows.js';
+import { weeklyRows, formatSets } from './weekly-rows.js';
 
-// Дробные значения бывают только у нашего числа: вспомогательная доля 0.5 на
-// нечётном числе кругов даёт половину. Сопоставимое всегда целое.
-function formatSets(sets) {
-  return String(sets).replace('.', ',');
-}
-
-// className и text приходят непустыми при каждом вызове ниже — защит на
-// пустую строку/undefined не заводим: в единственном месте, где text не
-// передан (список-контейнер), `textContent = undefined` и так даёт "" на
-// пустом узле, ничего не меняя.
+// className приходит непустым при каждом вызове ниже, а text не передан ровно
+// в двух местах — у контейнеров, которым он и не нужен: список ('weekly-list')
+// и строка списка ('weekly-row'). Защит на пустую строку/undefined не заводим:
+// `textContent = undefined` даёт "" на пустом узле, ничего не меняя.
 function el(document, tag, className, text) {
   const node = document.createElement(tag);
   node.className = className;
