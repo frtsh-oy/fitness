@@ -112,8 +112,10 @@ function renderItem(document, block, item, itemIndex, expandDescriptions) {
   toggle.setAttribute('aria-label', `${HOWTO_LABEL}: ${item.name}`);
   const caret = renderIcon(document, CARET_PATH);
   // Класс атрибутом, а не присваиванием в className: у SVG это не строка, а
-  // SVGAnimatedString, и присваивание молча не сработало бы. По этому классу
-  // style.css и поворачивает уголок в раскрытом виде.
+  // SVGAnimatedString, причём свойство только для чтения, и присваивание в
+  // модуле (строгий режим) бросило бы TypeError — то есть уронило бы отрисовку
+  // карточки целиком, а не потеряло бы один класс. По этому классу style.css и
+  // поворачивает уголок в раскрытом виде.
   caret.setAttribute('class', 'howto-caret');
   toggle.append(el(document, 'span', null, HOWTO_LABEL), caret);
 
