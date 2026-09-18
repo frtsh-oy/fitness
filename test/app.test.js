@@ -1147,8 +1147,8 @@ test('окно ровно по порогу получает телефонну�
 // файлах сразу.
 //
 // Сверяется условие ИМЕННО ТОГО блока, который задаёт телефонные размеры, а не
-// присутствие числа где-нибудь в файле: медиазапросов в style.css пять, и среди
-// них уже есть 520px (силуэты карты) — то самое число, на которое телефонный
+// присутствие числа где-нибудь в файле: медиазапросов в style.css шесть, и
+// среди них уже есть 520px (силуэты карты) — то самое число, на которое телефонный
 // порог скорее всего однажды и поднимут. Прежняя версия теста искала число по
 // всем медиазапросам и на PHONE_MAX_WIDTH = 520 оставалась зелёной.
 //
@@ -1172,6 +1172,118 @@ test('телефонные размеры лежат в медиазапросе
   assert.ok(max, `условие блока должно быть «(max-width: Npx)», а оно «${condition}»`);
   assert.equal(Number(max[1]), PHONE_MAX_WIDTH,
     `телефонные размеры включаются на ${max[1]}px, а app.js считает порогом ${PHONE_MAX_WIDTH}px`);
+});
+
+// Минимальная высота нажимаемого. Требование владельца программы: всё, во что
+// тыкают пальцем, не ниже 44px — приложением пользуются между подходами, и
+// промах стоит дороже лишних пикселей.
+//
+// До этого теста требование держалось на одном комментарии в style.css:
+// возврат `.timer button{min-height:43px}` в блок 720px и возврат
+// `.check{min-height:36px}` оставляли все тесты зелёными.
+const MIN_TAP_HEIGHT = 44;
+
+// Всё нажимаемое страницы. Список — из требования Task 9 («чипы блоков, кнопки
+// режимов карты, видео, отметка, пресеты таймера, кнопка раскрытия секции»)
+// плюс кнопка «Как выполнять», сброс отметок, мышцы в подборе и обе кнопки
+// плеера, которым высоту задаёт player.css.
+//
+// Кого здесь нет и почему:
+// - `.check input` (19×19) — сам чекбокс лежит ВНУТРИ метки `.check`, а палец
+//   попадает по метке целиком: тап по любому её месту переключает отметку;
+// - `a.brand` в шапке и `.player-external` в подвале плеера — им высота в
+//   стилях не задана вовсе, она набирается содержимым. В требовании владельца
+//   их нет, и придумывать им проверку значит придумывать требование;
+// - `.block-number` — не нажимаемое, это номер блока (по медиазапросам он
+//   как раз и уезжает 44 → 38 → 34px).
+const TAP_TARGETS = [
+  '.block-nav a',
+  '.text-button',
+  '.video',
+  '.check',
+  '.timer button',
+  '.bodymap-toggle',
+  '.bodymap-modes button',
+  '.bodymap-pick button',
+  '.howto-toggle',
+  'button.extra-link',
+  '.player-close',
+];
+
+const HEIGHT_PROPS = ['min-height', 'height', 'max-height'];
+
+// Проверять можно только пиксели: процент считается от родителя, vh — от окна,
+// и «не ниже 44px» о них ничего не говорит. Поэтому не-пиксельное значение у
+// нажимаемого — это падение с объяснением, а не молчаливый пропуск.
+const tapPixels = (value, where) => {
+  const px = /^(\d+(?:\.\d+)?)px$/.exec(value.trim());
+  assert.ok(px, `высота нажимаемого задана не в пикселях, проверить её нельзя: ${where}`);
+  return Number(px[1]);
+};
+
+// Живую раскладку в jsdom не посчитать, поэтому сверяются сами объявления —
+// так же, как в тестах про порог телефона и про порядок правил печати.
+//
+// Объявления подбираются НЕ по совпадению строки селектора, а примеркой на
+// настоящие узлы страницы (`node.matches`): правило под другим селектором
+// (`.presets button` вместо `.timer button`) или внутри медиазапроса накрывает
+// те же кнопки, и сравнение строк его бы не заметило.
+//
+// Узлы берутся с отрисованной страницы ещё и затем, чтобы сторож не остался
+// беззубым молча: селектор, переставший что-либо накрывать (переименованный
+// класс), роняет тест на пустой выборке.
+test(`ни одно правило не опускает нажимаемое ниже ${MIN_TAP_HEIGHT}px`, t => {
+  const { window, document } = mount(t, { screenWidth: 375 });
+  // Подбор мышцы и плеер появляются только после нажатий: без них выборки
+  // `.bodymap-pick button` и `.player-close` были бы пустыми.
+  document.querySelector('.bodymap-toggle').click();
+  document.querySelector('.bodymap-anterior polygon')
+    .dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+  document.querySelector('button.video').click();
+
+  const declarations = [];
+  for (const file of ['style.css', 'player.css']) {
+    const style = document.createElement('style');
+    style.textContent = readFileSync(fileURLToPath(new URL(`../${file}`, import.meta.url)), 'utf8');
+    document.head.append(style);
+    for (const rule of [...style.sheet.cssRules]) {
+      const scope = rule.media ? `@media ${rule.media.mediaText} ` : '';
+      for (const inner of rule.media ? [...rule.cssRules] : [rule]) {
+        if (!inner.style) continue;
+        for (const prop of HEIGHT_PROPS) {
+          const value = inner.style.getPropertyValue(prop);
+          if (!value) continue;
+          declarations.push({
+            prop,
+            value,
+            selectors: inner.selectorText.split(',').map(s => s.trim()),
+            where: `${file} ${scope}${inner.selectorText}{${prop}:${value}}`,
+          });
+        }
+      }
+    }
+  }
+  const low = [];
+  for (const selector of TAP_TARGETS) {
+    const nodes = [...document.querySelectorAll(selector)];
+    assert.ok(nodes.length > 0,
+      `«${selector}» на странице ничего не накрывает — сторож высоты нажимаемого стал беззубым`);
+
+    const applied = declarations.filter(
+      declaration => nodes.some(node => declaration.selectors.some(s => node.matches(s))));
+    // Высота обязана быть задана: снятое `min-height` вернуло бы высоту по
+    // содержимому, и одной проверкой «ни одно объявление не ниже 44px» такое
+    // снятие прошло бы мимо — объявлять стало бы нечего.
+    const floors = applied.filter(declaration => declaration.prop === 'min-height'
+      && tapPixels(declaration.value, declaration.where) >= MIN_TAP_HEIGHT);
+    assert.ok(floors.length > 0,
+      `у «${selector}» нет объявления min-height не ниже ${MIN_TAP_HEIGHT}px`);
+
+    for (const declaration of applied) {
+      if (tapPixels(declaration.value, declaration.where) < MIN_TAP_HEIGHT) low.push(declaration.where);
+    }
+  }
+  assert.deepEqual(low, []);
 });
 
 test('нажатие на «Как выполнять» раскрывает описание, повторное — сворачивает', t => {
