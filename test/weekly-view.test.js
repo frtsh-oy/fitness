@@ -2,8 +2,8 @@
 // синтетическая тренировка вместо WORKOUTS. Нужно затем, что реальная
 // программа (legs-mwf, три дня в неделю) ни разу не поднимает сопоставимый
 // объём выше 12 (см. test/weekly.test.js) — полосы «работает, но не
-// оптимально» (1–4) и «выше изученного» (21+) через неё вообще не
-// показать, а значит и пометку «наша линия» у «выше изученного» через
+// оптимально» (1–4) и «выше нашей границы» (21+) через неё вообще не
+// показать, а значит и пометку «наша линия» у «выше нашей границы» через
 // test/weekly-section.test.js не проверить. Расчёт (weekly.js) и полосы
 // (load-bands.js) проверены отдельно — здесь только разметка.
 import { test } from 'node:test';
@@ -37,11 +37,11 @@ function rowFor(h, ruName) {
   return [...h.querySelectorAll('.weekly-row')].find(row => row.textContent.includes(ruName));
 }
 
-test('«выше изученного» (21+, basis целиком наша линия) помечен пометкой', () => {
+test('«выше нашей границы» (21+, basis целиком наша линия) помечен пометкой', () => {
   const h = host();
   renderWeekly({ host: h, workouts: [fixture({ chest: 1 }, 22)] });
   const row = rowFor(h, 'Грудные');
-  assert.match(row.querySelector('.weekly-verdict').textContent, /выше изученного/);
+  assert.match(row.querySelector('.weekly-verdict').textContent, /выше нашей границы/);
   const mark = row.querySelector('.weekly-basis');
   assert.ok(mark, 'нет пометки «наша линия» у вердикта, который весь — наша линия');
   assert.equal(mark.textContent, 'наша линия');
