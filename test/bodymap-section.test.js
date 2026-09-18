@@ -495,6 +495,31 @@ test('смена режима не рисует силуэт заново', () =
   assert.equal(d.querySelectorAll('.bodymap-posterior svg').length, 1);
 });
 
+test('нажатие кнопки режима не оставляет человечка без стоп, кистей и головы', () => {
+  // То же, что «дорисованные стопы, кисти и голова остаются в разметке после
+  // смены режима» в test/bodymap.test.js, но через настоящую кнопку страницы:
+  // библиотека при смене режима заменяет содержимое своей схемы целиком, и
+  // владелец увидел бы фигуру без стоп и кистей сразу после первого нажатия.
+  const { window } = mount();
+  const d = window.document;
+  d.querySelector('.bodymap-toggle').click();
+  // 37 полигонов на вид — это 33 от библиотеки плюс четыре дорисованных
+  // (стопы и кисти); эллипс — голова со спины, спереди её рисует библиотека.
+  const drawn = () => ({
+    полигоновСпереди: d.querySelectorAll('.bodymap-anterior polygon').length,
+    полигоновСзади: d.querySelectorAll('.bodymap-posterior polygon').length,
+    головаСзади: d.querySelectorAll('.bodymap-posterior ellipse').length,
+    леваяСтопаСпереди: [...d.querySelectorAll('.bodymap-anterior polygon')]
+      .some(p => p.getAttribute('points') === '20.8,195.5 26.9,195.5 28.4,202.5 26.8,208.8 19.4,208.8 17.8,202.5'),
+  });
+  const before = drawn();
+  assert.deepEqual(before,
+    { полигоновСпереди: 37, полигоновСзади: 37, головаСзади: 1, леваяСтопаСпереди: true },
+    'фигура нарисована не целиком ещё до смены режима');
+  modeButton(d, 'all').click();
+  assert.deepEqual(drawn(), before, 'после нажатия «Вся нагрузка» дорисованное пропало из разметки');
+});
+
 test('свежее окно с сохранённым режимом «вся нагрузка» открывается в нём', () => {
   const { window } = makeDom(html);
   window.localStorage.setItem('bodymap-mode', 'all');
