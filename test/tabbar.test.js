@@ -52,6 +52,33 @@ test('в покое пункт подписан «Отдых»', () => {
   assert.equal(document.getElementById('timer-open').textContent.trim(), 'Отдых');
 });
 
+// Спека требует: «пока отдых идёт — подсвечивается», и это про отсчёт, а не
+// про открытую шторку. Закрытие шторки крестиком не останавливает отдых, и
+// подсветка обязана пережить закрытие — иначе единственный намёк на идущее
+// время исчезает, хотя оно всё ещё тикает.
+test('подсветка пункта держится на отсчёте, а не на открытости шторки', () => {
+  const { window, document } = mount();
+  const app = startApp(window);
+  const openButton = document.getElementById('timer-open');
+  assert.equal(openButton.dataset.running, 'false', 'в покое пункт не подсвечен');
+
+  openButton.click();
+  document.getElementById('timer-toggle').click();
+  assert.equal(openButton.dataset.running, 'true', 'во время отдыха пункт подсвечен');
+
+  document.getElementById('timer-close').click();
+  assert.equal(openButton.getAttribute('aria-expanded'), 'false', 'шторка и правда закрыта');
+  // Тик после закрытия — не для отсчёта времени (он и так идёт), а чтобы
+  // заставить перерисовку случиться уже ПОСЛЕ закрытия шторки: привязка к
+  // sheet.hidden в этот момент дала бы false и погасила бы подсветку, привязка
+  // к running — нет. Без этого тика мутация на sheet.hidden проходит случайно:
+  // последняя перерисовка была ещё при открытой шторке.
+  app.timer.tick();
+  assert.equal(app.timer.running, true, 'отдых всё ещё идёт');
+  assert.equal(openButton.dataset.running, 'true',
+    'закрытие шторки не должно гасить подсветку идущего отсчёта');
+});
+
 test('пункт «Отдых» не переключает раздел', () => {
   const { window, document } = mount();
   startApp(window);
