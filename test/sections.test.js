@@ -92,3 +92,42 @@ test('прочие разделы открываются сверху', () => {
   document.querySelector('[data-section="workouts"]').click();
   assert.deepEqual(scrolls.at(-1), { top: 0, behavior: 'instant' });
 });
+
+test('«Тренировки» показывают то, что есть в реестре', async () => {
+  const { WORKOUTS } = await import('../workouts/index.js');
+  const { window, document } = mount();
+  startApp(window);
+  document.querySelector('[data-section="workouts"]').click();
+  const cards = document.querySelectorAll('#screen-workouts .workout-card');
+  assert.equal(cards.length, Object.keys(WORKOUTS).length);
+  assert.match(document.querySelector('#screen-workouts').textContent, /Всё тело/);
+});
+
+test('текущая тренировка помечена в списке', () => {
+  const { window, document } = mount();
+  startApp(window);
+  document.querySelector('[data-section="workouts"]').click();
+  const marked = document.querySelectorAll('#screen-workouts .workout-card[aria-current]');
+  assert.equal(marked.length, 1);
+});
+
+test('нажатие на карточку тренировки открывает «Сегодня»', () => {
+  // Смены текущей тренировки здесь нет и не будет, пока не появится загрузка
+  // тренировок с сервера — в реестре сегодня одна запись, и она же текущая.
+  // Карточка лишь возвращает человека туда, откуда он и хотел тренироваться.
+  const { window, document } = mount();
+  startApp(window);
+  document.querySelector('[data-section="workouts"]').click();
+  document.querySelector('#screen-workouts .workout-card').click();
+  assert.deepEqual(shown(document), ['screen-today']);
+});
+
+test('«Конструктор» объясняет, что это и почему платно', () => {
+  const { window, document } = mount();
+  startApp(window);
+  document.querySelector('[data-section="builder"]').click();
+  const text = document.querySelector('#screen-builder').textContent;
+  assert.match(text, /платн/i, 'должно быть сказано, что раздел платный');
+  assert.match(text, /упражнени/i, 'должно быть сказано, что в нём будет');
+  assert.ok(text.trim().length > 80, 'заглушка не должна быть пустым экраном');
+});

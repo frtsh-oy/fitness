@@ -12,6 +12,9 @@ import { createBodyMap, warmupOnlyGroups, idleGroups, isMode, DEFAULT_MODE } fro
 import { muscleLabel, regionGroups } from './muscles.js';
 import { renderWeekly } from './weekly-view.js';
 import { createSections, savedSection } from './sections.js';
+import { renderWorkouts } from './workouts-view.js';
+import { renderBuilder } from './builder-view.js';
+import { hasSubscription } from './access.js';
 
 // Отсчёт сверяется с часами часто, чтобы экран не отставал от них больше чем
 // на глаз: на границе секунды подпись меняется в пределах пятой доли.
@@ -92,7 +95,33 @@ export function startApp(win = globalThis.window) {
     local: localStore(win),
   });
 
-  const sections = createSections({ win });
+  // «Тренировки» и «Конструктор» рисуются при первом показе, а не при
+  // запуске: до тех пор, пока человек ни разу не открыл раздел, готовить его
+  // разметку незачем. Признаки drawn — не кеш содержимого (оно не меняется
+  // за время сеанса), а просто «строить один раз».
+  let workoutsDrawn = false;
+  let builderDrawn = false;
+
+  const sections = createSections({
+    win,
+    onShow(id) {
+      if (id === 'workouts' && !workoutsDrawn) {
+        workoutsDrawn = true;
+        renderWorkouts({
+          host: document.getElementById('screen-workouts'),
+          workouts: WORKOUTS,
+          currentId: workout.id,
+          // Смены текущей тренировки здесь нет: в реестре она одна и уже
+          // открыта на экране «Сегодня». Карточка лишь возвращает туда.
+          onPick: () => sections.show('today'),
+        });
+      }
+      if (id === 'builder' && !builderDrawn) {
+        builderDrawn = true;
+        renderBuilder({ host: document.getElementById('screen-builder'), hasSubscription });
+      }
+    },
+  });
   sections.show(savedSection(win) ?? 'today');
 
   renderIntro(workout, document);

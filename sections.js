@@ -51,7 +51,7 @@ export function createSections({ win, onShow }) {
     button.addEventListener('click', () => show(button.dataset.section));
   }
 
-  return { show, current: () => current };
+  return { show };
 }
 
 export function savedSection(win) {

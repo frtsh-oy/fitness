@@ -1211,6 +1211,7 @@ const TAP_TARGETS = [
   '.howto-toggle',
   'button.extra-link',
   '.player-close',
+  '.workout-card',
 ];
 
 const HEIGHT_PROPS = ['min-height', 'height', 'max-height'];
@@ -1238,11 +1239,14 @@ const tapPixels = (value, where) => {
 test(`ни одно правило не опускает нажимаемое ниже ${MIN_TAP_HEIGHT}px`, t => {
   const { window, document } = mount(t, { screenWidth: 375 });
   // Подбор мышцы и плеер появляются только после нажатий: без них выборки
-  // `.bodymap-pick button` и `.player-close` были бы пустыми.
+  // `.bodymap-pick button` и `.player-close` были бы пустыми. Раздел
+  // «Тренировки» рисуется тоже только при показе (см. app.js, onShow) — без
+  // клика по нему `.workout-card` была бы пустой выборкой точно так же.
   document.querySelector('.bodymap-toggle').click();
   document.querySelector('.bodymap-anterior polygon')
     .dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
   document.querySelector('button.video').click();
+  document.querySelector('[data-section="workouts"]').click();
 
   const declarations = [];
   for (const file of ['style.css', 'player.css']) {
