@@ -145,7 +145,7 @@ test('«Сегодня» возвращается на то место, где �
   window.scrollY = 900;
   document.querySelector('[data-section="workouts"]').click();
   document.querySelector('[data-section="today"]').click();
-  assert.equal(window.__scrolledTo, 900,
+  assert.deepEqual(scrolls.at(-1), { top: 900, behavior: 'instant' },
     'при возврате в «Сегодня» прокрутка должна восстанавливаться');
 });
 
@@ -154,19 +154,22 @@ test('прочие разделы открываются сверху', () => {
   startApp(window);
   window.scrollY = 900;
   document.querySelector('[data-section="workouts"]').click();
-  assert.equal(window.__scrolledTo, 0);
+  assert.deepEqual(scrolls.at(-1), { top: 0, behavior: 'instant' });
 });
 ```
 
-В `test/setup.js` добавь в `fillBrowserGaps` запись положения, потому что jsdom прокрутку не выполняет:
+**`test/setup.js` не трогай.** В проекте уже есть приём для этого — подмена
+`window.scrollTo` внутри самого теста, см. `test/app.test.js:1001`:
 
 ```js
-  // jsdom не прокручивает: window.scrollTo существует, но ничего не делает и
-  // scrollY не меняет. Запоминаем аргумент, чтобы тесты могли проверить не
-  // «функцию вызвали», а «куда просили».
-  window.__scrolledTo = 0;
-  window.scrollTo = options => { window.__scrolledTo = options?.top ?? 0; };
+  const scrolls = [];
+  window.scrollTo = options => scrolls.push(options);
 ```
+
+Заводить вторую, глобальную заглушку значит держать два способа делать одно и
+то же. Перепиши два теста про прокрутку под этот приём: собирай вызовы в массив
+и проверяй последний. `window.scrollY` в jsdom записываемый — проверено, так что
+задать исходное положение можно прямо присваиванием.
 
 - [ ] **Step 3: Прогнать, убедиться, что падает**
 
@@ -213,8 +216,12 @@ export function createSections({ win, onShow }) {
     }
     current = next;
 
-    // behavior: 'instant' обязателен: у html стоит scroll-behavior: smooth, и
-    // плавная прокрутка возвращает управление до того, как закончилась.
+    // Здесь намеренно 'instant', а не scrollBehavior(win) из app.js: тот
+    // отдаёт 'smooth' всем, кто не просил убрать плавность, и это уместно для
+    // кнопки «назад», которая именно прокручивает. Переключение разделов —
+    // не прокрутка, а смена экрана: анимировать её незачем, а у html стоит
+    // scroll-behavior: smooth, из-за которого плавная прокрутка ещё и
+    // возвращает управление до своего окончания.
     win.scrollTo({ top: REMEMBERS_SCROLL.has(next) ? (scrollAt.get(next) ?? 0) : 0, behavior: 'instant' });
 
     try { win.localStorage.setItem(KEY, next); } catch { /* приватный режим */ }
@@ -430,7 +437,9 @@ Expected: FAIL.
 
 - [ ] **Step 6: Сторож высоты**
 
-Замени `'.timer button'` в `TAP_TARGETS` на `'.timer-sheet button'` и добавь `'.tabbar-timer'`. Проверь, что старый селектор больше ничего не накрывает — иначе сторож упадёт с сообщением про беззубость, и это правильное поведение.
+Замени `'.timer button'` в `TAP_TARGETS` на `'.timer-sheet button'`. Старый селектор после переезда ничего не накрывает, и сторож обязан упасть с сообщением про беззубость — это его правильное поведение, а не поломка.
+
+**`'.tabbar-timer'` отдельно добавлять не надо:** кнопка лежит внутри `.tabbar`, а `'.tabbar button'` там уже есть с Task 1. Второй селектор на то же самое — лишняя запись, которая создаёт вид покрытия там, где оно уже есть.
 
 - [ ] **Step 7: Прогнать**
 
