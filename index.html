@@ -46,12 +46,17 @@
 <div class="presets" aria-label="Длительность отдыха"><button data-time="20">20с</button><button data-time="45">45с</button><button data-time="60" aria-pressed="true">60с</button><button data-time="90">90с</button></div>
 <button class="timer-start" id="timer-toggle">Старт</button>
 <button class="timer-reset" id="timer-reset" aria-label="Сбросить таймер">↺</button>
-<span id="timer-status" aria-live="polite">Выбери время</span>
 </div>
+<!-- Вне шторки и не спрятана атрибутом hidden: шторка в покое стоит закрытой
+     (display:none), а сообщение о конце отдыха обязано доходить и тогда —
+     это и есть штатный сценарий (человек убрал телефон на время отдыха).
+     Скрыт только визуально (.sr-only), из потока чтения экранного диктора
+     не убран. -->
+<span id="timer-status" class="sr-only" aria-live="polite">Выбери время</span>
 <nav class="tabbar" aria-label="Разделы">
 <button type="button" data-section="today" aria-current="page">Сегодня</button>
 <button type="button" data-section="workouts">Тренировки</button>
-<button type="button" data-section="builder">Конструктор</button>
+<button type="button" data-section="builder" aria-label="Конструктор (платный раздел)">Конструктор<span class="lock-badge" aria-hidden="true">🔒</span></button>
 <button type="button" class="tabbar-timer" id="timer-open" aria-expanded="false" aria-controls="timer-sheet">Отдых</button>
 </nav>
 <noscript><p>Для просмотра упражнений включи JavaScript в браузере.</p></noscript>
