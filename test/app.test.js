@@ -671,12 +671,12 @@ test('конец отдыха: панель гаснет в ноль и кноп
   assert.equal(document.getElementById('timer-value').textContent, '00:00');
   assert.equal(status.textContent, 'Отдых закончен');
   assert.equal(toggle.textContent, 'Ещё раз', 'старт на отработавшем таймере начинает заново');
-  assert.equal(document.querySelector('.timer').classList.contains('done'), true);
+  assert.equal(document.querySelector('.timer-sheet').classList.contains('done'), true);
 
   toggle.click();
   assert.equal(document.getElementById('timer-value').textContent, '00:20');
   assert.equal(toggle.textContent, 'Пауза');
-  assert.equal(document.querySelector('.timer').classList.contains('done'), false);
+  assert.equal(document.querySelector('.timer-sheet').classList.contains('done'), false);
 });
 
 // #timer-status — область aria-live: каждое значение в ней диктор произносит.
@@ -1202,7 +1202,7 @@ const TAP_TARGETS = [
   '.text-button',
   '.video',
   '.check',
-  '.timer button',
+  '.timer-sheet button',
   '.tabbar button',
   '.bodymap-toggle',
   '.bodymap-modes button',

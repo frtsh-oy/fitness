@@ -458,10 +458,20 @@ export function startApp(win = globalThis.window) {
   });
 
   // Таймер отдыха
-  const panel = document.querySelector('.timer');
+  const sheet = document.getElementById('timer-sheet');
   const value = document.getElementById('timer-value');
   const status = document.getElementById('timer-status');
   const toggle = document.getElementById('timer-toggle');
+
+  const openButton = document.getElementById('timer-open');
+
+  function setSheetOpen(open) {
+    sheet.hidden = !open;
+    openButton.setAttribute('aria-expanded', String(open));
+  }
+
+  openButton.addEventListener('click', () => setSheetOpen(sheet.hidden));
+  document.getElementById('timer-close').addEventListener('click', () => setSheetOpen(false));
 
   const timer = createTimer({
     onTick: remaining => {
@@ -469,7 +479,10 @@ export function startApp(win = globalThis.window) {
       // «Ещё раз» в нуле — как в оригинале: старт на отработавшем таймере
       // начинает отсчёт заново, и кнопка обязана обещать именно это.
       toggle.textContent = timer.running ? 'Пауза' : remaining === 0 ? 'Ещё раз' : 'Старт';
-      panel.classList.toggle('done', remaining === 0);
+      sheet.classList.toggle('done', remaining === 0);
+      // Пока отдых идёт, время видно в навигации: это единственное место, где
+      // таймер занимает место постоянно, и ради него шторку открывать не надо.
+      openButton.textContent = timer.running ? formatTime(remaining) : 'Отдых';
       // Статус здесь не пишется намеренно. #timer-status — область aria-live:
       // каждое значение в ней экранный диктор проговаривает вслух. Перерисовка
       // случается и в нуле, и тогда он успел бы сказать одно ровно перед тем,

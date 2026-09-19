@@ -40,11 +40,19 @@
 <div class="screen" id="screen-workouts" hidden></div>
 <div class="screen" id="screen-builder" hidden></div>
 </main>
-<aside class="timer" aria-label="Таймер отдыха"><div class="timer-inner"><div class="timer-head"><span>ОТДЫХ</span><output id="timer-value" role="timer" aria-label="Оставшееся время отдыха"></output><span id="timer-status" aria-live="polite">Выбери время</span></div><div class="timer-controls"><div class="presets" aria-label="Длительность отдыха"><button data-time="20">20с</button><button data-time="45">45с</button><button data-time="60" aria-pressed="true">60с</button><button data-time="90">90с</button></div><button class="timer-start" id="timer-toggle">Старт</button><button class="timer-reset" id="timer-reset" aria-label="Сбросить таймер">↺</button></div></div></aside>
+<div class="timer-sheet" id="timer-sheet" hidden>
+<div class="timer-sheet-head"><span>ОТДЫХ</span><button type="button" id="timer-close" aria-label="Закрыть">✕</button></div>
+<output id="timer-value" role="timer" aria-label="Оставшееся время отдыха"></output>
+<div class="presets" aria-label="Длительность отдыха"><button data-time="20">20с</button><button data-time="45">45с</button><button data-time="60" aria-pressed="true">60с</button><button data-time="90">90с</button></div>
+<button class="timer-start" id="timer-toggle">Старт</button>
+<button class="timer-reset" id="timer-reset" aria-label="Сбросить таймер">↺</button>
+<span id="timer-status" aria-live="polite">Выбери время</span>
+</div>
 <nav class="tabbar" aria-label="Разделы">
 <button type="button" data-section="today" aria-current="page">Сегодня</button>
 <button type="button" data-section="workouts">Тренировки</button>
 <button type="button" data-section="builder">Конструктор</button>
+<button type="button" class="tabbar-timer" id="timer-open" aria-expanded="false" aria-controls="timer-sheet">Отдых</button>
 </nav>
 <noscript><p>Для просмотра упражнений включи JavaScript в браузере.</p></noscript>
 </body></html>
