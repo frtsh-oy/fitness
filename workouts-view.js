@@ -15,7 +15,7 @@ export function renderWorkouts({ host, workouts, currentId, onPick }) {
     kicker.className = 'workout-card-kicker';
     kicker.textContent = workout.kicker;
     card.append(title, kicker);
-    card.addEventListener('click', () => onPick(id));
+    card.addEventListener('click', () => onPick());
     host.append(card);
   }
 }

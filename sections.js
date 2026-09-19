@@ -25,7 +25,7 @@ export function createSections({ win, onShow }) {
     // на запуске, но и не повод показать пустой экран: открываем раздел по
     // умолчанию.
     const next = ids.includes(id) ? id : DEFAULT_ID;
-    if (REMEMBERS_SCROLL.has(current)) scrollAt.set(current, win.scrollY);
+    scrollAt.set(current, win.scrollY);
 
     for (const button of buttons) {
       const mine = button.dataset.section === next;
@@ -44,7 +44,7 @@ export function createSections({ win, onShow }) {
     win.scrollTo({ top: REMEMBERS_SCROLL.has(next) ? (scrollAt.get(next) ?? 0) : 0, behavior: 'instant' });
 
     try { win.localStorage.setItem(KEY, next); } catch { /* приватный режим */ }
-    if (onShow) onShow(next);
+    onShow(next);
   }
 
   for (const button of buttons) {
