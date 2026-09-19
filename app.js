@@ -11,6 +11,7 @@ import { setupPlayers } from './player.js';
 import { createBodyMap, warmupOnlyGroups, idleGroups, isMode, DEFAULT_MODE } from './bodymap.js';
 import { muscleLabel, regionGroups } from './muscles.js';
 import { renderWeekly } from './weekly-view.js';
+import { createSections, savedSection } from './sections.js';
 
 // Отсчёт сверяется с часами часто, чтобы экран не отставал от них больше чем
 // на глаз: на границе секунды подпись меняется в пределах пятой доли.
@@ -90,6 +91,9 @@ export function startApp(win = globalThis.window) {
     cloud: cloudStorage(tg.webApp),
     local: localStore(win),
   });
+
+  const sections = createSections({ win });
+  sections.show(savedSection(win) ?? 'today');
 
   renderIntro(workout, document);
 

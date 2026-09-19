@@ -1203,6 +1203,7 @@ const TAP_TARGETS = [
   '.video',
   '.check',
   '.timer button',
+  '.tabbar button',
   '.bodymap-toggle',
   '.bodymap-modes button',
   '.bodymap-pick button',
