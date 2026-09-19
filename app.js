@@ -2,7 +2,7 @@
 // соединяются здесь и больше нигде. Точка входа — index.html, который импортирует
 // startApp и зовёт её; сам модуль ничего не делает при импорте, поэтому связывание
 // проверяется тестами на jsdom.
-import { getWorkout } from './workouts/index.js';
+import { getWorkout, WORKOUTS } from './workouts/index.js';
 import { renderWorkout, renderIntro } from './render.js';
 import { createStorage } from './storage.js';
 import { initTelegram } from './telegram.js';
@@ -10,6 +10,7 @@ import { createTimer, formatTime } from './timer.js';
 import { setupPlayers } from './player.js';
 import { createBodyMap, warmupOnlyGroups, idleGroups, isMode, DEFAULT_MODE } from './bodymap.js';
 import { muscleLabel, regionGroups } from './muscles.js';
+import { renderWeekly } from './weekly-view.js';
 
 // Отсчёт сверяется с часами часто, чтобы экран не отставал от них больше чем
 // на глаз: на границе секунды подпись меняется в пределах пятой доли.
@@ -180,8 +181,11 @@ export function startApp(win = globalThis.window) {
     }
     // Этот список от режима не зависит: idleGroups перебирает все типы
     // упражнений сразу, и группа попадает в него, только если её нет ни в
-    // одном load. Речь именно о разметке, а не о теле: хват резинки в шести
-    // упражнениях есть, но предплечьям он не размечен (см. docs/muscle-map.md).
+    // одном load. Речь именно о разметке, а не о теле — но для legs-mwf такой
+    // группы больше нет: хват резинки размечен предплечьям по правилу из
+    // docs/muscle-map.md, и idleGroups(workout) для этой тренировки пуст.
+    // Условие ниже остаётся ради будущих тренировок и будущих групп мышц,
+    // которым разметки ещё не досталось.
     const idle = idleGroups(workout);
     if (idle.length) parts.push(`Светлым — то, чего нет в разметке: ${listGroups(idle)}.`);
     document.querySelector('.bodymap-groups').textContent = parts.join(' ');
@@ -284,6 +288,43 @@ export function startApp(win = globalThis.window) {
   // от построенной карты.
   fillNotes();
   if (mapWasOpen) setMapOpen(true);
+
+  // Секция недельного объёма. Устроена как секция карты выше: рисуется при
+  // первом раскрытии, состояние помнится. Повторное раскрытие не
+  // перерисовывает — renderWeekly очистил бы host и собрал те же строки заново.
+  const WEEKLY_KEY = 'weekly-open';
+  const weeklyToggle = document.querySelector('.weekly-toggle');
+  const weeklyBody = document.querySelector('.weekly-body');
+  let weeklyDrawn = false;
+
+  function drawWeekly() {
+    if (weeklyDrawn) return;
+    renderWeekly({ host: weeklyBody, workouts: Object.values(WORKOUTS) });
+    weeklyDrawn = true;
+  }
+
+  function setWeeklyOpen(open) {
+    weeklyToggle.setAttribute('aria-expanded', String(open));
+    weeklyBody.hidden = !open;
+    // Без if (open). Ложным open бывает — ровно при сворачивании, вторым
+    // кликом, — но к этому моменту рисовать уже нечего: раскрыть секцию можно
+    // только кликом по свёрнутой кнопке, а он всегда даёт open=true
+    // (aria-expanded стартует 'false' и меняется только здесь), значит перед
+    // любым setWeeklyOpen(false) drawWeekly уже отработал и weeklyDrawn уже
+    // true. То есть условие не меняло бы исхода ни разу — сторожит сам
+    // drawWeekly() своим if (weeklyDrawn).
+    drawWeekly();
+    // try/catch по месту — как у MAP_KEY выше: он гасит и бросающий геттер
+    // localStorage, и его отсутствие, второй защиты поверх не нужно.
+    try { win.localStorage.setItem(WEEKLY_KEY, open ? '1' : '0'); } catch { /* приватный режим */ }
+  }
+
+  weeklyToggle.addEventListener('click', () =>
+    setWeeklyOpen(weeklyToggle.getAttribute('aria-expanded') !== 'true'));
+
+  let weeklyWasOpen = false;
+  try { weeklyWasOpen = win.localStorage.getItem(WEEKLY_KEY) === '1'; } catch { /* см. выше */ }
+  if (weeklyWasOpen) setWeeklyOpen(true);
 
   const marks = new Set();
   const progress = document.getElementById('progress');
