@@ -671,12 +671,12 @@ test('конец отдыха: панель гаснет в ноль и кноп
   assert.equal(document.getElementById('timer-value').textContent, '00:00');
   assert.equal(status.textContent, 'Отдых закончен');
   assert.equal(toggle.textContent, 'Ещё раз', 'старт на отработавшем таймере начинает заново');
-  assert.equal(document.querySelector('.timer').classList.contains('done'), true);
+  assert.equal(document.querySelector('.timer-sheet').classList.contains('done'), true);
 
   toggle.click();
   assert.equal(document.getElementById('timer-value').textContent, '00:20');
   assert.equal(toggle.textContent, 'Пауза');
-  assert.equal(document.querySelector('.timer').classList.contains('done'), false);
+  assert.equal(document.querySelector('.timer-sheet').classList.contains('done'), false);
 });
 
 // #timer-status — область aria-live: каждое значение в ней диктор произносит.
@@ -1202,7 +1202,8 @@ const TAP_TARGETS = [
   '.text-button',
   '.video',
   '.check',
-  '.timer button',
+  '.timer-sheet button',
+  '.tabbar button',
   '.bodymap-toggle',
   '.bodymap-modes button',
   '.bodymap-pick button',
@@ -1210,6 +1211,7 @@ const TAP_TARGETS = [
   '.howto-toggle',
   'button.extra-link',
   '.player-close',
+  '.workout-card',
 ];
 
 const HEIGHT_PROPS = ['min-height', 'height', 'max-height'];
@@ -1237,11 +1239,14 @@ const tapPixels = (value, where) => {
 test(`ни одно правило не опускает нажимаемое ниже ${MIN_TAP_HEIGHT}px`, t => {
   const { window, document } = mount(t, { screenWidth: 375 });
   // Подбор мышцы и плеер появляются только после нажатий: без них выборки
-  // `.bodymap-pick button` и `.player-close` были бы пустыми.
+  // `.bodymap-pick button` и `.player-close` были бы пустыми. Раздел
+  // «Тренировки» рисуется тоже только при показе (см. app.js, onShow) — без
+  // клика по нему `.workout-card` была бы пустой выборкой точно так же.
   document.querySelector('.bodymap-toggle').click();
   document.querySelector('.bodymap-anterior polygon')
     .dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
   document.querySelector('button.video').click();
+  document.querySelector('[data-section="workouts"]').click();
 
   const declarations = [];
   for (const file of ['style.css', 'player.css']) {

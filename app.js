@@ -11,6 +11,10 @@ import { setupPlayers } from './player.js';
 import { createBodyMap, warmupOnlyGroups, idleGroups, isMode, DEFAULT_MODE } from './bodymap.js';
 import { muscleLabel, regionGroups } from './muscles.js';
 import { renderWeekly } from './weekly-view.js';
+import { createSections, savedSection } from './sections.js';
+import { renderWorkouts } from './workouts-view.js';
+import { renderBuilder } from './builder-view.js';
+import { hasSubscription } from './access.js';
 
 // Отсчёт сверяется с часами часто, чтобы экран не отставал от них больше чем
 // на глаз: на границе секунды подпись меняется в пределах пятой доли.
@@ -90,6 +94,35 @@ export function startApp(win = globalThis.window) {
     cloud: cloudStorage(tg.webApp),
     local: localStore(win),
   });
+
+  // «Тренировки» и «Конструктор» рисуются при первом показе, а не при
+  // запуске: до тех пор, пока человек ни разу не открыл раздел, готовить его
+  // разметку незачем. Признаки drawn — не кеш содержимого (оно не меняется
+  // за время сеанса), а просто «строить один раз».
+  let workoutsDrawn = false;
+  let builderDrawn = false;
+
+  const sections = createSections({
+    win,
+    onShow(id) {
+      if (id === 'workouts' && !workoutsDrawn) {
+        workoutsDrawn = true;
+        renderWorkouts({
+          host: document.getElementById('screen-workouts'),
+          workouts: WORKOUTS,
+          currentId: workout.id,
+          // Смены текущей тренировки здесь нет: в реестре она одна и уже
+          // открыта на экране «Сегодня». Карточка лишь возвращает туда.
+          onPick: () => sections.show('today'),
+        });
+      }
+      if (id === 'builder' && !builderDrawn) {
+        builderDrawn = true;
+        renderBuilder({ host: document.getElementById('screen-builder'), hasSubscription });
+      }
+    },
+  });
+  sections.show(savedSection(win) ?? 'today');
 
   renderIntro(workout, document);
 
@@ -454,10 +487,20 @@ export function startApp(win = globalThis.window) {
   });
 
   // Таймер отдыха
-  const panel = document.querySelector('.timer');
+  const sheet = document.getElementById('timer-sheet');
   const value = document.getElementById('timer-value');
   const status = document.getElementById('timer-status');
   const toggle = document.getElementById('timer-toggle');
+
+  const openButton = document.getElementById('timer-open');
+
+  function setSheetOpen(open) {
+    sheet.hidden = !open;
+    openButton.setAttribute('aria-expanded', String(open));
+  }
+
+  openButton.addEventListener('click', () => setSheetOpen(sheet.hidden));
+  document.getElementById('timer-close').addEventListener('click', () => setSheetOpen(false));
 
   const timer = createTimer({
     onTick: remaining => {
@@ -465,7 +508,15 @@ export function startApp(win = globalThis.window) {
       // «Ещё раз» в нуле — как в оригинале: старт на отработавшем таймере
       // начинает отсчёт заново, и кнопка обязана обещать именно это.
       toggle.textContent = timer.running ? 'Пауза' : remaining === 0 ? 'Ещё раз' : 'Старт';
-      panel.classList.toggle('done', remaining === 0);
+      sheet.classList.toggle('done', remaining === 0);
+      // Пока отдых идёт, время видно в навигации: это единственное место, где
+      // таймер занимает место постоянно, и ради него шторку открывать не надо.
+      openButton.textContent = timer.running ? formatTime(remaining) : 'Отдых';
+      // Подсветка пункта навигации держится на состоянии отсчёта, а не на
+      // открытости шторки: закрыв шторку крестиком во время отдыха, человек
+      // обязан по-прежнему видеть, что где-то идёт время. aria-expanded для
+      // этого не подходит — он гаснет вместе со шторкой, а отдых продолжается.
+      openButton.dataset.running = String(timer.running);
       // Статус здесь не пишется намеренно. #timer-status — область aria-live:
       // каждое значение в ней экранный диктор проговаривает вслух. Перерисовка
       // случается и в нуле, и тогда он успел бы сказать одно ровно перед тем,
