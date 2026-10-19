@@ -13,6 +13,7 @@ import { countMarks } from '../workouts/schema.js';
 import { recordKey } from '../my-workouts.js';
 import { serializeCompact } from '../builder/compact.js';
 import { LIBRARY, entry } from '../exercises/index.js';
+import { TEST_LIBRARY } from './fixtures/test-library.js';
 
 const PAGE = readFileSync(fileURLToPath(new URL('../index.html', import.meta.url)), 'utf8');
 const WORKOUT = getWorkout(null);
@@ -138,9 +139,13 @@ function widthMatchMedia(screenWidth) {
   };
 }
 
-function mount(t, { marks = null, preload = {}, webApp = null, freezeTimers = false, fakeClock = false, denyStorage = false, screenWidth = null, library } = {}) {
+function mount(t, { marks = null, preload = {}, webApp = null, freezeTimers = false, fakeClock = false, denyStorage = false, screenWidth = null, scrollStub = false, library } = {}) {
   const { window, document } = makeDom(PAGE);
   t.after(() => window.close());
+  // В jsdom прокрутки нет, а запуск приложения и смена раздела её просят: без
+  // заглушки каждый вызов печатает «Not implemented». Тем, кому она нужна ещё до
+  // startApp, — этот параметр.
+  if (scrollStub) window.scrollTo = () => {};
   // Ширину окна подменяем до startApp: по ней приложение решает при отрисовке,
   // раскрывать ли описания упражнений.
   if (screenWidth !== null) window.matchMedia = widthMatchMedia(screenWidth);
@@ -1257,6 +1262,10 @@ const TAP_TARGETS = [
   '.day-chip',
   '.replace-pick',
   '.replace-close',
+  '.level-option',
+  '.zone-chip',
+  '.builder-generate',
+  '.builder-variant',
 ];
 
 const HEIGHT_PROPS = ['min-height', 'height', 'max-height'];
@@ -1306,9 +1315,9 @@ test(`ни одно правило не опускает нажимаемое н
   // Узел, ушедший из разметки, отвечает на matches как прежде, и проверка по
   // нему честная — высота задаётся правилами, а не местом в документе.
   const seen = new Map(TAP_TARGETS.map(selector => [selector, new Set()]));
-  const collect = () => {
+  const collect = (scope = document) => {
     for (const [selector, nodes] of seen) {
-      for (const node of document.querySelectorAll(selector)) nodes.add(node);
+      for (const node of scope.querySelectorAll(selector)) nodes.add(node);
     }
   };
   // Подбор мышцы и плеер появляются только после нажатий: без них выборки
@@ -1340,6 +1349,19 @@ test(`ни одно правило не опускает нажимаемое н
   collect();
   builder.querySelector('.builder-save').click();
   collect();
+
+  // Генератор и результат. В настоящей библиотеке ни один уровень не доступен,
+  // и до результата не дойти: те же экраны проходятся на тестовой, где доступно
+  // всё. Кнопка «Другой вариант» живёт только на результате, а чипы зон и
+  // уровни — на генераторе.
+  const rich = mount(t, { screenWidth: 375, library: TEST_LIBRARY, scrollStub: true });
+  const richBuilder = rich.document.getElementById('screen-builder');
+  rich.document.querySelector('[data-section="builder"]').click();
+  richBuilder.querySelectorAll('.builder-path')[1].click();
+  collect(richBuilder);
+  richBuilder.querySelector('.zone-chip').click();
+  richBuilder.querySelector('.builder-generate').click();
+  collect(richBuilder);
 
   const declarations = [];
   for (const file of ['style.css', 'player.css']) {

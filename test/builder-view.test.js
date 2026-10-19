@@ -1,4 +1,5 @@
-// Раздел «Конструктор»: вход, ручная сборка, замена упражнения и сохранение.
+// Раздел «Конструктор»: вход, ручная сборка, генератор с результатом, замена
+// упражнения и сохранение.
 // Большинство тестов монтируют приложение на настоящем index.html (как
 // test/switch.test.js): так заодно проверено, что раздел встал на страницу и
 // что сохранённая тренировка доходит до «Тренировок» и «Сегодня». Там, где
@@ -12,13 +13,14 @@ import { makeDom } from './setup.js';
 import { startApp, CURRENT_KEY } from '../app.js';
 import { renderBuilder } from '../builder-view.js';
 import { recordKey, OWN_LIMIT } from '../my-workouts.js';
-import { serializeCompact, exerciseCount, NAME_MAX } from '../builder/compact.js';
+import { serializeCompact, exerciseCount, expandWorkout, NAME_MAX } from '../builder/compact.js';
 import { generate } from '../builder/generator.js';
-import { CORE_GROUPS, MAX_STRENGTH } from '../builder/rules.js';
+import { belowFloor } from '../builder/coverage.js';
+import { CORE_GROUPS, LEVELS, MAX_STRENGTH } from '../builder/rules.js';
 import { plural } from '../builder/texts.js';
 import { LIBRARY } from '../exercises/index.js';
 import { groupsPhrase } from '../muscles.js';
-import { TEST_LIBRARY } from './fixtures/test-library.js';
+import { TEST_LIBRARY, singlesOnly, variant } from './fixtures/test-library.js';
 
 const PAGE = readFileSync(fileURLToPath(new URL('../index.html', import.meta.url)), 'utf8');
 const settle = ms => new Promise(resolve => setTimeout(resolve, ms));
@@ -66,14 +68,14 @@ function mount(t, { library, preload = {}, webApp = null, denyStorage = false } 
 
 // Экран отдельно от приложения, со своим store. Возвращает корень и то, что
 // экран отдал наружу.
-function mountScreen(t, { store, library = LIBRARY, confirm = async () => true } = {}) {
+function mountScreen(t, { store, library = LIBRARY, confirm = async () => true, seed = () => 1 } = {}) {
   const { window, document } = makeDom('<!doctype html><html><body><div id="host"></div></body></html>');
   t.after(() => window.close());
   window.scrollTo = () => {};
   const root = document.getElementById('host');
   const saved = [];
   const view = renderBuilder({
-    host: root, win: window, library, store, confirm, seed: () => 1, openLink() {},
+    host: root, win: window, library, store, confirm, seed, openLink() {},
     onSaved: (...args) => saved.push(args),
   });
   return { window, document, root, saved, view };
@@ -126,6 +128,33 @@ function openReplace(root, blockTitle) {
   return root.querySelector('.replace-sheet');
 }
 
+// Генератор: второй путь на входе, выбор уровня и зон, результат.
+const startGenerator = root => root.querySelectorAll('.builder-path')[1].click();
+const generateNow = root => root.querySelector('.builder-generate').click();
+const otherVariant = root => root.querySelector('.builder-variant').click();
+const levelOption = (root, label) => [...root.querySelectorAll('.level-option')]
+  .find(option => option.querySelector('.level-title').textContent === label);
+const zoneChip = (root, label) => [...root.querySelectorAll('.zone-chip')].find(chip => chip.textContent === label);
+const pressedZones = root => [...root.querySelectorAll('.zone-chip[aria-pressed="true"]')].map(chip => chip.textContent);
+const checkedLevels = root => [...root.querySelectorAll('.level-option[aria-checked="true"]')]
+  .map(option => option.querySelector('.level-title').textContent);
+const tagsIn = (row, className) => [...row.querySelectorAll(`.${className}`)].map(tag => tag.textContent);
+// Зерно, которое каждый раз новое: «Другой вариант» без него вернул бы ту же тренировку.
+const counter = () => {
+  let n = 0;
+  return () => { n += 1; return n; };
+};
+const SIX_MISSING = groupsPhrase(['calves', 'abs', 'obliques', 'delts_front', 'delts_rear', 'biceps']);
+
+// Нажимает «Заменить» у упражнения и выбирает кандидата по ключам тестовой библиотеки.
+function replaceWith(root, fromKey, toKey) {
+  rowOf(root, nameOf(fromKey, TEST_LIBRARY)).querySelector('.builder-replace').click();
+  const candidate = [...root.querySelectorAll('.replace-candidate')]
+    .find(item => item.querySelector('.replace-name').textContent === nameOf(toKey, TEST_LIBRARY));
+  assert.ok(candidate, `среди кандидатов нет «${toKey}»`);
+  candidate.querySelector('.replace-pick').click();
+}
+
 test('вход: «Собрать самому» и устройство тренировки; нет слов «ИИ», «персональный», «тренер»', t => {
   const { document, root } = mount(t);
   openBuilder(document);
@@ -134,10 +163,9 @@ test('вход: «Собрать самому» и устройство трен
   assert.equal(root.querySelector('.builder-lead').textContent,
     'Тренировка всегда на всё тело. Собери её сам из библиотеки или получи готовую по правилам, а потом сохрани.');
 
-  const paths = root.querySelectorAll('.builder-path');
-  assert.equal(paths.length, 1, 'вторую кнопку добавит генератор вместе со своим экраном');
-  assert.equal(paths[0].querySelector('.builder-path-title').textContent, 'Собрать самому');
-  assert.equal(paths[0].querySelector('.builder-path-note').textContent,
+  const [manual] = root.querySelectorAll('.builder-path');
+  assert.equal(manual.querySelector('.builder-path-title').textContent, 'Собрать самому');
+  assert.equal(manual.querySelector('.builder-path-note').textContent,
     'Листай библиотеку упражнений, добавляй нужные и сохрани тренировку.');
 
   assert.equal(root.querySelector('.builder-steps-title').textContent, 'Любая тренировка устроена одинаково');
@@ -813,7 +841,6 @@ test('у подобранной по правилам на сохранении 
   await settle(0);
   openWorkouts(document);
   document.querySelector('#screen-workouts .workout-edit').click();
-  assert.equal(root.querySelector('h2').textContent, 'Своя тренировка', 'у сгенерированной пока та же сборка');
   toSave(root);
 
   const count = exerciseCount(generated);
@@ -854,4 +881,378 @@ test('выбранная замена попадает в сохранённую
   assert.ok(compact.warmup.includes(picked.key), 'в записи — ключ выбранного упражнения');
   assert.equal(compact.warmup.length, 2, 'замена, а не добавление');
   assert.deepEqual(compact.strength, ['squat-a']);
+});
+
+test('на входе два пути: «Собрать самому» и «Сгенерировать»', t => {
+  const { document, root } = mount(t);
+  openBuilder(document);
+
+  const paths = [...root.querySelectorAll('.builder-path')];
+  assert.deepEqual(paths.map(path => path.querySelector('.builder-path-title').textContent),
+    ['Собрать самому', 'Сгенерировать']);
+  assert.equal(paths[1].querySelector('.builder-path-note').textContent,
+    'Выбери уровень и зоны упора — упражнения подберутся по правилам.');
+
+  paths[1].click();
+  assert.equal(root.querySelector('h2').textContent, 'Генератор');
+  assert.equal(root.querySelector('.builder-subtitle').textContent, 'Подбор упражнений по правилам');
+  back(root);
+  assert.equal(root.querySelectorAll('.builder-path').length, 2, 'с генератора «Назад» ведёт на вход');
+});
+
+test('с нынешней библиотекой уровни недоступны и называют, чего не хватает', t => {
+  const { document, root } = mount(t);
+  openBuilder(document);
+  startGenerator(root);
+
+  const options = [...root.querySelectorAll('.level-option')];
+  assert.deepEqual(options.map(option => option.querySelector('.level-title').textContent),
+    ['Начальный', 'Средний', 'Продвинутый']);
+  for (const option of options) {
+    assert.equal(option.getAttribute('role'), 'radio');
+    assert.equal(option.getAttribute('aria-disabled'), 'true');
+    assert.equal(option.getAttribute('aria-checked'), 'false');
+    assert.equal(option.getAttribute('aria-describedby'), option.nextElementSibling.id,
+      'причина привязана к уровню для диктора');
+  }
+  // Причина стоит сразу под своим уровнем; в настоящей библиотеке шесть групп без упражнения.
+  assert.deepEqual(options.map(option => option.nextElementSibling.textContent), [
+    `Для начального уровня в библиотеке пока нет базовых упражнений на: ${SIX_MISSING}.`,
+    `Для среднего уровня в библиотеке пока нет базовых и средних упражнений на: ${SIX_MISSING}.`,
+    `Для продвинутого уровня в библиотеке пока нет упражнений на: ${SIX_MISSING}.`,
+  ]);
+
+  options[0].click();
+  assert.deepEqual(checkedLevels(root), [], 'недоступный уровень не выбирается');
+  const generateButton = root.querySelector('.builder-generate');
+  assert.equal(generateButton.disabled, true);
+  generateButton.click();
+  assert.equal(root.querySelector('h2').textContent, 'Генератор');
+  assert.ok([...root.querySelectorAll('.zone-chip')].every(chip => chip.getAttribute('aria-disabled') === 'true'),
+    'без выбранного уровня зоны выбрать нельзя');
+});
+
+test('генерация: тренировка на всё тело с меткой «упор» у упражнения зоны', t => {
+  const { root } = mountScreen(t, { library: TEST_LIBRARY, seed: () => 1 });
+  startGenerator(root);
+
+  const described = [...root.querySelectorAll('.level-option')].map(option => [
+    option.querySelector('.level-title').textContent,
+    option.querySelector('.level-who').textContent,
+    ...[...option.querySelectorAll('.level-line')].map(line => line.textContent),
+  ]);
+  assert.deepEqual(described, [
+    ['Начальный', 'Занятий не было или перерыв в несколько лет',
+      'Кругов в паре: 2', 'Упражнения: базовые', 'Остановка: за 3–4 повтора до отказа'],
+    ['Средний', 'Около полугода регулярных занятий',
+      'Кругов в паре: 2', 'Упражнения: базовые и средние', 'Остановка: за 2–3 повтора до отказа'],
+    ['Продвинутый', 'Годы регулярных занятий',
+      'Кругов в паре: 3', 'Упражнения: все', 'Остановка: за 1–2 повтора до отказа'],
+  ]);
+  assert.deepEqual(checkedLevels(root), ['Начальный'], 'выбран первый из доступных');
+  assert.equal(root.querySelector('.zone-hint').textContent,
+    'Упор добавит упражнение на каждую выбранную зону, не больше двух. Остальные группы мышц остаются в тренировке.');
+  assert.deepEqual([...root.querySelectorAll('.zone-chip')].map(chip => chip.textContent),
+    ['Ноги', 'Ягодицы', 'Спина', 'Грудь', 'Плечи', 'Руки', 'Пресс и кор']);
+
+  zoneChip(root, 'Ягодицы').click();
+  assert.equal(zoneChip(root, 'Ягодицы').getAttribute('aria-pressed'), 'true');
+  generateNow(root);
+
+  const expected = generate({ level: 'beginner', zones: ['glutes'], seed: 1, library: TEST_LIBRARY }).compact;
+  const count = exerciseCount(expected);
+  assert.equal(root.querySelector('h2').textContent, 'Всё тело. Упор: ягодицы');
+  assert.equal(root.querySelector('.builder-subtitle').textContent,
+    `Начальный уровень · ${count} ${plural(count, ['упражнение', 'упражнения', 'упражнений'])}`);
+  assert.deepEqual(coverage(root), ['Все основные группы получают нагрузку']);
+  assert.deepEqual(rows(root).sort(),
+    [...expected.warmup, ...expected.circuit, ...expected.strength, ...expected.cooldown].map(key => nameOf(key, TEST_LIBRARY)).sort());
+
+  // Круги — у пар и только у них.
+  for (const block of root.querySelectorAll('.builder-block')) {
+    const rounds = tagsIn(block, 'builder-block-rounds');
+    assert.deepEqual(rounds, block.querySelector('h3').textContent.startsWith('Пара ') ? ['2 круга'] : []);
+  }
+
+  const [[focusKey]] = expected.focus;
+  assert.deepEqual(tagsIn(root, 'focus-tag'), ['упор'], 'метка одна — у упражнения зоны');
+  assert.deepEqual(tagsIn(rowOf(root, nameOf(focusKey, TEST_LIBRARY)), 'focus-tag'), ['упор']);
+  assert.equal(root.querySelectorAll('.replaced-tag').length, 0);
+  assert.equal(root.querySelectorAll('.builder-replace').length, count, 'заменить можно любое, и силовое тоже');
+  assert.equal(root.querySelectorAll('.builder-remove').length, 0);
+});
+
+test('третья зона недоступна', t => {
+  const { root } = mountScreen(t, { library: TEST_LIBRARY });
+  startGenerator(root);
+
+  zoneChip(root, 'Ноги').click();
+  zoneChip(root, 'Спина').click();
+  assert.deepEqual(pressedZones(root), ['Ноги', 'Спина']);
+  const third = zoneChip(root, 'Грудь');
+  assert.equal(third.getAttribute('aria-disabled'), 'true');
+  assert.equal(zoneChip(root, 'Ноги').getAttribute('aria-disabled'), null, 'выбранные остаются доступными');
+  third.click();
+  assert.deepEqual(pressedZones(root), ['Ноги', 'Спина'], 'третья зона не выбирается');
+
+  zoneChip(root, 'Ноги').click();
+  assert.deepEqual(pressedZones(root), ['Спина']);
+  assert.equal(third.getAttribute('aria-disabled'), null, 'место освободилось — остальные снова доступны');
+  third.click();
+  generateNow(root);
+  assert.equal(root.querySelector('h2').textContent, 'Всё тело. Упор: спина и грудь');
+  assert.equal(root.querySelectorAll('.focus-tag').length, 2);
+});
+
+test('смена уровня снимает зоны, недоступные на новом; причина названа под зонами', t => {
+  // Грудь на начальном уровне держится на одном базовом упражнении: упору нужно
+  // второе, и зона недоступна; на среднем есть среднее упражнение, и она открыта.
+  const library = TEST_LIBRARY.map(entry => (['press-a', 'press-b', 'chest-2'].includes(entry.key)
+    ? variant(entry, { difficulty: 'hard' }) : entry));
+  const { root } = mountScreen(t, { library });
+  startGenerator(root);
+  const note = () => [...root.querySelectorAll('.zone-missing p')].filter(p => !p.hidden).map(p => p.textContent);
+
+  assert.deepEqual(note(), ['Для упора на зону «Грудь» на начальном уровне в библиотеке пока не хватает упражнений: нужно второе упражнение на ту же группу.']);
+  assert.equal(zoneChip(root, 'Грудь').getAttribute('aria-disabled'), 'true');
+
+  levelOption(root, 'Средний').click();
+  assert.deepEqual(checkedLevels(root), ['Средний']);
+  assert.deepEqual(note(), []);
+  zoneChip(root, 'Грудь').click();
+  assert.deepEqual(pressedZones(root), ['Грудь']);
+
+  levelOption(root, 'Начальный').click();
+  assert.deepEqual(pressedZones(root), [], 'на начальном уровне грудь недоступна — выбор снят');
+  assert.equal(note().length, 1);
+  zoneChip(root, 'Грудь').click();
+  assert.deepEqual(pressedZones(root), [], 'недоступную зону не выбрать');
+});
+
+test('отказ генератора остаётся на его экране: причина названа, выбор не сброшен', t => {
+  // Одни односуставные упражнения: две зоны упора не умещаются в девять пар.
+  const library = singlesOnly();
+  const { root } = mountScreen(t, { library });
+  startGenerator(root);
+  zoneChip(root, 'Ноги').click();
+  zoneChip(root, 'Руки').click();
+  const refusal = root.querySelector('.builder-refusal');
+  assert.equal(refusal.hidden, true, 'пока отказа нет, плашка скрыта');
+
+  generateNow(root);
+  assert.equal(root.querySelector('h2').textContent, 'Генератор');
+  assert.equal(refusal.getAttribute('role'), 'alert');
+  assert.equal(refusal.hidden, false);
+  assert.match(refusal.textContent, /^Не получилось уложиться в 9 силовых пар: ниже границы остались /);
+  assert.equal(refusal.textContent, generate({ level: 'beginner', zones: ['legs', 'arms'], seed: 1, library }).message);
+  assert.deepEqual(checkedLevels(root), ['Начальный']);
+  assert.deepEqual(pressedZones(root), ['Ноги', 'Руки']);
+
+  zoneChip(root, 'Руки').click();
+  assert.equal(refusal.hidden, true, 'выбор изменили — прежний отказ уже не про него');
+});
+
+test('«Другой вариант» меняет тренировку: те же уровень и зоны, замены сброшены', t => {
+  const { root } = mountScreen(t, { library: TEST_LIBRARY, seed: counter() });
+  startGenerator(root);
+  levelOption(root, 'Средний').click();
+  zoneChip(root, 'Ягодицы').click();
+  generateNow(root);
+  const first = rows(root);
+  const [[firstFocus]] = generate({ level: 'intermediate', zones: ['glutes'], seed: 1, library: TEST_LIBRARY }).compact.focus;
+
+  openReplace(root, 'Стартовая разминка').querySelector('.replace-pick').click();
+  assert.deepEqual(tagsIn(root, 'replaced-tag'), ['заменено']);
+
+  otherVariant(root);
+  const second = generate({ level: 'intermediate', zones: ['glutes'], seed: 2, library: TEST_LIBRARY }).compact;
+  assert.notDeepEqual(rows(root).sort(), first.sort(), 'тренировка другая');
+  assert.deepEqual(rows(root).sort(),
+    [...second.warmup, ...second.circuit, ...second.strength, ...second.cooldown].map(key => nameOf(key, TEST_LIBRARY)).sort(),
+    'новая тренировка — по следующему зерну, замена прежней не перенесена');
+  assert.equal(root.querySelector('h2').textContent, 'Всё тело. Упор: ягодицы');
+  assert.match(root.querySelector('.builder-subtitle').textContent, /^Средний уровень · /);
+  assert.deepEqual(tagsIn(root, 'focus-tag'), ['упор']);
+  assert.notEqual(second.focus[0][0], firstFocus, 'и упор достался другому упражнению');
+  assert.equal(root.querySelectorAll('.replaced-tag').length, 0, 'метки «заменено» сброшены');
+});
+
+test('замена в сгенерированной: кандидаты из пула уровня; сломала нижнюю границу — предупреждение сразу', t => {
+  const { root } = mountScreen(t, { library: TEST_LIBRARY, seed: () => 1 });
+  startGenerator(root);
+  generateNow(root);
+  assert.deepEqual(rows(root).filter(name => name === nameOf('press-b', TEST_LIBRARY)).length, 1, 'исходная тренировка с жимом');
+  const status = root.querySelector('.builder-coverage');
+  assert.deepEqual(coverage(root), ['Все основные группы получают нагрузку']);
+
+  // Начальный уровень берёт базовые: среднее упражнение на трицепс есть в библиотеке, но не в списке.
+  rowOf(root, nameOf('press-b', TEST_LIBRARY)).querySelector('.builder-replace').click();
+  const sheet = root.querySelector('.replace-sheet');
+  assert.equal(sheet.querySelector('.replace-hint').textContent, 'Те же целевые мышцы, похожая разметка');
+  const names = [...sheet.querySelectorAll('.replace-name')].map(n => n.textContent);
+  assert.ok(names.length > 0);
+  assert.ok(names.every(name => TEST_LIBRARY.find(e => e.name === name).difficulty === 'basic'),
+    'на начальном уровне замена — только из базовых');
+  assert.equal(names.includes(nameOf('triceps-3', TEST_LIBRARY)), false);
+  assert.equal(TEST_LIBRARY.find(e => e.key === 'triceps-3').difficulty, 'medium');
+  sheet.querySelector('.replace-close').click();
+
+  // Трицепс жим заменить может, а грудные после этого без подходов: предупреждение сразу.
+  replaceWith(root, 'press-b', 'triceps-1');
+  assert.equal(root.querySelector('.replace-sheet'), null);
+  assert.equal(rowOf(root, nameOf('press-b', TEST_LIBRARY)), undefined);
+  assert.deepEqual(tagsIn(rowOf(root, nameOf('triceps-1', TEST_LIBRARY)), 'replaced-tag'), ['заменено']);
+  assert.equal(root.querySelector('.builder-coverage'), status, 'строка состояния — тот же узел: диктор услышит перемену');
+  assert.deepEqual(coverage(root), [`Ниже границы уровня: ${groupsPhrase(['chest'])}.`]);
+  assert.equal(status.classList.contains('is-ok'), false);
+});
+
+test('сохранение с двумя днями показывает группы ниже границы уровня ещё до сохранения', t => {
+  const { root } = mountScreen(t, { library: TEST_LIBRARY, seed: () => 1 });
+  startGenerator(root);
+  generateNow(root);
+  const compact = generate({ level: 'beginner', zones: [], seed: 1, library: TEST_LIBRARY }).compact;
+  const workoutAt = days => expandWorkout('my-check001', { ...compact, days }, TEST_LIBRARY).workout;
+  toSave(root);
+
+  assert.equal(root.querySelector('h2').textContent, 'Сохранение');
+  const count = exerciseCount(compact);
+  assert.equal(root.querySelector('.builder-summary').textContent,
+    `Что сохранится: ${count} ${plural(count, ['упражнение', 'упражнения', 'упражнений'])}, начальный уровень`);
+  assert.deepEqual(coverage(root), ['Все основные группы не ниже границы уровня.']);
+
+  dayChip(root, 'пт').click();
+  assert.deepEqual(pressedDays(root), ['пн', 'ср']);
+  const below = belowFloor(workoutAt([1, 3]), LEVELS.beginner.floor);
+  assert.ok(below.length > 0, 'на двух днях кому-то подходов не хватает');
+  assert.deepEqual(coverage(root), [`Ниже границы уровня при этих днях: ${groupsPhrase(below)}.`]);
+
+  // Результат оценивает тренировку на трёх днях: дни выбираются только на сохранении.
+  const backButton = root.querySelector('.builder-back');
+  assert.match(backButton.textContent, /К результату/);
+  backButton.click();
+  assert.equal(root.querySelector('h2').textContent, 'Всё тело');
+  assert.deepEqual(coverage(root), ['Все основные группы получают нагрузку']);
+  toSave(root);
+  assert.deepEqual(pressedDays(root), ['пн', 'ср'], 'выбранные дни остались в черновике');
+});
+
+test('«Назад» с результата: без замен сразу на генератор с тем же выбором, после замены спрашивает', async t => {
+  const questions = [];
+  const confirm = question => new Promise(resolve => questions.push({ question, answer: resolve }));
+  const { root } = mountScreen(t, { library: TEST_LIBRARY, seed: counter(), confirm });
+  startGenerator(root);
+  levelOption(root, 'Продвинутый').click();
+  zoneChip(root, 'Плечи').click();
+  generateNow(root);
+
+  back(root);
+  assert.equal(questions.length, 0, 'ничего не меняли — вопроса нет');
+  assert.equal(root.querySelector('h2').textContent, 'Генератор');
+  assert.deepEqual(checkedLevels(root), ['Продвинутый']);
+  assert.deepEqual(pressedZones(root), ['Плечи']);
+
+  generateNow(root);
+  openReplace(root, 'Стартовая разминка').querySelector('.replace-pick').click();
+  back(root);
+  assert.equal(questions.length, 1);
+  assert.equal(questions[0].question, 'Бросить сборку? Несохранённые изменения пропадут.');
+  questions[0].answer(false);
+  await settle(0);
+  assert.equal(root.querySelector('.builder-variant') !== null, true, 'отказ — результат на месте');
+  assert.equal(root.querySelectorAll('.replaced-tag').length, 1);
+
+  back(root);
+  questions[1].answer(true);
+  await settle(0);
+  assert.equal(root.querySelector('h2').textContent, 'Генератор');
+  assert.deepEqual(checkedLevels(root), ['Продвинутый']);
+});
+
+test('«Изменить» у сгенерированной открывает результат', async t => {
+  const generated = generate({ level: 'intermediate', zones: ['glutes'], seed: 7, library: TEST_LIBRARY, now: () => OWN.t }).compact;
+  const { document, root } = mount(t, { library: TEST_LIBRARY, preload: onDevice('my-gen00001', generated) });
+  await settle(0);
+  openWorkouts(document);
+  document.querySelector('#screen-workouts .workout-edit').click();
+  await settle(0);
+
+  assert.deepEqual(shown(document), ['screen-builder']);
+  assert.equal(root.querySelector('h2').textContent, 'Всё тело. Упор: ягодицы');
+  assert.ok(root.querySelector('.builder-variant'), 'это результат, а не сборка');
+  assert.equal(root.querySelector('.builder-remove'), null);
+  assert.equal(root.querySelectorAll('.builder-replace').length, exerciseCount(generated));
+  const [[focusKey]] = generated.focus;
+  assert.deepEqual(tagsIn(rowOf(root, nameOf(focusKey, TEST_LIBRARY)), 'focus-tag'), ['упор'], 'упор в записи сохранился');
+  assert.equal(root.querySelectorAll('.replaced-tag').length, 0, 'заменено — только то, что заменили в этом сеансе');
+
+  back(root);
+  assert.deepEqual(checkedLevels(root), ['Средний'], 'генератор открывается на уровне и зонах этой тренировки');
+  assert.deepEqual(pressedZones(root), ['Ягодицы']);
+});
+
+test('экраны генератора и результата без слов «ИИ», «персональный», «тренер»', t => {
+  const forbidden = /(^|[^а-яё])ИИ([^а-яё]|$)|персональн|тренер/i;
+
+  // С настоящей библиотекой на экране причины отказа, с тестовой — выбор и результат.
+  const real = mount(t);
+  openBuilder(real.document);
+  startGenerator(real.root);
+  assert.match(real.root.textContent, /Генератор/);
+  assert.doesNotMatch(real.root.textContent, forbidden);
+
+  const { root } = mountScreen(t, { library: TEST_LIBRARY });
+  startGenerator(root);
+  zoneChip(root, 'Грудь').click();
+  assert.doesNotMatch(root.textContent, forbidden);
+  generateNow(root);
+  assert.match(root.textContent, /Другой вариант/);
+  assert.doesNotMatch(root.textContent, forbidden);
+});
+
+test('отказ при «Другом варианте» показан на результате, прежняя тренировка остаётся', t => {
+  const library = [...TEST_LIBRARY];
+  const { root } = mountScreen(t, { library, seed: counter() });
+  startGenerator(root);
+  generateNow(root);
+  const before = rows(root);
+  assert.equal(root.querySelector('.builder-refusal').hidden, true);
+
+  // Пока результат на экране, из библиотеки пропали все упражнения на бицепс:
+  // второй подбор уже невозможен.
+  for (let i = library.length - 1; i >= 0; i -= 1) {
+    if (library[i].load.biceps === 1) library.splice(i, 1);
+  }
+  otherVariant(root);
+
+  const refusal = root.querySelector('.builder-refusal');
+  assert.equal(refusal.getAttribute('role'), 'alert');
+  assert.equal(refusal.hidden, false);
+  assert.equal(refusal.textContent, `Для начального уровня в библиотеке пока нет базовых упражнений на: ${groupsPhrase(['biceps'])}.`);
+  assert.ok(root.querySelector('.builder-variant'), 'результат остался на экране');
+  assert.deepEqual(rows(root), before, 'прежняя тренировка не тронута');
+});
+
+test('«Другой вариант» у открытой на правку тренировки оставляет её название, дни и id', async t => {
+  const generated = {
+    ...generate({ level: 'intermediate', zones: ['glutes'], seed: 7, library: TEST_LIBRARY, now: () => OWN.t }).compact,
+    name: 'Моя ягодичная', days: [2, 4],
+  };
+  const store = { save: async () => ({ ok: true, localOnly: false }) };
+  const { root, saved, view } = mountScreen(t, { library: TEST_LIBRARY, store, seed: () => 99 });
+  await view.edit('my-gen00001', generated);
+  const before = rows(root);
+
+  otherVariant(root);
+  assert.notDeepEqual(rows(root).sort(), before.sort(), 'подбор другой');
+  toSave(root);
+  assert.equal(root.querySelector('.save-name').value, 'Моя ягодичная');
+  assert.deepEqual(pressedDays(root), ['вт', 'чт']);
+  root.querySelector('.builder-save').click();
+  await settle(0);
+
+  const [[id, compact]] = saved;
+  assert.equal(id, 'my-gen00001', 'сохранение перезаписывает ту же тренировку');
+  assert.deepEqual([compact.level, compact.zones, compact.name, compact.days],
+    ['intermediate', ['glutes'], 'Моя ягодичная', [2, 4]]);
 });

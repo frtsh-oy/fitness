@@ -269,8 +269,8 @@
    .exercise-top, что у номера и мышц в «Сегодня». Подпись не переносится: на
    узкой строке сжиматься должен список мышц, а не слово «Среднее». */
 .library-level{white-space:nowrap;font-size:12px;letter-spacing:.1em;font-weight:650;color:#61748b}
-.library-add,.builder-add,.builder-save{display:block;width:100%;min-height:44px;margin:14px 0 0;padding:0 14px;border:1px solid #152d4a;border-radius:8px;background:#152d4a;font:inherit;font-size:14px;font-weight:650;color:#fff}
-.library-add:disabled,.builder-add:disabled,.builder-save:disabled{border-color:#d8e1eb;background:#eef3fa;color:#657289;cursor:default}
+.library-add,.builder-add,.builder-save,.builder-generate{display:block;width:100%;min-height:44px;margin:14px 0 0;padding:0 14px;border:1px solid #152d4a;border-radius:8px;background:#152d4a;font:inherit;font-size:14px;font-weight:650;color:#fff}
+.library-add:disabled,.builder-add:disabled,.builder-save:disabled,.builder-generate:disabled{border-color:#d8e1eb;background:#eef3fa;color:#657289;cursor:default}
 .library-foot{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:18px 0 0}
 .library-total{margin:0;font-size:14px;font-weight:600;color:#33475f}
 
@@ -284,7 +284,8 @@
 .builder h2:focus{outline:none}
 .builder-entry h2{margin-top:0}
 .builder-lead{max-width:520px;margin:0 0 20px;font-size:15px;line-height:1.6;color:#33475f}
-.builder-path{display:flex;flex-direction:column;align-items:flex-start;gap:4px;width:100%;min-height:64px;margin:0 0 28px;padding:14px 18px;border:1px solid #152d4a;border-radius:12px;background:#152d4a;font:inherit;color:#fff;text-align:left}
+.builder-path{display:flex;flex-direction:column;align-items:flex-start;gap:4px;width:100%;min-height:64px;margin:0 0 12px;padding:14px 18px;border:1px solid #152d4a;border-radius:12px;background:#152d4a;font:inherit;color:#fff;text-align:left}
+.builder-path:last-of-type{margin-bottom:28px}
 .builder-path-title{font-size:18px;font-weight:650;letter-spacing:-.02em}
 .builder-path-note{font-size:14px;line-height:1.5;color:#d7e0ed}
 .builder-steps-title{margin:0 0 6px;font-size:17px;letter-spacing:-.02em}
@@ -304,16 +305,24 @@
 .builder-coverage p{margin:0}
 .builder-coverage p+p{margin-top:4px}
 .builder-coverage p:first-child{font-weight:650}
-.builder-save{margin-top:24px}
+.builder-save,.builder-generate{margin-top:24px}
 .builder-reason{margin:8px 0 0;font-size:13px;line-height:1.5;color:#526278}
-.builder-error{margin:12px 0 0;padding:12px 16px;border-radius:10px;background:#fbe4bd;color:#7a4a06;font-size:14px}
+.builder-error,.builder-refusal{margin:12px 0 0;padding:12px 16px;border-radius:10px;background:#fbe4bd;color:#7a4a06;font-size:14px}
 .builder-block{margin:22px 0 0}
+.builder-block-head{display:flex;align-items:baseline;justify-content:space-between;gap:12px}
 .builder-block h3{margin:0;font-size:17px;letter-spacing:-.02em}
+.builder-block-rounds{flex:none;font-size:13px;font-weight:650;color:#526278}
 .builder-block-sub{margin:2px 0 10px;font-size:13px;color:#657289}
 .builder-item{display:flex;align-items:center;gap:10px;margin:0 0 8px;padding:10px 12px;border:1px solid #d8e1eb;border-radius:12px;background:#fff}
 .builder-item-text{display:flex;flex-direction:column;flex:1 1 auto;min-width:0}
 .builder-item-name{font-size:15px;font-weight:650;line-height:1.35;overflow-wrap:anywhere}
 .builder-item-muscles{font-size:12px;color:#657289}
+/* Метки результата: «упор» — тот же зелёный значок, что в «Сегодня» (.focus-tag),
+   но без margin-right:auto: двум меткам в ряд нужен обычный просвет, а не сдвиг
+   второй к правому краю. «заменено» — нейтральный, чтобы не спорить с упором. */
+.builder-item-tags{display:flex;flex-wrap:wrap;gap:4px;margin:2px 0 3px}
+.builder-item-tags .focus-tag{margin-right:0}
+.replaced-tag{white-space:nowrap;background:#e4edf8;color:#33475f;padding:2px 8px;border-radius:6px;font-size:12px;font-weight:650;letter-spacing:.06em}
 .builder-replace,.builder-remove{flex:none;min-height:44px;padding:0 14px;border:1px solid #cad6e4;border-radius:10px;background:#f3f7fc;font:inherit;font-size:14px;font-weight:650;color:#193d6a}
 
 /* Шторка замены встаёт над навигацией, как шторка таймера (.timer-sheet): та же
@@ -345,3 +354,26 @@
 .day-chip{flex:1 1 44px;min-width:44px;min-height:44px;padding:0 6px;border:1px solid #d4dde8;border-radius:30px;background:#fff;font:inherit;font-size:14px;font-weight:600;color:inherit}
 .day-chip[aria-pressed=true]{background:#152d4a;border-color:#152d4a;color:#fff}
 .builder-summary{margin:18px 0 0;font-size:14px;font-weight:600;color:#33475f}
+
+/* Генератор (builder-view.js, drawGenerator) и результат. Уровни — три широкие
+   кнопки друг под другом, зоны — чипы, которые переносятся на следующую строку,
+   а не уезжают за край: на 375px «Пресс и кор» не помещается рядом с остальными.
+   Недоступное помечено aria-disabled, а не disabled (так оно остаётся в обходе),
+   поэтому и вид у него задан по этому атрибуту. */
+.builder-subtitle{margin:-6px 0 0;font-size:14px;color:#526278}
+.builder-group-title{margin:22px 0 8px;font-size:17px;letter-spacing:-.02em}
+.level-options{display:flex;flex-direction:column;gap:8px}
+.level-option{display:flex;flex-direction:column;align-items:flex-start;gap:2px;width:100%;min-height:64px;padding:12px 16px;border:1px solid #d4dde8;border-radius:12px;background:#fff;font:inherit;color:inherit;text-align:left}
+.level-option[aria-checked=true]{border-color:#152d4a;background:#eef3fa;box-shadow:0 0 0 1px #152d4a}
+.level-option[aria-disabled=true]{background:#f3f7fc;color:#657289}
+.level-title{font-size:17px;font-weight:650;letter-spacing:-.02em}
+.level-who{margin-bottom:4px;font-size:14px;color:#33475f}
+.level-option[aria-disabled=true] .level-who{color:#657289}
+.level-line{font-size:13px;color:#526278}
+.level-missing,.zone-missing p{margin:6px 0 0;padding:10px 14px;border-radius:10px;background:#e8edf4;color:#53637a;font-size:13px;line-height:1.5}
+.zone-hint{margin:0 0 10px;font-size:13px;line-height:1.5;color:#526278}
+.zone-chips{display:flex;flex-wrap:wrap;gap:6px}
+.zone-chip{display:inline-flex;align-items:center;min-height:44px;padding:9px 14px;border:1px solid #d4dde8;border-radius:30px;background:#fff;font:inherit;font-size:14px;font-weight:600;color:inherit}
+.zone-chip[aria-pressed=true]{background:#152d4a;border-color:#152d4a;color:#fff}
+.zone-chip[aria-disabled=true]{opacity:.5}
+.builder-variant{display:block;width:100%;min-height:44px;margin:14px 0 0;padding:0 14px;border:1px solid #cad6e4;border-radius:8px;background:#f3f7fc;font:inherit;font-size:14px;font-weight:650;color:#193d6a}

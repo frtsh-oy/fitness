@@ -140,13 +140,13 @@ test('после сохранения раздел говорит об этом:
     'Тренировка сохранена на этом устройстве: облако Telegram не ответило. Отправим её туда при следующем запуске.');
 });
 
-test('«Конструктор» открывается на входе: как устроена тренировка и одна дорога — собрать самому', () => {
+test('«Конструктор» открывается на входе: как устроена тренировка и две дороги — собрать самому и сгенерировать', () => {
   const { window, document } = mount();
   startApp(window);
   document.querySelector('[data-section="builder"]').click();
   const screen = document.querySelector('#screen-builder');
   assert.equal(screen.querySelector('h2').textContent, 'Конструктор');
-  assert.equal(screen.querySelectorAll('.builder-path').length, 1);
+  assert.equal(screen.querySelectorAll('.builder-path').length, 2);
   assert.equal(screen.querySelectorAll('.builder-steps li').length, 4);
   assert.doesNotMatch(screen.textContent, /платн/i, 'раздел бесплатный');
 });
