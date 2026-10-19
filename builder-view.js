@@ -73,6 +73,19 @@ const el = (document, tag, className, text) => {
 // проставляется при сохранении и ни о каких правках человека не говорит.
 const snapshot = compact => JSON.stringify({ ...compact, t: 0 });
 
+// Копия записи, у которой с исходной нет общих массивов. Запись плоская: массивы
+// и пары упора. structuredClone не годится: в старых WebView (iOS до 15.4) его нет.
+const copyCompact = compact => ({
+  ...compact,
+  days: [...compact.days],
+  zones: [...compact.zones],
+  warmup: [...compact.warmup],
+  circuit: [...compact.circuit],
+  strength: [...compact.strength],
+  focus: compact.focus.map(pair => [...pair]),
+  cooldown: [...compact.cooldown],
+});
+
 // Возвращает { edit(id, compact) }: открыть сборку своей тренировки на правку.
 // Обещание, а не void: если начатую сборку жалко бросать, edit сперва спрашивает
 // и отвечает, открыл ли он правку.
@@ -86,9 +99,10 @@ export function renderBuilder({ host, win, library = LIBRARY, store, confirm, on
   let draft = null;
   let draftId = null;
   let startedAs = '';
-  // Идёт ли запрос на сохранение: пока идёт, повторный нажать нельзя, а с
-  // экрана сохранения не уйти.
-  let saving = false;
+  // id той, что сохраняется прямо сейчас. Пока идёт запрос, повторный нажать
+  // нельзя, а с экрана сохранения не уйти; но это про ту тренировку, а не про
+  // весь экран: облако отвечает долго, и человек успевает открыть другую.
+  let savingId = null;
 
   const isDirty = () => draft !== null && snapshot(draft) !== startedAs;
 
@@ -202,7 +216,7 @@ export function renderBuilder({ host, win, library = LIBRARY, store, confirm, on
   // результата появляется вместе с генератором, и именно здесь его место.
   async function edit(id, compact) {
     if (isDirty() && !await confirm(DISCARD_QUESTION)) return false;
-    draft = structuredClone(compact);
+    draft = copyCompact(compact);
     draftId = id;
     startedAs = snapshot(draft);
     drawBuild();
@@ -437,8 +451,9 @@ export function renderBuilder({ host, win, library = LIBRARY, store, confirm, on
 
       const { ok, lines } = schedule();
       paintStatus(status, ok, lines);
-      save.disabled = saving || reason !== null;
-      back.disabled = saving;
+      const busy = savingId !== null && savingId === draftId;
+      save.disabled = busy || reason !== null;
+      back.disabled = busy;
       setNote(saveReason, reason);
     }
 
@@ -451,7 +466,7 @@ export function renderBuilder({ host, win, library = LIBRARY, store, confirm, on
       const compact = { ...draft, name: draft.name.trim(), days: [...draft.days], t: Date.now() };
       const id = draftId;
       setNote(error, null);
-      saving = true;
+      savingId = id;
       refresh();
       let result;
       // store.save реджектится на записи, которую нельзя ни прочитать, ни
@@ -462,13 +477,16 @@ export function renderBuilder({ host, win, library = LIBRARY, store, confirm, on
       } catch {
         result = { ok: false, reason: 'device' };
       }
-      saving = false;
+      if (savingId === id) savingId = null;
       if (!result.ok) {
         refresh();
         setNote(error, result.reason === 'limit' ? LIMIT_REACHED : DEVICE_FAILED);
         return;
       }
-      abandon();
+      // Пока шёл запрос, на экране мог оказаться черновик другой тренировки:
+      // его сбрасывать нельзя. Сравнение по id, а не по объекту: правка названия
+      // или дней на этом же экране заменяет объект черновика, а тренировка та же.
+      if (draftId === id) abandon();
       onSaved(id, compact, { localOnly: result.localOnly });
     });
 

@@ -545,6 +545,78 @@ test('сохранение, которое реджектится, не оста
   assert.equal(saved.length, 0);
 });
 
+// Облако отвечает до пяти секунд, и за это время человек успевает нажать «Изменить»
+// у другой тренировки. Ответ первой сохраняет её и больше ничего не трогает.
+test('«Изменить» у другой тренировки, пока идёт сохранение: ответ не сбрасывает новый черновик', async t => {
+  let release;
+  const store = { save: () => new Promise(resolve => { release = resolve; }) };
+  const { root, saved, view } = mountScreen(t, { store });
+  assemble(root, [nameOf('glute-bridge')]);
+  toSave(root);
+  typeName(root, 'Первая');
+  root.querySelector('.builder-save').click();
+
+  assert.equal(await view.edit('my-other001', { ...OWN, name: 'Вторая' }), true);
+  release({ ok: true, localOnly: false });
+  await settle(0);
+
+  assert.equal(root.querySelector('.builder-path'), null, 'сборка не сброшена на вход');
+  assert.equal(root.querySelector('h2').textContent, 'Своя тренировка');
+  assert.equal(rows(root).length, exerciseCount(OWN), 'на экране упражнения второй тренировки');
+  assert.equal(saved.length, 1, 'первая при этом сохранена');
+});
+
+test('сохранение одной тренировки не блокирует «Сохранить» у другой, открытой поверх', async t => {
+  const calls = [];
+  const releases = [];
+  const store = {
+    save(id) {
+      calls.push(id);
+      return new Promise(resolve => releases.push(resolve));
+    },
+  };
+  const { root, saved, view } = mountScreen(t, { store });
+  assemble(root, [nameOf('glute-bridge')]);
+  toSave(root);
+  typeName(root, 'Первая');
+  root.querySelector('.builder-save').click();
+  await view.edit('my-other001', { ...OWN, name: 'Вторая' });
+  toSave(root);
+
+  assert.equal(root.querySelector('.builder-save').disabled, false, 'ответ первой ещё не пришёл, но это другая тренировка');
+  assert.equal(root.querySelector('.builder-back').disabled, false);
+  releases[0]({ ok: true, localOnly: false });
+  await settle(0);
+  assert.equal(root.querySelector('h2').textContent, 'Сохранение', 'экран второй остался на месте');
+
+  root.querySelector('.builder-save').click();
+  releases[1]({ ok: true, localOnly: false });
+  await settle(0);
+  assert.equal(calls.length, 2);
+  assert.equal(calls[1], 'my-other001');
+  assert.deepEqual(saved.map(([id]) => id), calls, 'каждая сохранена под своим id');
+  assert.equal(root.querySelector('h2').textContent, 'Конструктор', 'после сохранения второй — вход');
+});
+
+test('«Изменить» открывает копию: сохранённая запись не делит массивы с переданной', async t => {
+  const store = { save: async () => ({ ok: true, localOnly: false }) };
+  const { root, saved, view } = mountScreen(t, { store });
+  const given = { ...OWN, zones: ['glutes'], focus: [['rdl', 'glutes']] };
+  const before = JSON.parse(JSON.stringify(given));
+  await view.edit(OWN_ID, given);
+  toSave(root);
+  root.querySelector('.builder-save').click();
+  await settle(0);
+
+  const [, result] = saved[0];
+  assert.deepEqual(result, { ...before, t: result.t }, 'содержимое то же');
+  assert.deepEqual(given, before, 'переданная запись не изменилась');
+  for (const field of ['zones', 'warmup', 'circuit', 'strength', 'cooldown']) {
+    assert.notEqual(result[field], given[field], `${field}: свой массив`);
+  }
+  assert.notEqual(result.focus[0], given.focus[0], 'пара упора тоже своя');
+});
+
 test('«Изменить» у собранной руками открывает сборку с её упражнениями; сохранение перезаписывает', async t => {
   const { document, app, root } = mount(t, { preload: onDevice() });
   await settle(0);
