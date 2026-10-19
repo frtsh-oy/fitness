@@ -16,7 +16,6 @@ concurrency:
 
 permissions:
   contents: write
-  pages: write
 
 jobs:
   import:
@@ -48,9 +47,9 @@ jobs:
       - name: Тесты
         run: npm test
 
+      # Пуш в main сам запускает сборку Pages; явный запрос сборки дал бы
+      # вторую, а отменённая первая числится как «Page build failed».
       - name: Выкладка
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
           if git diff --quiet; then
             echo "Библиотека не изменилась"
@@ -60,5 +59,3 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git commit -am "Библиотека из таблицы"
           git push origin HEAD:main
-          # Пуш токеном действия сам сборку Pages может не запустить.
-          gh api -X POST "repos/$GITHUB_REPOSITORY/pages/builds" || echo "Сборку Pages запросить не удалось"
