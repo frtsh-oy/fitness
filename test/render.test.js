@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { makeDom } from './setup.js';
-import { renderWorkout, renderIntro, markId, videoUrl, scheduleShort, scheduleLong } from '../render.js';
+import { renderWorkout, renderIntro, renderHowto, bindHowto, markId, videoUrl, scheduleShort, scheduleLong } from '../render.js';
 import { countMarks } from '../workouts/schema.js';
 import legsMwf from '../workouts/legs-mwf.js';
 
@@ -500,4 +500,97 @@ test('у упражнения с focus: true в шапке карточки ес
   assert.ok(tags[0].parentNode.classList.contains('exercise-top'));
   assert.equal(tags[0].closest('.exercise').querySelector('h3').textContent, marked.blocks[2].items[0].name);
   assert.equal(renderWorkout(legsMwf, document).querySelectorAll('.focus-tag').length, 0);
+});
+
+// «Как выполнять» вынесено из карточки «Сегодня», чтобы экран библиотеки
+// строил то же самое, а не копию. Карточку «Сегодня» сторожат тесты выше (она
+// строится через renderHowto); здесь — сама функция, отдельно от карточки.
+const HOWTO_ITEM = {
+  key: 'rdl',
+  name: 'Тяга',
+  text: 'Основной текст.',
+  detail: 'Подробности.',
+  extra: 'Прогрессия.',
+  v: ['9aLdnLtIBhY', 4, '0:04'],
+  links: [['VZ3f0pSTObM', 18, 'Как установить резинку · 0:18'], ['dQw4w9WgXcQ', 0, 'Ещё ролик · 0:00']],
+};
+
+test('renderHowto: строка из кнопки и видео, область с техникой и дополнительные ролики', () => {
+  const { document } = makeDom();
+  const { refs, body, links } = renderHowto(document, { idPrefix: 'p', item: HOWTO_ITEM, expanded: false });
+
+  assert.equal(refs.className, 'exercise-refs');
+  assert.deepEqual([...refs.children].map(node => node.className), ['howto-toggle', 'video']);
+  assert.equal(refs.firstElementChild.getAttribute('aria-label'), 'Как выполнять: Тяга');
+  assert.equal(refs.lastElementChild.href, 'https://www.youtube.com/watch?v=9aLdnLtIBhY&t=4s');
+  assert.equal(refs.lastElementChild.getAttribute('aria-label'), 'Видео: Тяга, 0:04');
+
+  assert.equal(body.className, 'howto-body');
+  assert.deepEqual([...body.querySelectorAll('p')].map(p => p.textContent),
+    ['Основной текст.', 'Подробности.', 'Прогрессия.']);
+  assert.equal(body.querySelector('p').className, 'technique');
+
+  assert.deepEqual(links.map(link => link.textContent),
+    ['Как установить резинку · 0:18', 'Ещё ролик · 0:00']);
+  assert.ok(links.every(link => link.className === 'extra-link' && link.target === '_blank'));
+  assert.equal(links[0].href, 'https://www.youtube.com/watch?v=VZ3f0pSTObM&t=18s');
+
+  // Ничего из этого пока нигде не стоит: куда положить, решает вызывающий.
+  assert.equal(refs.parentNode, null);
+  assert.equal(body.parentNode, null);
+
+  // Без видео, подробностей и дополнительных роликов — только то, что есть.
+  const bare = renderHowto(document, { idPrefix: 'p', item: { key: 'k', name: 'Н', text: 'Т' }, expanded: false });
+  assert.equal(bare.refs.children.length, 1);
+  assert.equal(bare.body.querySelectorAll('p').length, 1);
+  assert.deepEqual(bare.links, []);
+});
+
+test('renderHowto: id области — префикс и ключ, expanded задаёт раскрытие кнопки и области', () => {
+  const { document } = makeDom();
+  const closed = renderHowto(document, { idPrefix: 'lib', item: HOWTO_ITEM, expanded: false });
+  const open = renderHowto(document, { idPrefix: 'howto-legs1', item: HOWTO_ITEM, expanded: true });
+
+  const toggleOf = result => result.refs.querySelector('.howto-toggle');
+  assert.equal(closed.body.id, 'lib-rdl');
+  assert.equal(toggleOf(closed).getAttribute('aria-controls'), 'lib-rdl');
+  assert.equal(toggleOf(closed).getAttribute('aria-expanded'), 'false');
+  assert.equal(closed.body.hidden, true);
+
+  assert.equal(open.body.id, 'howto-legs1-rdl');
+  assert.equal(toggleOf(open).getAttribute('aria-controls'), 'howto-legs1-rdl');
+  assert.equal(toggleOf(open).getAttribute('aria-expanded'), 'true');
+  assert.equal(open.body.hidden, false);
+});
+
+test('bindHowto: нажатие раскрывает и сворачивает свою область, по уголку тоже, соседей не трогает', () => {
+  const { window, document } = makeDom();
+  const root = document.createElement('div');
+  document.body.append(root);
+  const [first, second] = ['a', 'b'].map(key => {
+    const howto = renderHowto(document, { idPrefix: 'x', item: { ...HOWTO_ITEM, key }, expanded: false });
+    root.append(howto.refs, howto.body);
+    return howto;
+  });
+  bindHowto(root);
+  const toggle = howto => howto.refs.querySelector('.howto-toggle');
+
+  toggle(first).click();
+  assert.equal(toggle(first).getAttribute('aria-expanded'), 'true');
+  assert.equal(first.body.hidden, false);
+  assert.equal(second.body.hidden, true, 'соседняя область не тронута');
+
+  toggle(second).querySelector('.howto-caret').dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+  assert.equal(second.body.hidden, false);
+  assert.equal(first.body.hidden, false, 'раскрытие второй не сворачивает первую');
+
+  toggle(first).click();
+  assert.equal(toggle(first).getAttribute('aria-expanded'), 'false');
+  assert.equal(first.body.hidden, true);
+
+  // Нажатие не по кнопке раскрытия ничего не раскрывает и не падает.
+  first.body.click();
+  root.click();
+  assert.equal(first.body.hidden, true);
+  assert.equal(second.body.hidden, false);
 });

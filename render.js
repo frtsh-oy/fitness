@@ -76,36 +76,37 @@ const CARET_PATH = 'M12 16 4 8h16z';
 // отвечает на вопрос, который задают, глядя на незнакомое упражнение.
 const HOWTO_LABEL = 'Как выполнять';
 
-function renderItem(document, block, item, itemIndex, expandDescriptions) {
-  const article = el(document, 'article', 'exercise');
-
-  const top = el(document, 'div', 'exercise-top');
-  top.append(el(document, 'span', 'exercise-index', String(itemIndex + 1).padStart(2, '0')));
-  // Метка стоит сразу за номером, а не в конце: список мышц справа длинный и
-  // переносится, и метка рядом с ним съезжала бы вместе со строками.
-  if (item.focus) top.append(el(document, 'span', 'focus-tag', 'упор'));
-  top.append(el(document, 'span', 'muscles', item.muscles));
-  article.append(top);
-
-  article.append(el(document, 'h3', null, item.name));
-  article.append(el(document, 'p', 'reps', item.reps));
-
+// «Как выполнять» одного упражнения: строка из кнопки раскрытия и ссылки на
+// видео, область с текстами техники и дополнительные ролики. Вынесено из
+// карточки «Сегодня», чтобы экран библиотеки (library-view.js) строил то же
+// самое, а не копию, которая со временем разошлась бы с оригиналом.
+//
+// Ничего никуда не вставляет, а возвращает три части: что и в каком порядке
+// класть в карточку (строка, область, дополнительные ролики), решает
+// вызывающий. Отметки и шапка карточки сюда не входят — они у «Сегодня» свои.
+//
+// idPrefix обязан быть уникальным на странице: из него и key упражнения
+// строится идентификатор области, а по нему кнопка находит свою область
+// (aria-controls и bindHowto). У «Сегодня» это id блока, у библиотеки — свой
+// префикс, поэтому одно и то же упражнение в обоих местах не даёт двух
+// одинаковых id.
+export function renderHowto(document, { idPrefix, item, expanded }) {
   // Тексты техники — под кнопкой. Карточка упражнения была высотой от 309 до
   // 636px (в середине — 500), и девятнадцать таких карточек растягивали
   // страницу телефона 375×812 на шестнадцать экранов. Техника нужна в первые
   // разы, а по ходу тренировки пользуются названием, повторами, мышцами, видео
   // и отметкой — они и остаются на виду.
   //
-  // Идентификатор области — из id блока и key упражнения, как у отметок
-  // (markId): он обязан быть уникальным на всю страницу, иначе aria-controls
-  // и getElementById привели бы кнопку в чужую карточку, а уникальность именно
-  // этой пары сторожит валидатор (workouts/schema.js: id блоков не повторяются,
-  // key не повторяется внутри блока). Кнопка есть у каждого упражнения, потому
-  // что text — обязательное поле; необязательны только detail и extra.
-  const regionId = `howto-${block.id}-${item.key}`;
+  // Идентификатор области — из префикса и key упражнения, как у отметок
+  // (markId): уникальность этой пары у «Сегодня» сторожит валидатор
+  // (workouts/schema.js: id блоков не повторяются, key не повторяется внутри
+  // блока), у библиотеки — то, что ключ в ней один на упражнение. Кнопка есть у
+  // каждого упражнения, потому что text — обязательное поле; необязательны
+  // только detail и extra.
+  const regionId = `${idPrefix}-${item.key}`;
   const toggle = el(document, 'button', 'howto-toggle');
   toggle.type = 'button';
-  toggle.setAttribute('aria-expanded', String(expandDescriptions));
+  toggle.setAttribute('aria-expanded', String(expanded));
   toggle.setAttribute('aria-controls', regionId);
   // Имя для диктора называет упражнение — как у ссылки на видео и у каждой
   // отметки ниже: иначе при обходе по кнопкам подряд девятнадцать раз звучит
@@ -143,19 +144,17 @@ function renderItem(document, block, item, itemIndex, expandDescriptions) {
     link.append(renderIcon(document, PLAY_PATH), document.createTextNode(` Видео · ${item.v[2]}`));
     refs.append(link);
   }
-  article.append(refs);
 
   // Область с текстом — следом за строкой, а не внутри неё: внутри раскрытие
   // разрывало бы строку между кнопкой и видео.
-  const howto = el(document, 'div', 'howto-body');
-  howto.id = regionId;
-  howto.hidden = !expandDescriptions;
-  howto.append(el(document, 'p', 'technique', item.text));
-  if (item.detail) howto.append(el(document, 'p', null, item.detail));
-  if (item.extra) howto.append(el(document, 'p', null, item.extra));
-  article.append(howto);
+  const body = el(document, 'div', 'howto-body');
+  body.id = regionId;
+  body.hidden = !expanded;
+  body.append(el(document, 'p', 'technique', item.text));
+  if (item.detail) body.append(el(document, 'p', null, item.detail));
+  if (item.extra) body.append(el(document, 'p', null, item.extra));
 
-  for (const extra of item.links ?? []) {
+  const links = (item.links ?? []).map(extra => {
     // Форма элемента — [id, start, caption], как у v. Упражнение приходит из
     // библиотеки (exercises/: таблица и импорт), и там подписи хранятся уже
     // целиком (например «Как установить длинную резинку · 0:18»), отдельного
@@ -164,8 +163,53 @@ function renderItem(document, block, item, itemIndex, expandDescriptions) {
     link.href = videoUrl(extra);
     link.target = '_blank';
     link.rel = 'noopener noreferrer';
-    article.append(link);
-  }
+    return link;
+  });
+
+  return { refs, body, links };
+}
+
+// Раскрытие описания — делегированием на корень: кнопок десятки, и своего
+// обработчика каждой не нужно. Кнопку ищем через closest, потому что цель
+// события — значок-уголок, когда палец попал в него, а не в подпись.
+// Раскрытие одного упражнения не трогает остальные: человек вправе держать
+// раскрытыми оба упражнения силовой пары, которые делает одно за другим.
+//
+// Вешается один раз на корень, живущий столько же, сколько его карточки:
+// у «Сегодня» это #workout (карточки перерисовываются внутри него, а сам он
+// остаётся), у библиотеки — узел, который она создаёт при каждой отрисовке.
+// Повесить второй раз на тот же узел нельзя: два обработчика переключили бы
+// область туда и обратно, и кнопка не раскрывала бы ничего.
+export function bindHowto(root) {
+  root.addEventListener('click', event => {
+    const toggle = event.target.closest('.howto-toggle');
+    if (!toggle) return;
+    const open = toggle.getAttribute('aria-expanded') !== 'true';
+    toggle.setAttribute('aria-expanded', String(open));
+    root.ownerDocument.getElementById(toggle.getAttribute('aria-controls')).hidden = !open;
+  });
+}
+
+function renderItem(document, block, item, itemIndex, expandDescriptions) {
+  const article = el(document, 'article', 'exercise');
+
+  const top = el(document, 'div', 'exercise-top');
+  top.append(el(document, 'span', 'exercise-index', String(itemIndex + 1).padStart(2, '0')));
+  // Метка стоит сразу за номером, а не в конце: список мышц справа длинный и
+  // переносится, и метка рядом с ним съезжала бы вместе со строками.
+  if (item.focus) top.append(el(document, 'span', 'focus-tag', 'упор'));
+  top.append(el(document, 'span', 'muscles', item.muscles));
+  article.append(top);
+
+  article.append(el(document, 'h3', null, item.name));
+  article.append(el(document, 'p', 'reps', item.reps));
+
+  const { refs, body, links } = renderHowto(document, {
+    idPrefix: `howto-${block.id}`,
+    item,
+    expanded: expandDescriptions,
+  });
+  article.append(refs, body, ...links);
 
   const checks = el(document, 'div', 'checks');
   for (let round = 1; round <= block.rounds; round += 1) {

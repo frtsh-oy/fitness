@@ -249,3 +249,39 @@
    к номеру и отдаёт весь свободный просвет строки списку мышц справа —
    space-between на трёх элементах поставил бы метку посередине. */
 .focus-tag{margin-right:auto;white-space:nowrap;background:#e0edc2;color:#39571b;padding:2px 8px;border-radius:6px;font-size:12px;font-weight:650;letter-spacing:.06em}
+
+/* Экран библиотеки упражнений (library-view.js), живёт в «Конструкторе». Всё
+   нажимаемое здесь — не ниже 44px, как и остальное в приложении; в сторожа
+   высоты (TAP_TARGETS в test/app.test.js) эти селекторы войдут, когда экран
+   встанет на страницу: сторож роняет тест на селекторе, которому не на чём
+   примериться. */
+.builder-back{display:inline-flex;align-items:center;gap:6px;min-height:44px;padding:0 14px;border:1px solid #cad6e4;border-radius:12px;background:#f3f7fc;font:inherit;font-size:14px;font-weight:650;color:#193d6a}
+/* Размер шрифта поля — 16px, не меньше: iOS приближает страницу, когда фокус
+   попадает в поле с кеглем ниже, и экран после ввода остаётся увеличенным.
+   appearance:none — иначе iOS рисует поле поиска своим скруглённым видом и
+   рамку с радиусом отсюда не берёт. */
+.library-search{appearance:none;-webkit-appearance:none;display:block;width:100%;min-height:44px;margin:14px 0 0;padding:0 14px;border:1px solid #cad6e4;border-radius:12px;background:#fff;color:inherit;font-size:16px}
+/* Чипы переносятся на следующую строку, а не прокручиваются вбок: «Пресс и
+   кор» и «Сложное» — полноценные фильтры, и прятать их за краем экрана нельзя.
+   Вид — как у чипов блоков (.block-nav a), выбранный — тёмный, как активный.
+   Отступы 11px и просвет 6px подобраны замером при 375px: при 14px и 8px
+   зоны занимали три строки, сложность — две, и первая карточка начиналась ниже
+   середины экрана; с этими — две и одна. */
+.library-filters{display:flex;flex-wrap:wrap;gap:6px;margin:12px 0 0}
+.library-chip{display:inline-flex;align-items:center;min-height:44px;padding:9px 11px;border:1px solid #d4dde8;border-radius:30px;background:#fff;font:inherit;font-size:14px;font-weight:600;color:inherit;white-space:nowrap}
+.library-chip[aria-pressed=true]{background:#152d4a;border-color:#152d4a;color:#fff}
+.library-found{margin:16px 0 12px;font-size:13px;color:#526278}
+/* Причина, по которой «Добавить» недоступна, — той же плашкой, что пометка про
+   убранные упражнения (.removed-note), над списком: она одна на все карточки. */
+.library-blocked{margin:14px 0 0;padding:13px 16px;border-radius:10px;background:#e8edf4;color:#53637a;font-size:14px}
+.library-empty{margin:0 0 12px;padding:18px 16px;border-radius:12px;background:#fff;border:1px solid #d8e1eb}
+.library-empty-title{margin:0;font-size:17px;font-weight:650}
+.library-empty-hint{margin:4px 0 14px;font-size:14px;color:#526278}
+/* Сложность стоит слева в шапке карточки, а список мышц — справа: та же строка
+   .exercise-top, что у номера и мышц в «Сегодня». Подпись не переносится: на
+   узкой строке сжиматься должен список мышц, а не слово «Среднее». */
+.library-level{white-space:nowrap;font-size:12px;letter-spacing:.1em;font-weight:650;color:#61748b}
+.library-add{display:block;width:100%;min-height:44px;margin:14px 0 0;padding:0 14px;border:1px solid #152d4a;border-radius:8px;background:#152d4a;font:inherit;font-size:14px;font-weight:650;color:#fff}
+.library-add:disabled{border-color:#d8e1eb;background:#eef3fa;color:#657289;cursor:default}
+.library-foot{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:18px 0 0}
+.library-total{margin:0;font-size:14px;font-weight:600;color:#33475f}

@@ -3,7 +3,7 @@
 // startApp и зовёт её; сам модуль ничего не делает при импорте, поэтому связывание
 // проверяется тестами на jsdom.
 import { WORKOUTS, DEFAULT_WORKOUT_ID } from './workouts/index.js';
-import { renderWorkout, renderIntro } from './render.js';
+import { renderWorkout, renderIntro, bindHowto } from './render.js';
 import { createStorage } from './storage.js';
 import { createMyWorkouts } from './my-workouts.js';
 import { expandWorkout } from './builder/compact.js';
@@ -211,18 +211,9 @@ export function startApp(win = globalThis.window, { library = LIBRARY } = {}) {
   const host = document.getElementById('workout');
   const removedNote = document.getElementById('removed-note');
 
-  // Раскрытие описания — делегированием на host: кнопок девятнадцать, и своего
-  // обработчика каждой не нужно. Кнопку ищем через closest, потому что цель
-  // события — значок-уголок, когда палец попал в него, а не в подпись.
-  // Раскрытие одного упражнения не трогает остальные: человек вправе держать
-  // раскрытыми оба упражнения силовой пары, которые делает одно за другим.
-  host.addEventListener('click', event => {
-    const toggle = event.target.closest('.howto-toggle');
-    if (!toggle) return;
-    const open = toggle.getAttribute('aria-expanded') !== 'true';
-    toggle.setAttribute('aria-expanded', String(open));
-    document.getElementById(toggle.getAttribute('aria-controls')).hidden = !open;
-  });
+  // Раскрытие описания упражнений — делегированием на host (render.js): сам
+  // host остаётся при смене тренировки, а карточки внутри него перерисовываются.
+  bindHowto(host);
 
   // Карта тела. Отложено именно РИСОВАНИЕ: сам модуль библиотеки грузится
   // вместе с приложением, статическим импортом. Отложена работа по построению
