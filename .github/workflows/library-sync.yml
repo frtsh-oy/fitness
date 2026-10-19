@@ -1,0 +1,64 @@
+# Библиотека из таблицы: кнопка «Приложение → Выложить библиотеку» в Google
+# Sheets (tools/library-sync.gs) кладёт лист коммитом в ветку library-sync.
+# Здесь из этого коммита берётся только library.csv, а всё остальное — из
+# свежего main: импорт, сводка разметки, тесты. Всё зелёное — коммит в main,
+# то есть в прод. Импорт отказал — main не тронут, а скрипт таблицы показывает
+# ошибки шага «Импорт» (поэтому имя шага менять только вместе со скриптом).
+name: Библиотека из таблицы
+
+on:
+  push:
+    branches: [library-sync]
+
+concurrency:
+  group: library-sync
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  pages: write
+
+jobs:
+  import:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+
+      - name: Таблица из ветки library-sync
+        run: |
+          git fetch --depth=1 origin "$GITHUB_SHA"
+          git show "$GITHUB_SHA:exercises/library.csv" > "$RUNNER_TEMP/library.csv"
+
+      - name: Импорт
+        run: node tools/import-exercises.mjs "$RUNNER_TEMP/library.csv"
+
+      - name: Сводка разметки
+        run: node tools/muscle-report.js
+
+      - name: Тесты
+        run: npm test
+
+      - name: Выкладка
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if git diff --quiet; then
+            echo "Библиотека не изменилась"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -am "Библиотека из таблицы"
+          git push origin HEAD:main
+          # Пуш токеном действия сам сборку Pages может не запустить.
+          gh api -X POST "repos/$GITHUB_REPOSITORY/pages/builds" || echo "Сборку Pages запросить не удалось"
