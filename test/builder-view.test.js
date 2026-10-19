@@ -14,13 +14,13 @@ import { startApp, CURRENT_KEY } from '../app.js';
 import { renderBuilder } from '../builder-view.js';
 import { recordKey, OWN_LIMIT } from '../my-workouts.js';
 import { serializeCompact, exerciseCount, expandWorkout, NAME_MAX } from '../builder/compact.js';
-import { generate } from '../builder/generator.js';
+import { generate, availability, missingGroupsMessage } from '../builder/generator.js';
 import { belowFloor } from '../builder/coverage.js';
 import { CORE_GROUPS, LEVELS, MAX_STRENGTH } from '../builder/rules.js';
 import { plural } from '../builder/texts.js';
 import { LIBRARY } from '../exercises/index.js';
 import { groupsPhrase } from '../muscles.js';
-import { TEST_LIBRARY, singlesOnly, variant } from './fixtures/test-library.js';
+import { TEST_LIBRARY, singlesOnly, variant, withoutTargets } from './fixtures/test-library.js';
 
 const PAGE = readFileSync(fileURLToPath(new URL('../index.html', import.meta.url)), 'utf8');
 const settle = ms => new Promise(resolve => setTimeout(resolve, ms));
@@ -144,7 +144,6 @@ const counter = () => {
   let n = 0;
   return () => { n += 1; return n; };
 };
-const SIX_MISSING = groupsPhrase(['calves', 'abs', 'obliques', 'delts_front', 'delts_rear', 'biceps']);
 
 // Нажимает «Заменить» у упражнения и выбирает кандидата по ключам тестовой библиотеки.
 function replaceWith(root, fromKey, toKey) {
@@ -900,29 +899,42 @@ test('на входе два пути: «Собрать самому» и «Сг
   assert.equal(root.querySelectorAll('.builder-path').length, 2, 'с генератора «Назад» ведёт на вход');
 });
 
-test('с нынешней библиотекой уровни недоступны и называют, чего не хватает', t => {
-  const { document, root } = mount(t);
-  openBuilder(document);
-  startGenerator(root);
-
+// Что экран генератора обязан показать про уровни данной библиотеки. Ожидания
+// выводятся из availability, а не из того, каких групп сейчас нет в таблице:
+// владелец дополняет её, и набор не должен краснеть от того, что стало лучше.
+// Недоступный уровень помечен и несёт причину, на которую указывает
+// aria-describedby; доступный — без пометки и без причины; выбран первый из
+// доступных, а если доступных нет, не выбран ни один.
+function expectLevels(root, library) {
+  const levels = Object.keys(LEVELS);
   const options = [...root.querySelectorAll('.level-option')];
   assert.deepEqual(options.map(option => option.querySelector('.level-title').textContent),
     ['Начальный', 'Средний', 'Продвинутый']);
-  for (const option of options) {
-    assert.equal(option.getAttribute('role'), 'radio');
-    assert.equal(option.getAttribute('aria-disabled'), 'true');
-    assert.equal(option.getAttribute('aria-checked'), 'false');
-    assert.equal(option.getAttribute('aria-describedby'), option.nextElementSibling.id,
-      'причина привязана к уровню для диктора');
-  }
-  // Причина стоит сразу под своим уровнем; в настоящей библиотеке шесть групп без упражнения.
-  assert.deepEqual(options.map(option => option.nextElementSibling.textContent), [
-    `Для начального уровня в библиотеке пока нет базовых упражнений на: ${SIX_MISSING}.`,
-    `Для среднего уровня в библиотеке пока нет базовых и средних упражнений на: ${SIX_MISSING}.`,
-    `Для продвинутого уровня в библиотеке пока нет упражнений на: ${SIX_MISSING}.`,
-  ]);
+  const missing = levels.map(level => availability(library, level).missing);
+  levels.forEach((level, index) => {
+    const option = options[index];
+    assert.equal(option.getAttribute('role'), 'radio', level);
+    if (missing[index].length === 0) {
+      assert.equal(option.hasAttribute('aria-disabled'), false, `${level}: доступный уровень не помечен недоступным`);
+      assert.equal(option.hasAttribute('aria-describedby'), false, `${level}: у доступного нет причины`);
+      assert.equal(option.nextElementSibling, null, `${level}: под доступным причины нет`);
+      return;
+    }
+    assert.equal(option.getAttribute('aria-disabled'), 'true', level);
+    assert.equal(option.getAttribute('aria-checked'), 'false', level);
+    const note = option.nextElementSibling;
+    assert.equal(note.textContent, missingGroupsMessage(level, missing[index]), `${level}: причина стоит сразу под уровнем`);
+    assert.equal(option.getAttribute('aria-describedby'), note.id, `${level}: причина привязана к уровню для диктора`);
+  });
+  const first = missing.findIndex(list => list.length === 0);
+  assert.deepEqual(checkedLevels(root), first === -1 ? [] : [LEVELS[levels[first]].label]);
+  return missing;
+}
 
-  options[0].click();
+// Когда недоступны все уровни, выбирать нечего: уровень не выбирается, кнопка
+// выключена, зоны выбрать нельзя.
+function expectNothingSelectable(root) {
+  root.querySelector('.level-option').click();
   assert.deepEqual(checkedLevels(root), [], 'недоступный уровень не выбирается');
   const generateButton = root.querySelector('.builder-generate');
   assert.equal(generateButton.disabled, true);
@@ -930,6 +942,50 @@ test('с нынешней библиотекой уровни недоступн
   assert.equal(root.querySelector('h2').textContent, 'Генератор');
   assert.ok([...root.querySelectorAll('.zone-chip')].every(chip => chip.getAttribute('aria-disabled') === 'true'),
     'без выбранного уровня зоны выбрать нельзя');
+}
+
+test('настоящая библиотека: уровни и причины на экране совпадают с availability', t => {
+  const { document, root } = mount(t);
+  openBuilder(document);
+  startGenerator(root);
+
+  const missing = expectLevels(root, LIBRARY);
+  if (missing.every(list => list.length > 0)) expectNothingSelectable(root);
+});
+
+test('библиотека без упражнений на бицепс: все уровни недоступны и называют причину', t => {
+  const library = withoutTargets(['biceps']);
+  const { root } = mountScreen(t, { library });
+  startGenerator(root);
+
+  // Условие теста: недоступны именно все три уровня, и по одной и той же группе.
+  assert.deepEqual(Object.keys(LEVELS).map(level => availability(library, level).missing), [['biceps'], ['biceps'], ['biceps']]);
+  expectLevels(root, library);
+  assert.deepEqual([...root.querySelectorAll('.level-missing')].map(note => note.textContent), [
+    'Для начального уровня в библиотеке пока нет базовых упражнений на: бицепс.',
+    'Для среднего уровня в библиотеке пока нет базовых и средних упражнений на: бицепс.',
+    'Для продвинутого уровня в библиотеке пока нет упражнений на: бицепс.',
+  ]);
+  expectNothingSelectable(root);
+});
+
+test('недоступен только начальный уровень: причина у него одного, выбран первый из доступных', t => {
+  // Базовых упражнений на икроножные нет, средние и сложные есть: у начального
+  // пула группы нет, у остальных есть.
+  const library = TEST_LIBRARY.filter(entry => !['calves-1', 'calves-2'].includes(entry.key));
+  const { root } = mountScreen(t, { library });
+  startGenerator(root);
+
+  assert.deepEqual(Object.keys(LEVELS).map(level => availability(library, level).missing), [['calves'], [], []]);
+  expectLevels(root, library);
+  assert.deepEqual([...root.querySelectorAll('.level-missing')].map(note => note.textContent),
+    ['Для начального уровня в библиотеке пока нет базовых упражнений на: икроножные.']);
+  assert.deepEqual(checkedLevels(root), ['Средний']);
+
+  levelOption(root, 'Начальный').click();
+  assert.deepEqual(checkedLevels(root), ['Средний'], 'недоступный уровень выбрать нельзя');
+  levelOption(root, 'Продвинутый').click();
+  assert.deepEqual(checkedLevels(root), ['Продвинутый'], 'доступный выбирается');
 });
 
 test('генерация: тренировка на всё тело с меткой «упор» у упражнения зоны', t => {
@@ -1194,7 +1250,7 @@ test('«Изменить» у сгенерированной открывает 
 test('экраны генератора и результата без слов «ИИ», «персональный», «тренер»', t => {
   const forbidden = /(^|[^а-яё])ИИ([^а-яё]|$)|персональн|тренер/i;
 
-  // С настоящей библиотекой на экране причины отказа, с тестовой — выбор и результат.
+  // С настоящей библиотекой — экран выбора уровня как есть, с тестовой — выбор и результат.
   const real = mount(t);
   openBuilder(real.document);
   startGenerator(real.root);

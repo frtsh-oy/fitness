@@ -10,7 +10,7 @@ import {
 import { expandWorkout, serializeCompact, parseCompact, NAME_MAX, VALUE_MAX } from '../builder/compact.js';
 import { weeklySets } from '../weekly.js';
 import { itemProblems, KEY_PATTERN, NO_LOAD_PATTERN } from '../workouts/schema.js';
-import { LIBRARY, toItem } from '../exercises/index.js';
+import { toItem } from '../exercises/index.js';
 import { TEST_LIBRARY, withoutTargets, singlesOnly, onlyOneFor, variant } from './fixtures/test-library.js';
 
 const ZONE_SETS = [[], ...Object.keys(ZONES).map(z => [z]), ['glutes', 'back'], ['arms', 'core']];
@@ -96,8 +96,22 @@ test('не уложились в 9 пар — отказ «ceiling» с груп
 
 test('третья зона — ошибка вызова', () => assert.throws(() => generate({ level: 'beginner', zones: ['legs', 'arms', 'core'], seed: 1, library: TEST_LIBRARY }), RangeError));
 
-test('с нынешней библиотекой начальный уровень недоступен и называет шесть групп', () => {
-  assert.deepEqual(availability(LIBRARY, 'beginner').missing, ['calves', 'abs', 'obliques', 'delts_front', 'delts_rear', 'biceps']);
+// Недостающие группы считаются по пулу уровня: у начального только базовые, у
+// среднего базовые и средние, у продвинутого все; порядок — как у основных групп.
+// Настоящая библиотека здесь не нужна: чего в ней не хватает, меняется с каждой
+// правкой таблицы.
+test('availability: недостающие группы считаются по пулу уровня и идут в порядке основных групп', () => {
+  const levels = Object.keys(LEVELS);
+  const lacking = library => levels.map(level => availability(library, level).missing);
+  assert.deepEqual(lacking(TEST_LIBRARY), [[], [], []], 'богатая библиотека закрывает все группы на всех уровнях');
+
+  const both = CORE_GROUPS.filter(group => group === 'calves' || group === 'biceps');
+  assert.deepEqual(lacking(withoutTargets(['biceps', 'calves'])), [both, both, both]);
+
+  const withoutKeys = (library, keys) => library.filter(entry => !keys.includes(entry.key));
+  const noBasic = withoutKeys(TEST_LIBRARY, ['calves-1', 'calves-2']);
+  assert.deepEqual(lacking(noBasic), [['calves'], [], []], 'без базовых начальному не хватает, остальным хватает средних');
+  assert.deepEqual(lacking(withoutKeys(noBasic, ['calves-3'])), [['calves'], ['calves'], []], 'без средних не хватает и среднему');
 });
 
 test('неизвестный уровень, неизвестная зона и повтор зоны — ошибка вызова, а не запись', () => {
