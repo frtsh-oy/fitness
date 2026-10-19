@@ -1,7 +1,20 @@
 // Прогресс живёт в CloudStorage внутри Telegram и в localStorage снаружи.
 // Ключ включает дату, поэтому отметки сами сбрасываются на следующий день.
+// Сами они при этом не исчезают, а CloudStorage держит не больше 1024 записей
+// на человека, так что старые чистит prune() при запуске. Чистятся отметки
+// СТАРШЕ вчерашних, вчерашние остаются: у другого устройства того же человека
+// часовой пояс может быть другим, и наше «вчера» у него ещё сегодня.
+import { createKv } from './kv.js';
+
+// Ключ отметок — `m_<id тренировки>_<день>`, без двоеточий: CloudStorage
+// принимает ключи только из A-Z a-z 0-9 _ - (1–128 символов), см.
+// https://core.telegram.org/bots/webapps. Прежний ключ `w:<id>:<день>` под это
+// правило не подходил, и Telegram отвечал на каждую запись отказом, который
+// мы честно ловили: отметки жили только на устройстве. Старые отметки не
+// переносим — они живут один день, поэтому в день обновления сегодняшние
+// начинаются заново, а остатки прежнего формата стирает prune().
 export function storageKey(workoutId, date) {
-  return `w:${workoutId}:${date}`;
+  return `m_${workoutId}_${date}`;
 }
 
 // Сегодняшний день по МЕСТНОМУ времени — дословно как в src-original/app.js:47.
@@ -13,6 +26,37 @@ export function storageKey(workoutId, date) {
 // времени наступает завтра, и отметки обнуляются прямо во время тренировки.
 export function currentDay() {
   return new Date().toLocaleDateString('en-CA');
+}
+
+// Предыдущий день для YYYY-MM-DD. День здесь — строка, а не момент времени, и
+// считается целиком по UTC: Date.UTC сам переходит через месяц, год и 29 февраля,
+// а часовой пояс устройства в расчёте не участвует. Вычитание через местное
+// время восточнее Гринвича дало бы позавчера: местная полночь там по UTC уже
+// вчерашняя, и toISOString() отдала бы день на единицу меньше, чем надо.
+export function yesterday(day) {
+  const [year, month, date] = day.split('-').map(Number);
+  return new Date(Date.UTC(year, month - 1, date - 1)).toISOString().slice(0, 10);
+}
+
+// Отметки на устройстве: прежний формат (`w:<id>:<день>`) тоже, чтобы его
+// остатки не лежали вечно, и признак `:pending` рядом с любым из них.
+const DEVICE_MARK = [
+  /^m_.+_(\d{4}-\d{2}-\d{2})(:pending)?$/,
+  /^w:.+:(\d{4}-\d{2}-\d{2})(:pending)?$/,
+];
+// В облаке бывает только новый формат и без признака: двоеточие туда не пускали.
+const CLOUD_MARK = /^m_.+_(\d{4}-\d{2}-\d{2})$/;
+
+// Ключ — отметка старше границы? Чужой ключ (раздел, своя тренировка) под
+// шаблоны не подходит и потому никогда не считается устаревшим: трогать его
+// чистка не вправе. Даты сравниваются как строки: у YYYY-MM-DD порядок
+// строк и порядок дней совпадают.
+function isStaleMark(key, patterns, cutoff) {
+  for (const pattern of patterns) {
+    const match = pattern.exec(key);
+    if (match) return match[1] < cutoff;
+  }
+  return false;
 }
 
 // Признак «локальная копия не подтверждена облаком»: ставится вместе с самой
@@ -36,45 +80,13 @@ export function createStorage({ cloud = null, local = null, today = currentDay, 
   // Сериализуем write-операции для каждого ключа (save и clear должны применяться в порядке вызова)
   const queues = new Map();
 
-  // Любое обращение к localStorage может бросить: приватный режим Safari,
-  // урезанный WebView, исчерпанная квота. Три обёртки ниже — единственный путь
-  // к local во всём модуле, поэтому необёрнутых обращений тут просто нет.
-  // Важно в том числе внутри setTimeout: там исключение роняет не промис, а окружение.
-  const localGet = key => {
-    try { return local?.getItem(key) ?? ''; } catch { return ''; }
-  };
-  const localSet = (key, value) => {
-    try { local?.setItem(key, value); } catch { /* приватный режим — молча пропускаем */ }
-  };
-  const localRemove = key => {
-    try { local?.removeItem(key); } catch { /* см. выше */ }
-  };
+  // Доступ к обоим хранилищам, который не бросает и не реджектится, живёт в
+  // kv.js: там же объяснено, почему обёрнуто всё и откуда три способа отказа облака.
+  const { hasCloud, localGet, localSet, localRemove, localKeys, callCloud } = createKv({ cloud, local, cloudTimeout });
 
   const isPending = key => localGet(pendingKey(key)) === '1';
   const markPending = key => localSet(pendingKey(key), '1');
   const clearPending = key => localRemove(pendingKey(key));
-
-  // Один вызов облака с тремя способами отказа: ошибка в колбэке, синхронное
-  // исключение, отсутствие колбэка (таймаут). Никогда не реджектится;
-  // ok === false означает «облако не подтвердило операцию».
-  // Отдельного сторожа «мы уже ответили» здесь нет намеренно: промис принимает
-  // первый исход и молча игнорирует последующие. Опоздавший после таймаута
-  // колбэк и повторный вызов колбэка и так ни на что не влияют, а сторож только
-  // изображал бы решение, ничего не решая.
-  const callCloud = (method, args) => new Promise(resolve => {
-    const timer = setTimeout(() => resolve({ ok: false, value: '' }), cloudTimeout);
-
-    try {
-      cloud[method](...args, (err, value) => {
-        clearTimeout(timer);
-        // Значение при ошибке отбрасываем: оно может быть обрезанным или чужим
-        resolve(err ? { ok: false, value: '' } : { ok: true, value: value ?? '' });
-      });
-    } catch {
-      clearTimeout(timer);
-      resolve({ ok: false, value: '' });
-    }
-  });
 
   // Ставит задачу в очередь ключа: записи применяются в порядке вызова.
   // Обработчик один на оба исхода предыдущего звена намеренно: очередь не должна
@@ -86,7 +98,7 @@ export function createStorage({ cloud = null, local = null, today = currentDay, 
   };
 
   const read = async key => {
-    if (!cloud) return localGet(key);
+    if (!hasCloud) return localGet(key);
 
     if (isPending(key)) {
       const raw = localGet(key);
@@ -134,7 +146,7 @@ export function createStorage({ cloud = null, local = null, today = currentDay, 
     // Синхронно — потому что flushSave зовут на выгрузке страницы: всё, что
     // отложено хотя бы на микрозадачу, там умирает вместе с вкладкой.
     localSet(key, value);
-    if (!cloud) return Promise.resolve();
+    if (!hasCloud) return Promise.resolve();
 
     // Признак ставится вместе с записью, а не по факту отказа: «неподтверждённая»
     // — это в том числе запись, ответа на которую мы не дождались, потому что
@@ -160,7 +172,7 @@ export function createStorage({ cloud = null, local = null, today = currentDay, 
     // после сброса локальных следов не должно оставаться при любом бэкенде.
     localRemove(key);
     clearPending(key);
-    if (!cloud) return Promise.resolve();
+    if (!hasCloud) return Promise.resolve();
 
     // Исход облака здесь ни на что не влияет и потому не проверяется:
     // локальная часть уже сделана, повторять её по ответу нечем и незачем.
@@ -176,6 +188,28 @@ export function createStorage({ cloud = null, local = null, today = currentDay, 
     },
     async clear(workoutId) {
       await drop(storageKey(workoutId, today()));
+    },
+    // Стирает отметки старше вчерашнего дня. Не бросает и не реджектится:
+    // приложение зовёт её при запуске и идёт дальше, а любой сбой чистки значит
+    // лишь «в другой раз». Устройство чистится синхронно, до первого обращения
+    // к облаку: облако отвечает долго или молчит, а мусор рядом ждать не должен.
+    prune() {
+      const cutoff = yesterday(today());
+
+      for (const key of localKeys()) {
+        if (isStaleMark(key, DEVICE_MARK, cutoff)) localRemove(key);
+      }
+      if (!hasCloud) return Promise.resolve();
+
+      return (async () => {
+        const { ok, value } = await callCloud('getKeys', []);
+        // Отказ getKeys — списка у нас нет, и стирать по догадке нельзя: ответ
+        // при ошибке мог быть обрезанным или чужим (см. callCloud).
+        if (!ok || !Array.isArray(value)) return;
+        const staleKeys = value.filter(key => isStaleMark(key, [CLOUD_MARK], cutoff));
+        // Исход removeItems ничего не меняет: устаревшее подберёт следующий запуск
+        if (staleKeys.length) await callCloud('removeItems', [staleKeys]);
+      })();
     },
   };
 }

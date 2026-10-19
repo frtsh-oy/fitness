@@ -135,13 +135,15 @@ function widthMatchMedia(screenWidth) {
   };
 }
 
-function mount(t, { marks = null, webApp = null, freezeTimers = false, fakeClock = false, denyStorage = false, screenWidth = null } = {}) {
+function mount(t, { marks = null, preload = {}, webApp = null, freezeTimers = false, fakeClock = false, denyStorage = false, screenWidth = null } = {}) {
   const { window, document } = makeDom(PAGE);
   t.after(() => window.close());
   // Ширину окна подменяем до startApp: по ней приложение решает при отрисовке,
   // раскрывать ли описания упражнений.
   if (screenWidth !== null) window.matchMedia = widthMatchMedia(screenWidth);
   if (marks) window.localStorage.setItem(todayKey(), JSON.stringify(marks));
+  // Всё, что уже лежало на устройстве до запуска: остатки прошлых дней и прочее
+  for (const [key, value] of Object.entries(preload)) window.localStorage.setItem(key, value);
   // Приватный режим Safari и урезанный WebView: обращение к localStorage
   // бросает ещё до первого getItem.
   if (denyStorage) {
@@ -604,6 +606,33 @@ test('пустой объект WebApp не роняет приложение и
 
   assert.deepEqual([...app.marks], [box.dataset.mark]);
   assert.deepEqual(JSON.parse(window.localStorage.getItem(todayKey())), [box.dataset.mark]);
+});
+
+// Чистка старых отметок запускается из startApp и не ждёт ответа облака, поэтому
+// устройство проверяем сразу после запуска, без единого await: оно чистится
+// синхронно. Сегодняшняя отметка при этом остаётся.
+test('при запуске старые отметки удаляются с устройства', t => {
+  const stale = storageKey(WORKOUT.id, '2000-01-01');
+  const { window } = mount(t, {
+    marks: [markOf(0, 0)],
+    preload: { [stale]: '[]', [`${stale}:pending`]: '1' },
+  });
+
+  assert.equal(window.localStorage.getItem(stale), null);
+  assert.equal(window.localStorage.getItem(`${stale}:pending`), null);
+  assert.deepEqual(JSON.parse(window.localStorage.getItem(todayKey())), [markOf(0, 0)], 'сегодняшняя отметка стёрта');
+});
+
+test('при запуске старые отметки удаляются и из облака, а сегодняшние остаются', async t => {
+  const stale = storageKey(WORKOUT.id, '2000-01-01');
+  const cloud = fakeCloud({ data: { [stale]: '[]', [todayKey()]: JSON.stringify([markOf(0, 0)]) } });
+  cloud.getKeys = callback => callback(null, Object.keys(cloud.data));
+  cloud.removeItems = (keys, callback) => { for (const key of keys) delete cloud.data[key]; callback(null, true); };
+  const { app } = mount(t, { webApp: fakeWebApp({ cloud }) });
+  await app.ready;
+  await settle(20);
+
+  assert.deepEqual(Object.keys(cloud.data), [todayKey()]);
 });
 
 test('таймер на странице: пресет, старт, шаг, сброс', t => {
