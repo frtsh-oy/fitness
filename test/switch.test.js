@@ -43,7 +43,7 @@ const onDevice = (id = OWN_ID, compact = OWN) => ({ [recordKey(id)]: serializeCo
 const LEGS_H1 = legs.titleLines.join('');
 const settle = ms => new Promise(resolve => setTimeout(resolve, ms));
 
-function mount(t, { preload = {}, url, webApp = null, library } = {}) {
+function mount(t, { preload = {}, url, webApp = null, library, beforeStart } = {}) {
   const { window, document } = makeDom(PAGE, { url });
   t.after(() => window.close());
   // В jsdom прокрутки нет, а показ раздела её просит: без заглушки каждый
@@ -51,6 +51,7 @@ function mount(t, { preload = {}, url, webApp = null, library } = {}) {
   window.scrollTo = () => {};
   for (const [key, value] of Object.entries(preload)) window.localStorage.setItem(key, value);
   if (webApp) window.Telegram = { WebApp: webApp };
+  beforeStart?.(window);
   return { window, document, app: startApp(window, { library }) };
 }
 
@@ -437,18 +438,40 @@ test('наблюдатель за блоками следит за блокам�
   assert.equal(document.querySelector('.block-nav a.active').hash, `#${ids(ownWorkout)[2]}`);
 });
 
-// Облако, у которого отметки приходят с опозданием: за это время человек успевает
-// переключиться. Свою запись и список ключей отдаёт сразу — иначе список «Мои»
-// стёр бы свою тренировку как «удалённую на другом устройстве».
+// Облако, у которого чтение отметок отвечает не сразу: за это время человек
+// успевает переключиться. Свою запись и список ключей отдаёт сразу — иначе
+// список «Мои» стёр бы свою тренировку как «удалённую на другом устройстве».
+// Значение для ответа снимается в момент запроса, как у настоящего облака: запись,
+// сделанная пока ответ в пути, в него не попадает.
+const cloudWith = (data, getItem) => ({
+  getItem,
+  setItem: (key, value, cb) => { data[key] = value; cb(null, true); },
+  removeItem: (key, cb) => { delete data[key]; cb(null, true); },
+  removeItems: (keys, cb) => cb(null, true),
+  getKeys: cb => cb(null, Object.keys(data)),
+  getItems: (keys, cb) => cb(null, Object.fromEntries(keys.filter(key => key in data).map(key => [key, data[key]]))),
+});
+
 function slowMarksCloud(data, delay) {
-  return {
-    getItem: (key, cb) => { setTimeout(() => cb(null, data[key] ?? ''), delay); },
-    setItem: (key, value, cb) => { data[key] = value; cb(null, true); },
-    removeItem: (key, cb) => { delete data[key]; cb(null, true); },
-    removeItems: (keys, cb) => cb(null, true),
-    getKeys: cb => cb(null, Object.keys(data)),
-    getItems: (keys, cb) => cb(null, Object.fromEntries(keys.filter(key => key in data).map(key => [key, data[key]]))),
+  return cloudWith(data, (key, cb) => {
+    const value = data[key] ?? '';
+    setTimeout(() => cb(null, value), delay);
+  });
+}
+
+// Ответы на чтение отметок выпускает тест: release(ключ).
+function heldMarksCloud(data) {
+  const held = [];
+  const cloud = cloudWith(data, (key, cb) => {
+    const value = data[key] ?? '';
+    held.push({ key, answer: () => cb(null, value) });
+  });
+  cloud.release = key => {
+    const index = held.findIndex(call => call.key === key);
+    assert.notEqual(index, -1, `чтение ${key} не запрашивалось`);
+    held.splice(index, 1)[0].answer();
   };
+  return cloud;
 }
 
 test('отметки, пришедшие из хранилища после смены тренировки, к новой не относятся', async t => {
@@ -495,4 +518,90 @@ test('другая тренировка открывается сверху, а 
 
   pick(document, OWN.name);
   assert.deepEqual(scrolls.at(-1), { top: 0, behavior: 'instant' });
+});
+
+// Опоздавший ответ прежней тренировки: экран и набор новой он не трогает, но
+// ранние отметки, которые при смене уже ушли в хранилище одни, он обязан
+// вернуть вместе с сохранёнными — иначе они затёрты.
+const LEGS_SAVED = [markId('start', 'pelvic-tilt', 1), markId('start', 'thoracic-rotation', 1)];
+const LEGS_EARLY = markId('circuit', 'chinese-squat', 1);
+
+async function mountWithHeldMarks(t) {
+  unrefCloudTimeouts(t);
+  const legsKey = storageKey('legs-mwf', currentDay());
+  const data = { ...onDevice(), [legsKey]: JSON.stringify(LEGS_SAVED) };
+  const cloud = heldMarksCloud(data);
+  const mounted = mount(t, { preload: onDevice(), webApp: fakeWebApp({ cloud }) });
+  await settle(0);
+  return { ...mounted, cloud, data, legsKey, ownKey: storageKey(OWN_ID, currentDay()) };
+}
+
+test('опоздавший ответ прежней тренировки возвращает в хранилище ранние отметки вместе с сохранёнными', async t => {
+  const { window, document, app, cloud, data, legsKey, ownKey } = await mountWithHeldMarks(t);
+
+  boxes(document).find(box => box.dataset.mark === LEGS_EARLY).click();
+  pick(document, OWN.name);
+  assert.deepEqual(JSON.parse(window.localStorage.getItem(legsKey)), [LEGS_EARLY],
+    'при смене ушла одна ранняя отметка: ответа по готовой ещё нет');
+
+  cloud.release(legsKey);
+  await settle(0);
+  const union = [...LEGS_SAVED, LEGS_EARLY].sort();
+  assert.deepEqual(JSON.parse(window.localStorage.getItem(legsKey)).sort(), union);
+  assert.deepEqual(JSON.parse(data[legsKey]).sort(), union, 'и в облаке');
+
+  // Экран новой тренировки не изменился.
+  assert.equal(heading(document), OWN.name);
+  assert.equal(app.marks.size, 0);
+  assert.equal(boxes(document).filter(box => box.checked).length, 0);
+  cloud.release(ownKey);
+  await settle(0);
+  assert.equal(window.localStorage.getItem(ownKey), null, 'под id новой ничего не записано');
+});
+
+test('сброс до ответа прежней тренировки: опоздавший ответ сохранённое не возвращает', async t => {
+  const { window, document, cloud, legsKey } = await mountWithHeldMarks(t);
+
+  document.getElementById('reset').click();      // отметок нет, поэтому без вопроса
+  boxes(document).find(box => box.dataset.mark === LEGS_EARLY).click();
+  pick(document, OWN.name);
+
+  cloud.release(legsKey);
+  await settle(0);
+  assert.deepEqual(JSON.parse(window.localStorage.getItem(legsKey)), [LEGS_EARLY], 'сброшенное не вернулось');
+});
+
+test('опоздавший ответ прежней тренировки без ранних отметок ничего не пишет', async t => {
+  const { window, document, cloud, data, legsKey } = await mountWithHeldMarks(t);
+
+  pick(document, OWN.name);                      // отметок не ставили
+  cloud.release(legsKey);
+  await settle(0);
+  assert.equal(window.localStorage.getItem(legsKey), null, 'на устройство ничего не легло');
+  assert.deepEqual(JSON.parse(data[legsKey]), LEGS_SAVED, 'облако не тронуто');
+});
+
+test('Escape слушается на document один раз, сколько бы раз ни переключали тренировку', async t => {
+  const keydowns = [];
+  const { window, document } = mount(t, {
+    preload: onDevice(),
+    // Считаем обработчики keydown, повешенные на document, по тому, сколько
+    // из них отзовётся на одну клавишу.
+    beforeStart(win) {
+      const add = win.document.addEventListener.bind(win.document);
+      win.document.addEventListener = (type, handler, ...rest) =>
+        add(type, type === 'keydown' ? event => { keydowns.push(event.key); handler(event); } : handler, ...rest);
+    },
+  });
+  await settle(0);
+  pick(document, OWN.name);
+  pick(document, legs.title);
+  pick(document, OWN.name);
+
+  // Плеер новой тренировки по-прежнему закрывается Escape.
+  document.querySelector('#workout button.video').click();
+  assert.ok(document.querySelector('.player-shell'), 'плеер открылся');
+  document.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape' }));
+  assert.equal(keydowns.length, 1);
+  assert.equal(document.querySelector('.player-shell'), null);
 });

@@ -4,6 +4,9 @@
 //
 // openLink приходит из telegram.js: внутри Telegram target="_blank" не работает,
 // поэтому «Открыть в YouTube» — кнопка, а не ссылка.
+//
+// Возвращает функцию, закрывающую открытое видео (если оно есть) с возвратом
+// фокуса на его кнопку.
 export function setupPlayers(root, openLink) {
   const doc = root.ownerDocument;
   const win = doc.defaultView;
@@ -101,7 +104,8 @@ export function setupPlayers(root, openLink) {
     });
   });
 
-  doc.addEventListener('keydown', event => {
-    if (event.key === 'Escape' && activeVideo) closeExerciseVideo(true);
-  });
+  // Закрывать открытое видео по Escape — дело вызывающего: слушатель клавиши
+  // живёт на document, а setupPlayers зовут заново при каждой смене тренировки,
+  // и слушатель, повешенный отсюда, копился бы по одному на каждую смену.
+  return () => closeExerciseVideo(true);
 }

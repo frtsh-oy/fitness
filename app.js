@@ -479,28 +479,39 @@ export function startApp(win = globalThis.window, { library = LIBRARY } = {}) {
   //
   // Сброс — единственное исключение: он и означает «забыть сохранённое».
   // Признак отдельный, потому что обычная отметка приехавшего не отменяет.
-  let resetBeforeLoad = false;
-  // А этот — про то, успела ли уйти запись до слияния. Спрашивать вместо него
-  // «стал ли набор больше приехавшего» нельзя: ранний набор бывает
-  // ПОДМНОЖЕСТВОМ сохранённого — тапнули круг, который в хранилище уже отмечен,
-  // или тапнули и тут же сняли промах. Размеры тогда совпадают (во втором
-  // случае ранний набор вообще пуст), а в хранилище уже лежит обрезанный набор
-  // или пустота. Значение имеет сам факт изменения, а не его размер.
-  let touchedBeforeLoad = false;
-  // Номер загрузки отметок. Ответ хранилища приходит позже смены тренировки, и
-  // тогда он принадлежит прежней: положенный в набор, он показал бы отметки
-  // одной тренировки на экране другой. Загрузка помнит номер, с которым
-  // началась, и чужой ответ отбрасывает.
-  let generation = 0;
+  //
+  // Состояние живёт у каждой загрузки своё (marksLoad), а не общим на всё
+  // приложение: ответ хранилища может прийти уже после смены тренировки, и тогда
+  // ему нужны признаки ТОЙ тренировки, а не нынешней.
+  //   reset — сброс до ответа (см. выше);
+  //   touched — успела ли уйти запись до слияния. Спрашивать вместо этого «стал
+  //     ли набор больше приехавшего» нельзя: ранний набор бывает ПОДМНОЖЕСТВОМ
+  //     сохранённого — тапнули круг, который в хранилище уже отмечен, или
+  //     тапнули и тут же сняли промах. Размеры тогда совпадают (во втором случае
+  //     ранний набор вообще пуст), а в хранилище уже лежит обрезанный набор или
+  //     пустота. Значение имеет сам факт изменения, а не его размер;
+  //   known — отметки, которые были на экране этой тренировки;
+  //   early — копия набора на момент смены тренировки, пока ответа не было.
+  let marksLoad = null;
   let ready = Promise.resolve();
 
   function loadMarks() {
-    generation += 1;
-    const loading = generation;
-    resetBeforeLoad = false;
-    touchedBeforeLoad = false;
-    ready = storage.load(workout.id).then(saved => {
-      if (loading !== generation || resetBeforeLoad) return;
+    const mine = { id: workout.id, known, touched: false, reset: false, early: null };
+    marksLoad = mine;
+    ready = storage.load(mine.id).then(saved => {
+      if (mine.reset) return;
+      // Ответ пришёл после смены тренировки: он принадлежит прежней, и в набор на
+      // экране ему не место, иначе он показал бы отметки одной тренировки на
+      // экране другой. Но выбросить его нельзя: при смене под прежний id уже ушёл
+      // ранний набор, один, без сохранённых (save пишет набор целиком), и они
+      // остались бы затёртыми. Поэтому возвращаем в хранилище объединение. Не
+      // было ранних отметок — нечего защищать, и записывать нечего.
+      if (mine !== marksLoad) {
+        if (mine.touched) {
+          storage.save(mine.id, new Set([...mine.early, ...[...saved].filter(id => mine.known.has(id))]));
+        }
+        return;
+      }
       // Приехавшее сверяется с экраном. В хранилище за сегодня могут лежать
       // идентификаторы, которых на странице уже нет: упражнению сменили key,
       // упражнение убрали, блок переименовали. Без сверки такая отметка попадает
@@ -514,7 +525,7 @@ export function startApp(win = globalThis.window, { library = LIBRARY } = {}) {
       // Ранняя отметка уже уехала в хранилище — одна, без сохранённых, потому что
       // save пишет набор целиком. Возвращаем туда объединённый набор, иначе старые
       // отметки пропадут из хранилища, даже оставшись на экране.
-      if (touchedBeforeLoad) queueSave();
+      if (mine.touched) queueSave();
       paint();
     });
   }
@@ -527,7 +538,7 @@ export function startApp(win = globalThis.window, { library = LIBRARY } = {}) {
     // Цель change от чекбокса — сам чекбокс, вложенности тут не бывает.
     const box = event.target;
     if (!box.matches('input[data-mark]')) return;
-    touchedBeforeLoad = true;
+    marksLoad.touched = true;
     const id = box.dataset.mark;
     if (box.checked) marks.add(id); else marks.delete(id);
     paint();
@@ -539,7 +550,7 @@ export function startApp(win = globalThis.window, { library = LIBRARY } = {}) {
   });
 
   function resetMarks() {
-    resetBeforeLoad = true;
+    marksLoad.reset = true;
     // Отложенная запись больше не нужна: её набор устарел, а очистка идёт следом.
     cancelSave();
     marks.clear();
@@ -691,6 +702,15 @@ export function startApp(win = globalThis.window, { library = LIBRARY } = {}) {
   // выбирал, и «Выбери время» из разметки — правда. Это тоже как в оригинале.
   selectDuration(presets.find(preset => preset.getAttribute('aria-pressed') === 'true'));
 
+  // Escape закрывает открытое видео. Слушатель на document один на всё время
+  // работы, а не по одному на каждую отрисовку тренировки: плеер приходит от
+  // последнего setupPlayers, и закрывает он именно своё видео (в разметке
+  // прежней тренировки их уже нет).
+  let closePlayer = () => {};
+  document.addEventListener('keydown', event => {
+    if (event.key === 'Escape') closePlayer();
+  });
+
   // Возвращение к приложению — второй источник правды о времени, кроме интервала:
   // пока вкладка была скрыта, он мог не сработать ни разу. Уход, наоборот, —
   // последний момент, когда можно дописать отметки.
@@ -753,7 +773,7 @@ export function startApp(win = globalThis.window, { library = LIBRARY } = {}) {
     // себе просьбы «покажи мне технику» не означает.
     const expandDescriptions = !win.matchMedia(`(max-width: ${PHONE_MAX_WIDTH}px)`).matches;
     host.replaceChildren(renderWorkout(workout, document, { expandDescriptions }));
-    setupPlayers(host, url => tg.openLink(url));
+    closePlayer = setupPlayers(host, url => tg.openLink(url));
 
     // Блоки прежней тренировки из документа ушли, наблюдать за ними нечего.
     observer.disconnect();
@@ -775,6 +795,9 @@ export function startApp(win = globalThis.window, { library = LIBRARY } = {}) {
     weeklyDrawn = false;
     if (!weeklyBody.hidden) drawWeekly();
 
+    // Ответа по прежней тренировке могло ещё не быть: он придёт позже и ему
+    // понадобится набор на момент смены (см. loadMarks).
+    if (marksLoad) marksLoad.early = new Set(marks);
     marks.clear();
     const onScreen = [...host.querySelectorAll('input[data-mark]')].map(box => box.dataset.mark);
     known = new Set(onScreen);
