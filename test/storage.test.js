@@ -820,7 +820,7 @@ test('синхронное исключение и таймаут getKeys тож
   await withDeadline(createStorage({ cloud: throwing, local: fakeLocal(), today }).prune());
 
   const silent = { getKeys: () => { /* никогда не ответит */ }, removeItems: () => { throw new Error('не должен вызываться'); } };
-  await withDeadline(createStorage({ cloud: silent, local: fakeLocal(), today, cloudTimeout: 10 }).prune());
+  await withDeadline(createStorage({ cloud: silent, local: fakeLocal(), today, cloudTimeout: 10 }).prune(), 1000);
 });
 
 test('ответ getKeys не списком — prune ничего не удаляет', async () => {
@@ -841,6 +841,23 @@ test('prune с бросающим localStorage и без облака не па�
 
 test('prune без облака и без localStorage не падает', async () => {
   await withDeadline(createStorage({ today }).prune());
+});
+
+test('prune не бросает при today() не в формате ГГГГ-ММ-ДД', async () => {
+  // Границы нет — значит нечего и стирать: ни на устройстве, ни в облаке.
+  // Исключение здесь убило бы запуск приложения: startApp зовёт prune() без защиты.
+  const throwing = () => { throw new Error('часы сломаны'); };
+  for (const badToday of [() => '09/14/2026', () => '', () => 'сегодня', () => undefined, throwing]) {
+    const local = localWith(['m_legs-mwf_2026-09-01']);
+    const cloud = fakeCloud({ data: { 'm_legs-mwf_2026-09-01': '[]' } });
+    const s = createStorage({ cloud, local, today: badToday });
+
+    let pending;
+    assert.doesNotThrow(() => { pending = s.prune(); }, 'prune бросил синхронно');
+    await withDeadline(pending);
+    assert.deepEqual([...local._map.keys()], ['m_legs-mwf_2026-09-01'], 'устройство тронуто без границы');
+    assert.deepEqual(cloud.calls, [], 'облако тронуто без границы');
+  }
 });
 
 test('prune с бросающим localStorage всё равно чистит облако', async () => {

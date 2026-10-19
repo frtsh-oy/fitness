@@ -9,10 +9,12 @@ import { createKv } from './kv.js';
 // Ключ отметок — `m_<id тренировки>_<день>`, без двоеточий: CloudStorage
 // принимает ключи только из A-Z a-z 0-9 _ - (1–128 символов), см.
 // https://core.telegram.org/bots/webapps. Прежний ключ `w:<id>:<день>` под это
-// правило не подходил, и Telegram отвечал на каждую запись отказом, который
-// мы честно ловили: отметки жили только на устройстве. Старые отметки не
-// переносим — они живут один день, поэтому в день обновления сегодняшние
-// начинаются заново, а остатки прежнего формата стирает prune().
+// правило не подходил, а значит, по документации, Telegram должен был
+// отвечать на каждую запись отказом, который мы ловили и молча переживали:
+// отметки, скорее всего, жили только на устройстве. На живом клиенте это не
+// проверялось. Старые отметки не переносим — они живут один день, поэтому в
+// день обновления сегодняшние начинаются заново, а остатки прежнего формата
+// стирает prune().
 export function storageKey(workoutId, date) {
   return `m_${workoutId}_${date}`;
 }
@@ -194,7 +196,16 @@ export function createStorage({ cloud = null, local = null, today = currentDay, 
     // лишь «в другой раз». Устройство чистится синхронно, до первого обращения
     // к облаку: облако отвечает долго или молчит, а мусор рядом ждать не должен.
     prune() {
-      const cutoff = yesterday(today());
+      // Единственное, что здесь может бросить, — день: today() подменяют
+      // снаружи, и из неразборчивой строки Date.UTC делает Invalid Date, а
+      // toISOString() на нём бросает RangeError. Без границы стирать нечего —
+      // ни на устройстве, ни в облаке, — и запуск из-за этого падать не должен.
+      let cutoff;
+      try {
+        cutoff = yesterday(today());
+      } catch {
+        return Promise.resolve();
+      }
 
       for (const key of localKeys()) {
         if (isStaleMark(key, DEVICE_MARK, cutoff)) localRemove(key);
@@ -202,10 +213,11 @@ export function createStorage({ cloud = null, local = null, today = currentDay, 
       if (!hasCloud) return Promise.resolve();
 
       return (async () => {
-        const { ok, value } = await callCloud('getKeys', []);
-        // Отказ getKeys — списка у нас нет, и стирать по догадке нельзя: ответ
-        // при ошибке мог быть обрезанным или чужим (см. callCloud).
-        if (!ok || !Array.isArray(value)) return;
+        const { value } = await callCloud('getKeys', []);
+        // Списка нет — стирать нечего. Отдельной проверки на отказ тут нет:
+        // при отказе callCloud сам отдаёт value '', а не обрезанный или чужой
+        // ответ, и '' (как и null от удачного вызова) списком не является.
+        if (!Array.isArray(value)) return;
         const staleKeys = value.filter(key => isStaleMark(key, [CLOUD_MARK], cutoff));
         // Исход removeItems ничего не меняет: устаревшее подберёт следующий запуск
         if (staleKeys.length) await callCloud('removeItems', [staleKeys]);
