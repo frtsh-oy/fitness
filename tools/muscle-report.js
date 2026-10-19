@@ -159,8 +159,9 @@ function weeklyLines(workouts) {
 // (для отбора в конструкторе): в упражнение тренировки они не попадают, так что
 // вычитать их, кроме как здесь, негде. Это то же инженерное суждение, что
 // разметка нагрузки. У несиловых в этих колонках тире — «такого признака нет»,
-// а не «не заполнено». Силовое без сложности сюда не доходит (импорт его не
-// пропускает), а если дойдёт, libraryLabel упадёт, а не напечатает тире.
+// а не «не заполнено». Силовое без сложности или многосуставности сюда не
+// доходит (импорт его не пропускает), а если дойдёт, отчёт упадёт, а не
+// напечатает тире или молчаливое «нет».
 function libraryLines() {
   const lines = [
     '## Библиотека упражнений', '',
@@ -177,6 +178,9 @@ function libraryLines() {
     const [primary, secondary] = muscleColumns(e.load);
     const strength = e.slot === 'strength';
     const difficulty = strength ? libraryLabel(DIFFICULTY_LABELS, e.difficulty, 'уровень сложности') : '—';
+    if (strength && typeof e.compound !== 'boolean') {
+      throw new Error(`Многосуставность силового упражнения «${e.key}» в библиотеке не «да» и не «нет»: ${e.compound}`);
+    }
     const compound = strength ? (e.compound ? 'да' : 'нет') : '—';
     lines.push(`| ${e.key} | ${e.name} | ${libraryLabel(SLOT_LABELS, e.slot, 'тип')} | ${difficulty} | ${compound} | ${primary} | ${secondary} |`);
   }

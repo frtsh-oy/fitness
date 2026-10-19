@@ -153,9 +153,10 @@ function renderItem(document, block, item, itemIndex, expandDescriptions) {
   article.append(howto);
 
   for (const extra of item.links ?? []) {
-    // Форма элемента — [id, start, caption], как у v: workouts/legs-mwf.js
-    // хранит подписи уже целиком (например «Как установить длинную резинку · 0:18»),
-    // отдельного поля label в данных нет.
+    // Форма элемента — [id, start, caption], как у v. Упражнение приходит из
+    // библиотеки (exercises/: таблица и импорт), и там подписи хранятся уже
+    // целиком (например «Как установить длинную резинку · 0:18»), отдельного
+    // поля label в данных нет.
     const link = el(document, 'a', 'extra-link', extra[2]);
     link.href = videoUrl(extra);
     link.target = '_blank';
