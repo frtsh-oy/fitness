@@ -110,6 +110,11 @@ function itemValueProblems(item, at) {
   if (!PATTERNS.includes(item.pattern)) problems.push(`${at}: неизвестный pattern ${item.pattern}`);
   if (!KINDS.includes(item.kind)) problems.push(`${at}: неизвестный kind ${item.kind}`);
   if (typeof item.unilateral !== 'boolean') problems.push(`${at}: unilateral должен быть true или false`);
+  // Метка «упор» своей тренировки (builder/compact.js): есть — значит true, а
+  // «нет» выражается отсутствием поля. false сказал бы то же самое вторым
+  // способом, и код, проверяющий поле по наличию, разошёлся бы с кодом,
+  // проверяющим его по значению.
+  if (item.focus !== undefined && item.focus !== true) problems.push(`${at}: focus — только true`);
 
   if (!Array.isArray(item.gear)) {
     problems.push(`${at}: gear должен быть массивом`);

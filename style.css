@@ -221,3 +221,10 @@
 .workout-card-title{font-size:18px;font-weight:650;letter-spacing:-.02em}
 .workout-card-kicker{font-size:12px;letter-spacing:.08em;font-weight:650;color:#657289}
 .builder-note{max-width:520px;margin:0;font-size:15px;line-height:1.6;color:#33475f}
+
+/* Метка «упор» у упражнения, добавленного ради зоны упора своей тренировки
+   (render.js). Подпись, а не кнопка: нажимаемого не прибавляет, поэтому в
+   сторожа высоты нажимаемого не входит. margin-right:auto сажает её вплотную
+   к номеру и отдаёт весь свободный просвет строки списку мышц справа —
+   space-between на трёх элементах поставил бы метку посередине. */
+.focus-tag{margin-right:auto;white-space:nowrap;background:#e0edc2;color:#39571b;padding:2px 8px;border-radius:6px;font-size:12px;font-weight:650;letter-spacing:.06em}

@@ -486,3 +486,18 @@ test('область раскрытия стоит следом за строк�
     assert.equal(refs.nextElementSibling, region, 'область идёт сразу за строкой');
   }
 });
+
+// Метка «упор» — у упражнения, добавленного ради зоны упора своей тренировки.
+// Это подпись, а не кнопка: нажимаемого в карточке она не прибавляет.
+test('у упражнения с focus: true в шапке карточки есть метка «упор», у остальных её нет', () => {
+  const { document } = makeDom();
+  const marked = structuredClone(legsMwf);
+  marked.blocks[2].items[0].focus = true;
+  const fragment = renderWorkout(marked, document);
+  const tags = [...fragment.querySelectorAll('.focus-tag')];
+  assert.equal(tags.length, 1);
+  assert.equal(tags[0].textContent, 'упор');
+  assert.ok(tags[0].parentNode.classList.contains('exercise-top'));
+  assert.equal(tags[0].closest('.exercise').querySelector('h3').textContent, marked.blocks[2].items[0].name);
+  assert.equal(renderWorkout(legsMwf, document).querySelectorAll('.focus-tag').length, 0);
+});

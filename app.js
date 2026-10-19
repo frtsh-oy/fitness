@@ -9,7 +9,7 @@ import { initTelegram } from './telegram.js';
 import { createTimer, formatTime } from './timer.js';
 import { setupPlayers } from './player.js';
 import { createBodyMap, warmupOnlyGroups, idleGroups, isMode, DEFAULT_MODE } from './bodymap.js';
-import { muscleLabel, regionGroups } from './muscles.js';
+import { groupsPhrase, regionGroups } from './muscles.js';
 import { renderWeekly } from './weekly-view.js';
 import { createSections, savedSection } from './sections.js';
 import { renderWorkouts } from './workouts-view.js';
@@ -164,16 +164,6 @@ export function startApp(win = globalThis.window) {
   let bodyMap = null;
   let mapMode = DEFAULT_MODE;
 
-  // Названия групп внутри фразы — со строчной: «Только в разминке и заминке:
-  // сгибатели бедра, задняя дельта». muscleLabel отдаёт их с заглавной, потому
-  // что в подборе и в docs/muscle-map.md название стоит самостоятельно.
-  // Понижаем только первую букву — заглавных внутри названий в словаре нет, и
-  // трогать там нечего.
-  const listGroups = groups => groups
-    .map(muscleLabel)
-    .map(name => name[0].toLowerCase() + name.slice(1))
-    .join(', ');
-
   // Объём — точная сумма долей, поэтому бывает дробным (0.5 за круг): 2.5 в
   // русском тексте пишется «2,5». Доли кратны 0.5, такие суммы в double
   // представимы точно, и String печатает их не длиннее одного знака после
@@ -213,7 +203,7 @@ export function startApp(win = globalThis.window) {
     // говорить об этих группах нечего.
     const warm = warmupOnlyGroups(workout);
     if (mapMode !== 'all' && warm.length) {
-      parts.push(`Только в разминке и заминке: ${listGroups(warm)}.`);
+      parts.push(`Только в разминке и заминке: ${groupsPhrase(warm)}.`);
     }
     // Этот список от режима не зависит: idleGroups перебирает все типы
     // упражнений сразу, и группа попадает в него, только если её нет ни в
@@ -223,7 +213,7 @@ export function startApp(win = globalThis.window) {
     // Условие ниже остаётся ради будущих тренировок и будущих групп мышц,
     // которым разметки ещё не досталось.
     const idle = idleGroups(workout);
-    if (idle.length) parts.push(`Светлым — то, чего нет в разметке: ${listGroups(idle)}.`);
+    if (idle.length) parts.push(`Светлым — то, чего нет в разметке: ${groupsPhrase(idle)}.`);
     document.querySelector('.bodymap-groups').textContent = parts.join(' ');
   }
 

@@ -78,3 +78,15 @@ export function regionLabel(region) {
   const names = regionGroups(region).map(id => MUSCLES[id].ru);
   return names.map((n, i) => (i === 0 ? n : n.toLowerCase())).join(', ');
 }
+
+// Названия групп внутри фразы — со строчной: «Только в разминке и заминке:
+// сгибатели бедра, задняя дельта». muscleLabel отдаёт их с заглавной, потому
+// что в подборе и в docs/muscle-map.md название стоит самостоятельно.
+// Понижаем только первую букву — заглавных внутри названий в словаре нет, и
+// трогать там нечего.
+export function groupsPhrase(ids) {
+  return ids
+    .map(muscleLabel)
+    .map(name => name[0].toLowerCase() + name.slice(1))
+    .join(', ');
+}

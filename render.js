@@ -81,6 +81,9 @@ function renderItem(document, block, item, itemIndex, expandDescriptions) {
 
   const top = el(document, 'div', 'exercise-top');
   top.append(el(document, 'span', 'exercise-index', String(itemIndex + 1).padStart(2, '0')));
+  // Метка стоит сразу за номером, а не в конце: список мышц справа длинный и
+  // переносится, и метка рядом с ним съезжала бы вместе со строками.
+  if (item.focus) top.append(el(document, 'span', 'focus-tag', 'упор'));
   top.append(el(document, 'span', 'muscles', item.muscles));
   article.append(top);
 
