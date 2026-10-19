@@ -61,7 +61,7 @@ const NO_DAYS = 'Выбери хотя бы один день.';
 
 const LIMIT_REACHED = `Сохранить нельзя: уже ${OWN_LIMIT} своих тренировок. Удали ненужную в разделе «Тренировки».`;
 const DEVICE_FAILED = 'Не удалось сохранить: хранилище недоступно. Тренировка осталась здесь — попробуй ещё раз.';
-const DISCARD_QUESTION = 'Бросить сборку? Несохранённые изменения пропадут.';
+const DISCARD_QUESTION = 'Бросить тренировку? Несохранённые изменения пропадут.';
 
 const NO_CANDIDATES = 'Похожих упражнений больше нет: все подходящие уже в тренировке.';
 const HINT_STRENGTH = 'Те же целевые мышцы, похожая разметка';
@@ -617,7 +617,9 @@ export function renderBuilder({ host, win, library = LIBRARY, store, confirm, on
     const another = make('button', 'builder-variant', 'Другой вариант');
     another.type = 'button';
     const refusal = alertNote('builder-refusal');
-    another.addEventListener('click', () => runGenerator(draft.level, draft.zones, refusal));
+    // Зоны — из выбора, а не из записи: выбор уже приведён к тому, что принимает
+    // генератор (см. edit), а запись могла принести лишнюю зону.
+    another.addEventListener('click', () => runGenerator(choice.level, choice.zones, refusal));
     const blocks = make('div', 'builder-blocks');
     const save = make('button', 'builder-save', 'Сохранить');
     save.type = 'button';

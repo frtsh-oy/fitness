@@ -99,10 +99,16 @@ export function equipmentFor(entries) {
 
 // «Всё тело» — тренировка всегда на всё тело, упор только добавка. Зоны — через
 // «и» («ягодицы и спина»): названия идут в заголовок, где запятая читалась бы
-// как перечисление трёх.
+// как перечисление трёх. Но если «и» уже есть в названии зоны («пресс и кор»),
+// второй рядом сливается с ним в «пресс и кор и ягодицы»: тогда все через запятую.
 export function defaultName(zones) {
   if (zones.length === 0) return 'Всё тело';
   const names = zones.map(zoneLabel);
-  const list = names.length < 2 ? names[0] : `${names.slice(0, -1).join(', ')} и ${names.at(-1)}`;
+  let list = names[0];
+  if (names.length > 1) {
+    list = names.some(name => name.includes(' и '))
+      ? names.join(', ')
+      : `${names.slice(0, -1).join(', ')} и ${names.at(-1)}`;
+  }
   return `Всё тело. Упор: ${list}`;
 }

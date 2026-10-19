@@ -778,7 +778,7 @@ test('«Назад» со сборки: без изменений уходит �
   assemble(root, [nameOf('glute-bridge')]);
   back(root);
   assert.equal(webApp.confirms.length, 1);
-  assert.equal(webApp.confirms[0].message, 'Бросить сборку? Несохранённые изменения пропадут.');
+  assert.equal(webApp.confirms[0].message, 'Бросить тренировку? Несохранённые изменения пропадут.');
   webApp.confirms[0].answer(false);
   await settle(0);
   assert.ok(rows(root).includes(nameOf('glute-bridge')), 'отказ — сборка на месте');
@@ -817,7 +817,7 @@ test('«Изменить» при начатой сборке спрашивае
   openWorkouts(document);
   document.querySelector('#screen-workouts .workout-edit').click();
   assert.equal(webApp.confirms.length, 1);
-  assert.equal(webApp.confirms[0].message, 'Бросить сборку? Несохранённые изменения пропадут.');
+  assert.equal(webApp.confirms[0].message, 'Бросить тренировку? Несохранённые изменения пропадут.');
   webApp.confirms[0].answer(false);
   await settle(0);
   assert.deepEqual(shown(document), ['screen-workouts'], 'отказ — остаёмся в «Тренировках»');
@@ -1156,7 +1156,7 @@ test('«Назад» с результата: без замен сразу на 
   openReplace(root, 'Стартовая разминка').querySelector('.replace-pick').click();
   back(root);
   assert.equal(questions.length, 1);
-  assert.equal(questions[0].question, 'Бросить сборку? Несохранённые изменения пропадут.');
+  assert.equal(questions[0].question, 'Бросить тренировку? Несохранённые изменения пропадут.');
   questions[0].answer(false);
   await settle(0);
   assert.equal(root.querySelector('.builder-variant') !== null, true, 'отказ — результат на месте');
@@ -1255,4 +1255,34 @@ test('«Другой вариант» у открытой на правку тр
   assert.equal(id, 'my-gen00001', 'сохранение перезаписывает ту же тренировку');
   assert.deepEqual([compact.level, compact.zones, compact.name, compact.days],
     ['intermediate', ['glutes'], 'Моя ягодичная', [2, 4]]);
+});
+
+test('«Другой вариант» у записи с тремя зонами берёт две: не падает, а подбирает заново', async t => {
+  // Генератор принимает не больше двух зон, а запись, сделанная не им, могла принести три.
+  const three = {
+    ...generate({ level: 'beginner', zones: ['legs', 'glutes'], seed: 7, library: TEST_LIBRARY, now: () => OWN.t }).compact,
+    zones: ['legs', 'glutes', 'back'],
+  };
+  const { root, view } = mountScreen(t, { library: TEST_LIBRARY, seed: () => 99 });
+  await view.edit('my-gen00001', three);
+  assert.equal(root.querySelector('h2').textContent, 'Всё тело. Упор: ноги, ягодицы и спина');
+
+  otherVariant(root);
+  assert.equal(root.querySelector('h2').textContent, 'Всё тело. Упор: ноги и ягодицы', 'подобрана новая тренировка по двум зонам');
+  assert.equal(root.querySelectorAll('.focus-tag').length, 2);
+});
+
+test('«Изменить» другой подобранной сбрасывает метки «заменено»', async t => {
+  const { root, view } = mountScreen(t, { library: TEST_LIBRARY, seed: () => 1 });
+  startGenerator(root);
+  generateNow(root);
+  replaceWith(root, 'warm-1', 'warm-3');
+  assert.deepEqual(tagsIn(rowOf(root, nameOf('warm-3', TEST_LIBRARY)), 'replaced-tag'), ['заменено']);
+
+  // В открываемой тренировке та же разминка: без сброса метка перешла бы на неё.
+  const other = generate({ level: 'beginner', zones: [], seed: 2, library: TEST_LIBRARY, now: () => OWN.t }).compact;
+  assert.ok(other.warmup.includes('warm-3'));
+  assert.equal(await view.edit('my-gen00002', other), true);
+  assert.ok(rowOf(root, nameOf('warm-3', TEST_LIBRARY)), 'открыта другая тренировка, и разминка в ней есть');
+  assert.equal(root.querySelectorAll('.replaced-tag').length, 0);
 });
