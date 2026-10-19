@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { CLOUD_KEY } from '../kv.js';
-import { serializeCompact } from '../builder/compact.js';
+import { serializeCompact, parseCompact, VALUE_MAX } from '../builder/compact.js';
 import { OWN_LIMIT, recordKey, newWorkoutId, createMyWorkouts } from '../my-workouts.js';
 
 // rejects — какие ключи устройство отказывается писать (переполненная квота):
@@ -42,6 +42,44 @@ function flakyCloud({ data = {}, ...faults } = {}) {
     removeItem: (k, cb) => answer('removeItem', cb, () => { delete data[k]; return true; }),
     getKeys: cb => answer('getKeys', cb, () => Object.keys(data)),
     getItems: (keys, cb) => answer('getItems', cb, () => Object.fromEntries(keys.filter(k => k in data).map(k => [k, data[k]]))),
+  };
+}
+
+// Облако, которое отвечает, когда скажет тест: каждый вызов встаёт в очередь
+// held и ждёт answer(). Чтение (getKeys, getItems) снимает ответ в момент вызова,
+// как облако, получившее запрос, — поэтому ответ, полученный позже, бывает
+// устаревшим. Запись ложится в data, только когда на неё ответили успехом.
+function heldCloud({ data = {} } = {}) {
+  const held = [];
+  const tick = () => new Promise(resolve => setImmediate(resolve));
+  const hold = (method, args, cb, value, apply = () => {}) => {
+    held.push({
+      method,
+      args,
+      reply: ok => {
+        if (!ok) { cb(new Error('отказ облака')); return; }
+        apply();
+        cb(null, value);
+      },
+    });
+  };
+  return {
+    data,
+    held,
+    setItem: (k, v, cb) => hold('setItem', [k, v], cb, true, () => { data[k] = v; }),
+    removeItem: (k, cb) => hold('removeItem', [k], cb, true, () => { delete data[k]; }),
+    getKeys: cb => hold('getKeys', [], cb, Object.keys(data)),
+    getItems: (keys, cb) => hold('getItems', [keys], cb, Object.fromEntries(keys.filter(k => k in data).map(k => [k, data[k]]))),
+    // Отвечает на самый ранний вызов метода (с подходящими аргументами) и даёт
+    // коду модуля дойти до следующего обращения к облаку. Пока вызова нет, ждёт.
+    async answer(method, ok = true, match = () => true) {
+      const find = () => held.findIndex(call => call.method === method && match(call.args));
+      for (let i = 0; i < 20 && find() === -1; i += 1) await tick();
+      const index = find();
+      assert.notEqual(index, -1, `облако не получило ${method}`);
+      held.splice(index, 1)[0].reply(ok);
+      await tick();
+    },
   };
 }
 
@@ -99,14 +137,34 @@ test('не удалось записать никуда — reason device; на 
   );
   assert.deepEqual(await createMyWorkouts({ local: full() }).save('my-a', C), { ok: false, reason: 'device' });
 
-  // Запись легла, а пометка «не подтверждено» нет: без пометки следующий list
-  // принял бы запись за удалённую на другом устройстве и стёр бы её. Поэтому
-  // сохранённой на устройстве такая запись не считается.
+  // Не легла пометка «не подтверждено»: текст не пишем. Текст без пометки
+  // следующий list принял бы за удалённый на другом устройстве и стёр бы.
   const noFlag = fakeLocal({}, { rejects: key => key.endsWith(':pending') });
   assert.deepEqual(
     await createMyWorkouts({ cloud: deadCloud(), local: noFlag, cloudTimeout: 20 }).save('my-a', C),
     { ok: false, reason: 'device' },
   );
+  assert.equal(noFlag.getItem('u_my-a'), null, 'без пометки текст не пишется');
+
+  // Не лёг текст: пометку возвращаем, как была. Без неё не оставляем (иначе list
+  // досылал бы то, чего нет), а у прошлой недосланной версии оставляем (иначе
+  // следующий list стёр бы её как удалённую на другом устройстве).
+  const noText = () => fakeLocal({}, { rejects: key => key === 'u_my-a' });
+  const fresh = noText();
+  assert.deepEqual(
+    await createMyWorkouts({ cloud: deadCloud(), local: fresh, cloudTimeout: 20 }).save('my-a', C),
+    { ok: false, reason: 'device' },
+  );
+  assert.equal(fresh.getItem('u_my-a:pending'), null);
+
+  const old = compactAt(T0 - 1, 'Прошлая версия');
+  const withOld = fakeLocal({ 'u_my-a': ser(old), 'u_my-a:pending': '1' }, { rejects: key => key === 'u_my-a' });
+  assert.deepEqual(
+    await createMyWorkouts({ cloud: deadCloud(), local: withOld, cloudTimeout: 20 }).save('my-a', C),
+    { ok: false, reason: 'device' },
+  );
+  assert.equal(withOld.getItem('u_my-a'), ser(old));
+  assert.equal(withOld.getItem('u_my-a:pending'), '1');
 
   const cloud = flakyCloud();
   const store = createMyWorkouts({ cloud, local: full(), cloudTimeout: 20 });
@@ -292,4 +350,199 @@ test('ключ записи и новый id проходят правило Clo
   assert.equal(new Set(id.slice(3)).size, 8);
   assert.notEqual(newWorkoutId(() => 0), newWorkoutId(() => 0.999));
   assert.match(newWorkoutId(() => 0.999), /^my-[a-z0-9]{8}$/);
+});
+
+test('list не затирает правку, сделанную во время досылки: пометка остаётся, следующий list досылает новую версию', async () => {
+  const v1 = compactAt(T0 + 1, 'V1');
+  const v2 = compactAt(T0 + 2, 'V2');
+  const text = c => ([, value]) => value === ser(c);
+  // V1 уже на устройстве и не дослана
+  const local = fakeLocal({ 'u_my-x': ser(v1), 'u_my-x:pending': '1' });
+  const cloud = heldCloud();
+  const store = createMyWorkouts({ cloud, local, cloudTimeout: 1000 });
+
+  const listing = store.list();
+  await cloud.answer('getKeys'); // облако пусто; list начинает досылать V1
+  const saving = store.save('my-x', v2);
+  await cloud.answer('setItem', false, text(v2)); // V2 облако не подтвердило
+  assert.deepEqual(await saving, { ok: true, localOnly: true });
+  await cloud.answer('setItem', true, text(v1)); // досылка V1 удалась
+
+  assert.deepEqual(await listing, [{ id: 'my-x', compact: v2, localOnly: true }]);
+  assert.equal(local.getItem('u_my-x'), ser(v2));
+  assert.equal(local.getItem('u_my-x:pending'), '1', 'подтверждена V1, а не V2');
+
+  // В облаке теперь V1, но пометка на месте: следующий list шлёт V2, а не берёт V1
+  const next = store.list();
+  await cloud.answer('getKeys');
+  await cloud.answer('getItems');
+  await cloud.answer('setItem', true, text(v2));
+  assert.deepEqual(await next, [{ id: 'my-x', compact: v2, localOnly: false }]);
+  assert.equal(cloud.data['u_my-x'], ser(v2));
+  assert.equal(local.getItem('u_my-x:pending'), null);
+  assert.equal(cloud.held.length, 0);
+});
+
+test('list не возвращает запись, удалённую во время чтения облака, и не пишет её на устройство', async () => {
+  const x = compactAt(T0 + 1);
+  const local = fakeLocal({ 'u_my-x': ser(x) });
+  const cloud = heldCloud({ data: { 'u_my-x': ser(x) } });
+  const store = createMyWorkouts({ cloud, local, cloudTimeout: 1000 });
+
+  const listing = store.list();
+  await cloud.answer('getKeys');
+  // Запрос значений ушёл, и облако уже отдало запись; пока ответ идёт, человек удаляет
+  const removing = store.remove('my-x');
+  await cloud.answer('removeItem');
+  await removing;
+  assert.equal(local.getItem('u_my-x:deleted'), null, 'удаление подтверждено, пометки нет');
+  await cloud.answer('getItems'); // ответ про запись, которой в облаке уже нет
+
+  assert.deepEqual(await listing, []);
+  assert.equal(local.getItem('u_my-x'), null);
+  assert.equal(cloud.data['u_my-x'], undefined);
+  assert.equal(cloud.held.length, 0);
+});
+
+test('подтверждение старой записи не снимает пометку у новой', async () => {
+  const a = compactAt(T0 + 1, 'Первая');
+  const b = compactAt(T0 + 2, 'Вторая');
+  const text = c => ([, value]) => value === ser(c);
+  const local = fakeLocal();
+  const cloud = heldCloud();
+  const store = createMyWorkouts({ cloud, local, cloudTimeout: 1000 });
+
+  // Вторая запись той же тренировки уходит, пока первая ещё без ответа
+  const first = store.save('my-x', a);
+  const second = store.save('my-x', b);
+  await cloud.answer('setItem', true, text(a));
+  assert.deepEqual(await first, { ok: true, localOnly: false });
+  assert.equal(local.getItem('u_my-x:pending'), '1', 'вторая ещё не подтверждена');
+  await cloud.answer('setItem', false, text(b));
+  assert.deepEqual(await second, { ok: true, localOnly: true });
+  assert.equal(local.getItem('u_my-x:pending'), '1');
+
+  // В облаке первая версия, но list шлёт вторую, а не принимает облачную
+  const listing = store.list();
+  await cloud.answer('getKeys');
+  await cloud.answer('getItems');
+  await cloud.answer('setItem', true, text(b));
+  assert.deepEqual(await listing, [{ id: 'my-x', compact: b, localOnly: false }]);
+  assert.equal(cloud.data['u_my-x'], ser(b));
+});
+
+test('сохранение и удаление без облака оставляют пометки: когда облако появится, они сработают', async () => {
+  const a = compactAt(T0 + 1, 'Сохранена без связи');
+  const b = compactAt(T0 + 2, 'Удалена без связи');
+  const local = fakeLocal();
+  const bare = createMyWorkouts({ local });
+  await bare.save('my-a', a);
+  await bare.save('my-b', b);
+  await bare.remove('my-b');
+  assert.equal(local.getItem('u_my-a:pending'), '1');
+  assert.equal(local.getItem('u_my-b:deleted'), '1');
+  assert.deepEqual(await bare.list(), [{ id: 'my-a', compact: a, localOnly: false }]);
+
+  // Следующий запуск уже с облаком, а удалённая там ещё лежит
+  const cloud = flakyCloud({ data: { 'u_my-b': ser(b) } });
+  const store = createMyWorkouts({ cloud, local, cloudTimeout: 20 });
+  assert.deepEqual(await store.list(), [{ id: 'my-a', compact: a, localOnly: false }]);
+  assert.equal(cloud.data['u_my-a'], ser(a), 'сохранённая без связи дошла до облака');
+  assert.equal(cloud.data['u_my-b'], undefined, 'удалённая не вернулась');
+  assert.equal(local.getItem('u_my-a:pending'), null);
+  assert.equal(local.getItem('u_my-b:deleted'), null);
+  assert.equal(local.getItem('u_my-b'), null);
+});
+
+test('сохранение поверх id с пометкой «удалено» снимает пометку', async () => {
+  const first = compactAt(T0 + 1, 'Первая');
+  const second = compactAt(T0 + 2, 'Вторая');
+
+  // Удаление облако не получило, а новое сохранение не подтвердило: пометка
+  // «удалено» не должна пережить сохранение, иначе list сотрёт новую в облаке
+  const cloud = flakyCloud({ silentRemove: 1, failSet: 2 });
+  const local = fakeLocal();
+  const store = createMyWorkouts({ cloud, local, cloudTimeout: 20 });
+  await store.save('my-a', first);
+  await store.remove('my-a');
+  assert.equal(local.getItem('u_my-a:deleted'), '1');
+  assert.deepEqual(await store.save('my-a', second), { ok: true, localOnly: true });
+  assert.equal(local.getItem('u_my-a:deleted'), null);
+  assert.deepEqual(await store.list(), [{ id: 'my-a', compact: second, localOnly: false }]);
+  assert.equal(cloud.data['u_my-a'], ser(second));
+  assert.equal(cloud.calls.removeItem, 1, 'повторного удаления нет');
+
+  // Устройство не приняло ничего, облако приняло: пометка снимается по ответу облака
+  const deviceFull = fakeLocal({ 'u_my-b:deleted': '1' }, { rejects: () => true });
+  const cloudB = flakyCloud();
+  const storeB = createMyWorkouts({ cloud: cloudB, local: deviceFull, cloudTimeout: 20 });
+  assert.deepEqual(await storeB.save('my-b', second), { ok: true, localOnly: false });
+  assert.equal(deviceFull.getItem('u_my-b:deleted'), null);
+  assert.deepEqual(idsOf(await storeB.list()), ['my-b']);
+});
+
+test('save отвергает запись, которую не прочитает parseCompact или не вместит облако', async () => {
+  const cloud = flakyCloud();
+  const local = fakeLocal();
+  const store = createMyWorkouts({ cloud, local, cloudTimeout: 20 });
+
+  await assert.rejects(store.save('my-a', { ...C, v: 2 }), /не прошла проверку формата/);
+  await assert.rejects(store.save('my-a', { ...C, name: '   ' }), /не прошла проверку формата/);
+  await assert.rejects(store.save('my-a', undefined), /не прошла проверку формата/);
+
+  // Читается, но не помещается в одно значение облака
+  const long = { ...C, strength: Array.from({ length: 120 }, (_, i) => `k${i}`.padEnd(40, 'x')) };
+  assert.notEqual(parseCompact(ser(long)), null);
+  assert.ok(ser(long).length > VALUE_MAX);
+  await assert.rejects(store.save('my-a', long), /не помещается в одну запись/);
+
+  assert.equal(local._map.size, 0, 'на устройство ничего не записано');
+  assert.equal(cloud.calls.setItem, 0, 'облаку ничего не отдано');
+  assert.deepEqual(await store.save('my-a', C), { ok: true, localOnly: false });
+});
+
+test('при пустом облаке getItems не вызывается', async () => {
+  // Чужая запись (отметка) не тренировка; недосланная тренировка по-прежнему досылается
+  const cloud = flakyCloud({ data: { 'm_legs-mwf_2026-09-01': '[]' } });
+  const local = fakeLocal({ 'u_my-p': ser(C), 'u_my-p:pending': '1' });
+  const store = createMyWorkouts({ cloud, local, cloudTimeout: 20 });
+
+  assert.deepEqual(await store.list(), [{ id: 'my-p', compact: C, localOnly: false }]);
+  assert.equal(cloud.calls.getKeys, 1);
+  assert.equal(cloud.calls.getItems, 0);
+  assert.equal(cloud.data['u_my-p'], ser(C));
+});
+
+test('подтверждение старого удаления не снимает пометку у нового', async () => {
+  const x = compactAt(T0 + 1);
+  const again = compactAt(T0 + 2, 'Сохранена заново');
+  const local = fakeLocal({ 'u_my-x': ser(x) });
+  const cloud = heldCloud({ data: { 'u_my-x': ser(x) } });
+  const store = createMyWorkouts({ cloud, local, cloudTimeout: 1000 });
+
+  // Удалили, сохранили заново и удалили снова, пока первое удаление без ответа
+  const first = store.remove('my-x');
+  const saving = store.save('my-x', again);
+  const last = store.remove('my-x');
+  await cloud.answer('removeItem'); // облако подтвердило первое удаление
+  await first;
+  assert.equal(local.getItem('u_my-x:deleted'), '1', 'последнее удаление ещё не подтверждено');
+
+  await cloud.answer('setItem'); // заново сохранённая лежит в облаке
+  await saving;
+  await cloud.answer('removeItem', false); // а последнее удаление облако не получило
+  await last;
+  assert.equal(cloud.data['u_my-x'], ser(again));
+  assert.equal(local.getItem('u_my-x:deleted'), '1');
+
+  // list повторяет удаление, а не возвращает тренировку из облака
+  const listing = store.list();
+  await cloud.answer('getKeys');
+  await cloud.answer('getItems');
+  await cloud.answer('removeItem');
+  assert.deepEqual(await listing, []);
+  assert.equal(cloud.data['u_my-x'], undefined);
+  assert.equal(local.getItem('u_my-x'), null);
+  assert.equal(local.getItem('u_my-x:deleted'), null);
+  assert.equal(cloud.held.length, 0);
 });
