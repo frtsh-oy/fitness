@@ -66,6 +66,75 @@ function isValidPreamblePart(part) {
   return false;
 }
 
+// Проверки одного упражнения: форма полей, видео, pattern, kind, gear и load.
+// Вынесены из validateWorkout, чтобы их разделяли два входа: готовая тренировка
+// и импорт таблицы упражнений (tools/import-exercises.mjs). Упражнение,
+// принятое импортом, пройдёт и проверку упражнения в тренировке. Уникальность
+// key внутри блока сюда не входит: она про соседей, а у функции на входе одно
+// упражнение. `at` — начало каждого сообщения: «Блок …, упражнение «…»» или
+// своё у вызывающего.
+export function itemProblems(item, at) {
+  const problems = [];
+  for (const field of ITEM_FIELDS) {
+    if (item[field] === undefined) problems.push(`${at}: нет поля ${field}`);
+  }
+  // Отсутствие key уже названо выше, поэтому здесь только форма.
+  if (item.key !== undefined && !isNonEmptyString(item.key)) problems.push(`${at}: key должен быть непустой строкой`);
+  for (const field of ITEM_TEXT_FIELDS) {
+    if (item[field] !== undefined && !isNonEmptyString(item[field])) problems.push(`${at}: поле ${field} должно быть непустой строкой`);
+  }
+  if (item.v !== undefined) problems.push(...videoProblems(item.v, at, 'v'));
+  if (item.links !== undefined) {
+    if (!Array.isArray(item.links)) {
+      problems.push(`${at}: links должен быть массивом`);
+    } else {
+      item.links.forEach((link, li) => problems.push(...videoProblems(link, at, `links[${li}]`)));
+    }
+  }
+
+  if (!PATTERNS.includes(item.pattern)) problems.push(`${at}: неизвестный pattern ${item.pattern}`);
+  if (!KINDS.includes(item.kind)) problems.push(`${at}: неизвестный kind ${item.kind}`);
+  if (typeof item.unilateral !== 'boolean') problems.push(`${at}: unilateral должен быть true или false`);
+
+  if (!Array.isArray(item.gear)) {
+    problems.push(`${at}: gear должен быть массивом`);
+  } else {
+    for (const g of item.gear) {
+      if (!GEAR.includes(g)) problems.push(`${at}: неизвестный инвентарь ${g}`);
+    }
+  }
+
+  if (item.load !== undefined && (typeof item.load !== 'object' || item.load === null || Array.isArray(item.load))) {
+    problems.push(`${at}: load должен быть объектом`);
+    return problems;
+  }
+  const load = item.load ?? {};
+  const entries = Object.entries(load);
+  // Непустой load нужен упражнению ЛЮБОГО типа, а не только силовому, — и
+  // только одному он не нужен, см. второй абзац. Пустой load у растяжки
+  // выбрасывал информацию без нужды: карта тела работает по правилу «клик
+  // по мышце даёт упражнения на неё», и без разметки клик по сгибателям
+  // бедра не покажет растяжку сгибателей бедра, потому что данные не знают,
+  // что это она. Разминку и заминку от объёма отделяет kind, а не пустота
+  // разметки.
+  //
+  // Исключение названо явно — pattern NO_LOAD_PATTERN. Восстановление
+  // («Спокойное дыхание») не тренирует ничего, и разметка, придуманная ради
+  // правила, врала бы и в объёме, и в подборе под картой. Послабление
+  // привязано к pattern, а не к kind, хотя дыхание и единственная заминка
+  // без разметки: заминка — это в основном растяжки, а им разметка как раз
+  // обязательна (см. абзац выше про клик по мышце). Разреши мы пустоту
+  // всем заминкам — забытая разметка растяжки прошла бы проверку молча.
+  if (entries.length === 0 && item.pattern !== NO_LOAD_PATTERN) {
+    problems.push(`${at}: нужен непустой load (пустой разрешён только при pattern ${NO_LOAD_PATTERN})`);
+  }
+  for (const [id, value] of entries) {
+    if (!isMuscleId(id)) problems.push(`${at}: неизвестная группа мышц ${id}`);
+    if (!LOAD_VALUES.includes(value)) problems.push(`${at}: load[${id}] должен быть 1 или 0.5, получено ${value}`);
+  }
+  return problems;
+}
+
 export function validateWorkout(workout) {
   const problems = [];
 
@@ -169,74 +238,19 @@ export function validateWorkout(workout) {
     }
 
     // key — устойчивый идентификатор упражнения: из него строится идентификатор
-    // отметки (см. render.js). Требуется у каждого упражнения и обязан быть
-    // уникальным внутри блока. Без первого отметки «переезжают» на соседей при
-    // любой вставке упражнения, без второго два чекбокса схлопываются в один
-    // идентификатор — и оба раза молча, потому что countMarks по-прежнему
-    // насчитает 37.
+    // отметки (см. render.js). Требуется у каждого упражнения (itemProblems) и
+    // обязан быть уникальным внутри блока — это проверяется здесь, потому что
+    // для одного упражнения «внутри блока» ничего не значит. Без первого
+    // отметки «переезжают» на соседей при любой вставке упражнения, без второго
+    // два чекбокса схлопываются в один идентификатор — и оба раза молча, потому
+    // что countMarks по-прежнему насчитает 37.
     const seenKeys = new Set();
     for (const item of block.items) {
       const at = `${where}, упражнение «${item.name ?? '?'}»`;
-      for (const field of ITEM_FIELDS) {
-        if (item[field] === undefined) problems.push(`${at}: нет поля ${field}`);
-      }
-      // Отсутствие key уже названо выше, поэтому здесь только форма и уникальность.
-      if (item.key !== undefined) {
-        if (!isNonEmptyString(item.key)) problems.push(`${at}: key должен быть непустой строкой`);
-        else if (seenKeys.has(item.key)) problems.push(`${at}: дубликат key ${item.key} внутри блока`);
+      problems.push(...itemProblems(item, at));
+      if (isNonEmptyString(item.key)) {
+        if (seenKeys.has(item.key)) problems.push(`${at}: дубликат key ${item.key} внутри блока`);
         seenKeys.add(item.key);
-      }
-      for (const field of ITEM_TEXT_FIELDS) {
-        if (item[field] !== undefined && !isNonEmptyString(item[field])) problems.push(`${at}: поле ${field} должно быть непустой строкой`);
-      }
-      if (item.v !== undefined) problems.push(...videoProblems(item.v, at, 'v'));
-      if (item.links !== undefined) {
-        if (!Array.isArray(item.links)) {
-          problems.push(`${at}: links должен быть массивом`);
-        } else {
-          item.links.forEach((link, li) => problems.push(...videoProblems(link, at, `links[${li}]`)));
-        }
-      }
-
-      if (!PATTERNS.includes(item.pattern)) problems.push(`${at}: неизвестный pattern ${item.pattern}`);
-      if (!KINDS.includes(item.kind)) problems.push(`${at}: неизвестный kind ${item.kind}`);
-      if (typeof item.unilateral !== 'boolean') problems.push(`${at}: unilateral должен быть true или false`);
-
-      if (!Array.isArray(item.gear)) {
-        problems.push(`${at}: gear должен быть массивом`);
-      } else {
-        for (const g of item.gear) {
-          if (!GEAR.includes(g)) problems.push(`${at}: неизвестный инвентарь ${g}`);
-        }
-      }
-
-      if (item.load !== undefined && (typeof item.load !== 'object' || item.load === null || Array.isArray(item.load))) {
-        problems.push(`${at}: load должен быть объектом`);
-        continue;
-      }
-      const load = item.load ?? {};
-      const entries = Object.entries(load);
-      // Непустой load нужен упражнению ЛЮБОГО типа, а не только силовому, — и
-      // только одному он не нужен, см. второй абзац. Пустой load у растяжки
-      // выбрасывал информацию без нужды: карта тела работает по правилу «клик
-      // по мышце даёт упражнения на неё», и без разметки клик по сгибателям
-      // бедра не покажет растяжку сгибателей бедра, потому что данные не знают,
-      // что это она. Разминку и заминку от объёма отделяет kind, а не пустота
-      // разметки.
-      //
-      // Исключение названо явно — pattern NO_LOAD_PATTERN. Восстановление
-      // («Спокойное дыхание») не тренирует ничего, и разметка, придуманная ради
-      // правила, врала бы и в объёме, и в подборе под картой. Послабление
-      // привязано к pattern, а не к kind, хотя дыхание и единственная заминка
-      // без разметки: заминка — это в основном растяжки, а им разметка как раз
-      // обязательна (см. абзац выше про клик по мышце). Разреши мы пустоту
-      // всем заминкам — забытая разметка растяжки прошла бы проверку молча.
-      if (entries.length === 0 && item.pattern !== NO_LOAD_PATTERN) {
-        problems.push(`${at}: нужен непустой load (пустой разрешён только при pattern ${NO_LOAD_PATTERN})`);
-      }
-      for (const [id, value] of entries) {
-        if (!isMuscleId(id)) problems.push(`${at}: неизвестная группа мышц ${id}`);
-        if (!LOAD_VALUES.includes(value)) problems.push(`${at}: load[${id}] должен быть 1 или 0.5, получено ${value}`);
       }
     }
   }
