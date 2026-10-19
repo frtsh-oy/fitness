@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { MUSCLES } from '../muscles.js';
-import { PATTERNS, validateWorkout, itemProblems } from '../workouts/schema.js';
+import { PATTERNS, validateWorkout, itemProblems, KEY_PATTERN as SCHEMA_KEY_PATTERN, YOUTUBE_ID } from '../workouts/schema.js';
 import {
   COLUMNS, KEY_PATTERN, parseCsv, parseYoutube, formatStart, buildLibrary, renderLibraryJs,
 } from '../tools/import-exercises.mjs';
@@ -127,6 +127,20 @@ test('ключ: только строчная латиница, цифры и д
   assert.ok(!KEY_PATTERN.test('Hip'));
 });
 
+// Шаблон ключа один на всё приложение и живёт в схеме: его же применяет
+// parseCompact (builder/compact.js). Разойдись две копии, сохранённая
+// тренировка с ключом, который импорт принял, молча не читалась бы. Тот же
+// объект, а не равный по тексту: так возврат своей копии виден сразу.
+test('шаблон ключа импорта — тот же объект, что в схеме', () => {
+  assert.equal(KEY_PATTERN, SCHEMA_KEY_PATTERN);
+});
+
+test('ролик: импорт принимает ровно те id, которые разрешает схема', () => {
+  for (const id of ['abcdefghijk', 'ab_def-hijk', 'ABCDEFGHIJK', 'abcdefghij', 'abcdefghijkl', 'abc!efghijk', 'abcdefghi k', 'абвгдеёжзик']) {
+    assert.equal(parseYoutube(`https://www.youtube.com/watch?v=${id}`) !== null, YOUTUBE_ID.test(id), id);
+  }
+});
+
 test('ключ из ячейки с пробелами по краям читается без пробелов', () => {
   assert.equal(build([row({ 'Ключ': ' rdl ' })]).entries[0].key, 'rdl');
 });
@@ -176,7 +190,8 @@ test('Паттерн: десять русских названий дают де
     'кор': 'core', 'изолирующее': 'isolation', 'подвижность': 'mobility', 'растяжка': 'stretch', 'восстановление': 'recovery' };
   assert.deepEqual(Object.values(names).sort(), [...PATTERNS].sort(), 'в PATTERNS появился паттерн без русского названия');
   for (const [ru, pattern] of Object.entries(names)) {
-    const over = pattern === 'recovery' ? { 'Паттерн': ru, ...NO_LOAD } : { 'Паттерн': ru };
+    // Пустая разметка у «восстановления» допустима только вне силовых.
+    const over = pattern === 'recovery' ? { ...COOLDOWN, 'Паттерн': ru, ...NO_LOAD } : { 'Паттерн': ru };
     assert.equal(build([row(over)]).entries[0].pattern, pattern, ru);
   }
 });
@@ -360,6 +375,15 @@ test('проверки itemProblems: у восстановления пуста�
   const result = build([row({ ...COOLDOWN, 'Паттерн': 'восстановление', ...NO_LOAD })]);
   assert.deepEqual(result.errors, []);
   assert.deepEqual(result.entries[0].load, {});
+});
+
+test('проверки импорта: у силового пустая разметка отвергается и при паттерне «восстановление»', () => {
+  // Пара из такого упражнения не назвала бы ни одной группы, и своя тренировка
+  // с ним не прошла бы validateWorkout.
+  assert.deepEqual(errorsOf([row({ 'Паттерн': 'восстановление', ...NO_LOAD })]),
+    ['Строка 2, колонки мышц: у силового нужна хотя бы одна группа — 1 или 0,5']);
+  // Хоть одна группа размечена — строка принимается.
+  assert.deepEqual(errorsOf([row({ 'Паттерн': 'восстановление', ...NO_LOAD, 'Ягодичные': '0,5' })]), []);
 });
 
 test('itemProblems идёт в каждой строке: независимые ошибки видны сразу, эха названных нет', () => {

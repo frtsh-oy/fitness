@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { LIBRARY, entry } from '../exercises/index.js';
 import { validateWorkout } from '../workouts/schema.js';
 import { MAX_STRENGTH } from '../builder/rules.js';
+import { KEY_PATTERN } from '../workouts/schema.js';
 import { PAIR_PREAMBLE, BLOCK_TEXTS, progressionFor, CAUTION } from '../builder/texts.js';
 import {
   NAME_MAX, VALUE_MAX, serializeCompact, parseCompact, roundsOf, exerciseCount, expandWorkout,
@@ -145,7 +146,7 @@ test('шапка: название, дни, тексты уровня, счёт�
     { v: '17', l: 'упражнений' },
     { v: '3 + 2', l: 'круга разминки + каждой пары' },
   ]);
-  assert.equal(workout.equipment, 'Нужно: коврик, длинная резинка, мини-петля');
+  assert.equal(workout.equipment, 'Нужно: коврик, длинная резинка, мини-петля.');
   assert.deepEqual(workout.progression, progressionFor('beginner'));
   assert.equal(workout.caution, CAUTION);
 
@@ -171,7 +172,7 @@ test('счётчик упражнений и инвентарь считают �
   const noGear = expandWorkout('my-x', {
     ...MANUAL, warmup: ['pelvic-tilt'], circuit: [], strength: ['bird-dog'], cooldown: ['breathing'],
   }).workout;
-  assert.equal(noGear.equipment, 'Нужно: коврик');
+  assert.equal(noGear.equipment, 'Нужно: коврик.');
   assert.deepEqual(noGear.stats[0], { v: '3', l: 'упражнения' });
 });
 
@@ -234,6 +235,26 @@ test('parseCompact принимает записи в допустимых гр�
     assert.deepEqual(parseCompact(serializeCompact(c)), c);
   }
   assert.deepEqual(parseCompact(serializeCompact({ ...MANUAL, чужое: 1, name: ' Моя ' })), { ...MANUAL, name: ' Моя ' });
+});
+
+test('parseCompact принимает запись, где всё пустое, и она разворачивается без блоков', () => {
+  // Пустые слоты, нет уровня, зон и упора — допустимая запись: «слот не может
+  // быть пустым» из неё сделало бы нечитаемую тренировку, например после замены
+  // в библиотеке всех её упражнений.
+  const empty = { v: 1, name: 'Пустая', days: [1], level: null, zones: [], warmup: [], circuit: [], strength: [], focus: [], cooldown: [], t: 0 };
+  assert.deepEqual(parseCompact(serializeCompact(empty)), empty);
+  const { workout, removed } = expandWorkout('my-empty', empty);
+  assert.deepEqual(workout.blocks, []);
+  assert.deepEqual(removed, []);
+});
+
+// Ключ принимает один и тот же шаблон у импорта таблицы и у чтения записи: иначе
+// ключ, который библиотека приняла, делал бы тренировку нечитаемой.
+test('parseCompact принимает ровно те ключи, которые принимает шаблон ключа библиотеки', () => {
+  for (const key of ['a', '0', 'rdl-2', 'a'.repeat(40), 'Bad', 'rdl_2', 'a b', '', 'a'.repeat(41), 'ключ']) {
+    const parsed = parseCompact(serializeCompact({ ...MANUAL, strength: [key] }));
+    assert.equal(parsed !== null, KEY_PATTERN.test(key), JSON.stringify(key));
+  }
 });
 
 test('название с кавычками и эмодзи переживает запись и чтение', () => {

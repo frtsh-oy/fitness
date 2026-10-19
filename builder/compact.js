@@ -6,6 +6,7 @@
 import { LIBRARY, toItem } from '../exercises/index.js';
 import { groupsPhrase } from '../muscles.js';
 import { LEVELS, ZONES, MANUAL_ROUNDS, SKELETON } from './rules.js';
+import { KEY_PATTERN } from '../workouts/schema.js';
 import { arrangeStrength } from './arrange.js';
 import {
   plural, PAIR_PREAMBLE, BLOCK_TEXTS, CAUTION, progressionFor, kickerFor, leadFor, equipmentFor,
@@ -23,16 +24,14 @@ import {
 export const NAME_MAX = 60;
 export const VALUE_MAX = 4096;
 
-// Ключ упражнения — как в библиотеке (тот же шаблон проверяет импорт таблицы,
-// tools/import-exercises.mjs; из tools/ приложение не импортирует).
-const KEY = /^[a-z0-9-]{1,40}$/;
 const SLOTS = ['warmup', 'circuit', 'strength', 'cooldown'];
 
 export function serializeCompact(compact) {
   return JSON.stringify(compact);
 }
 
-const isKey = value => typeof value === 'string' && KEY.test(value);
+// Шаблон ключа — тот, по которому импорт принимает упражнения в библиотеку.
+const isKey = value => typeof value === 'string' && KEY_PATTERN.test(value);
 const isOwn = (object, id) => typeof id === 'string' && Object.hasOwn(object, id);
 const isDistinctArray = (value, ok) => Array.isArray(value) && value.every(ok) && new Set(value).size === value.length;
 

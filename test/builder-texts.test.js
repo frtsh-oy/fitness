@@ -94,12 +94,14 @@ test('equipmentFor: коврик и подписи инвентаря в пос�
   const band = byGear('band_long');
   const loop = byGear('loop_short');
   const none = byGear('none');
-  assert.equal(equipmentFor([]), 'Нужно: коврик');
-  assert.equal(equipmentFor([none]), 'Нужно: коврик');
-  assert.equal(equipmentFor([loop, none]), 'Нужно: коврик, мини-петля');
-  assert.equal(equipmentFor([band, none]), 'Нужно: коврик, длинная резинка');
-  assert.equal(equipmentFor([loop, band, band]), 'Нужно: коврик, длинная резинка, мини-петля');
-  assert.equal(equipmentFor([band, loop]), 'Нужно: коврик, длинная резинка, мини-петля');
+  // Точка в конце — как у строки готовой тренировки («Нужно: …, стена.»): на
+  // одном экране они должны выглядеть одинаково.
+  assert.equal(equipmentFor([]), 'Нужно: коврик.');
+  assert.equal(equipmentFor([none]), 'Нужно: коврик.');
+  assert.equal(equipmentFor([loop, none]), 'Нужно: коврик, мини-петля.');
+  assert.equal(equipmentFor([band, none]), 'Нужно: коврик, длинная резинка.');
+  assert.equal(equipmentFor([loop, band, band]), 'Нужно: коврик, длинная резинка, мини-петля.');
+  assert.equal(equipmentFor([band, loop]), 'Нужно: коврик, длинная резинка, мини-петля.');
   // Упражнение с двумя видами инвентаря (если появится) называет оба.
-  assert.equal(equipmentFor([{ ...entry('rdl'), gear: ['loop_short', 'band_long'] }]), 'Нужно: коврик, длинная резинка, мини-петля');
+  assert.equal(equipmentFor([{ ...entry('rdl'), gear: ['loop_short', 'band_long'] }]), 'Нужно: коврик, длинная резинка, мини-петля.');
 });
