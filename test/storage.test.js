@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createStorage, storageKey, currentDay } from '../storage.js';
+import { createStorage, storageKey, currentDay, yesterday } from '../storage.js';
 
 function fakeLocal() {
   const map = new Map();
@@ -8,6 +8,8 @@ function fakeLocal() {
     getItem: k => (map.has(k) ? map.get(k) : null),
     setItem: (k, v) => map.set(k, String(v)),
     removeItem: k => map.delete(k),
+    key: i => [...map.keys()][i] ?? null,
+    get length() { return map.size; },
     _map: map,
   };
 }
@@ -19,12 +21,14 @@ function throwingLocal() {
     getItem: () => { throw new Error('приватный режим'); },
     setItem: () => { throw new Error('приватный режим'); },
     removeItem: () => { throw new Error('приватный режим'); },
+    key: () => { throw new Error('приватный режим'); },
+    get length() { throw new Error('приватный режим'); },
   };
 }
 
 const today = () => '2026-09-14';
 
-const KEY = 'w:legs-mwf:2026-09-14';
+const KEY = 'm_legs-mwf_2026-09-14';
 // Признак «локальная копия не подтверждена облаком» — ключ производный от
 // основного, поэтому сбрасывается по дате вместе с отметками.
 const PENDING = `${KEY}:pending`;
@@ -39,7 +43,7 @@ function withDeadline(promise, ms = 300) {
 }
 
 test('ключ включает id тренировки и дату', () => {
-  assert.equal(storageKey('legs-mwf', '2026-09-14'), 'w:legs-mwf:2026-09-14');
+  assert.equal(storageKey('legs-mwf', '2026-09-14'), 'm_legs-mwf_2026-09-14');
 });
 
 test('пустое хранилище отдаёт пустое множество', async () => {
@@ -72,7 +76,7 @@ test('отметки за вчера сегодня не читаются', asyn
 
 test('битое значение в хранилище не роняет загрузку', async () => {
   const local = fakeLocal();
-  local.setItem('w:legs-mwf:2026-09-14', 'не json');
+  local.setItem(KEY, 'не json');
   const marks = await createStorage({ local, today }).load('legs-mwf');
   assert.deepEqual([...marks], []);
 });
@@ -86,7 +90,7 @@ test('CloudStorage используется когда доступен', async 
   };
   const s = createStorage({ cloud, local: fakeLocal(), today });
   await s.save('legs-mwf', new Set(['x']));
-  assert.ok(store.has('w:legs-mwf:2026-09-14'), 'запись не ушла в CloudStorage');
+  assert.ok(store.has(KEY), 'запись не ушла в CloudStorage');
   assert.deepEqual([...(await s.load('legs-mwf'))], ['x']);
 });
 
@@ -156,9 +160,9 @@ test('НАХОДКА E: clear работает с CloudStorage и удаляет
   };
   const s = createStorage({ cloud, local: fakeLocal(), today });
   await s.save('legs-mwf', new Set(['x']));
-  assert.ok(store.has('w:legs-mwf:2026-09-14'), 'данные не записались');
+  assert.ok(store.has(KEY), 'данные не записались');
   await s.clear('legs-mwf');
-  assert.ok(!store.has('w:legs-mwf:2026-09-14'), 'ключ не удалён из CloudStorage');
+  assert.ok(!store.has(KEY), 'ключ не удалён из CloudStorage');
   assert.deepEqual([...(await s.load('legs-mwf'))], []);
 });
 
@@ -166,7 +170,7 @@ test('НАХОДКА E: clear работает с CloudStorage и удаляет
 
 test('ПРАВИЛО 1A: ошибка getItem → читаем из localStorage', async () => {
   const local = fakeLocal();
-  local.setItem('w:legs-mwf:2026-09-14', '["локальная-отметка"]');
+  local.setItem(KEY, '["локальная-отметка"]');
   const cloud = { getItem: (k, cb) => cb(new Error('нет сети')) };
   const s = createStorage({ cloud, local, today });
   // При ошибке облака берём из localStorage
@@ -175,7 +179,7 @@ test('ПРАВИЛО 1A: ошибка getItem → читаем из localStorage
 
 test('ПРАВИЛО 1B: синхронный throw getItem → читаем из localStorage', async () => {
   const local = fakeLocal();
-  local.setItem('w:legs-mwf:2026-09-14', '["локальная-отметка"]');
+  local.setItem(KEY, '["локальная-отметка"]');
   const cloud = { getItem: () => { throw new Error('бум'); } };
   const s = createStorage({ cloud, local, today });
   // При синхронном throw берём из localStorage
@@ -184,7 +188,7 @@ test('ПРАВИЛО 1B: синхронный throw getItem → читаем и�
 
 test('ПРАВИЛО 1C: таймаут getItem → читаем из localStorage', async () => {
   const local = fakeLocal();
-  local.setItem('w:legs-mwf:2026-09-14', '["локальная-отметка"]');
+  local.setItem(KEY, '["локальная-отметка"]');
   const cloud = { getItem: () => { /* никогда не вызовет cb */ } };
   const s = createStorage({ cloud, local, today, cloudTimeout: 10 });
   // При таймауте берём из localStorage
@@ -193,7 +197,7 @@ test('ПРАВИЛО 1C: таймаут getItem → читаем из localStora
 
 test('ПРАВИЛО 1D: пустой успешный ответ облака не подменяется localStorage', async () => {
   const local = fakeLocal();
-  local.setItem('w:legs-mwf:2026-09-14', '["устаревшая-отметка"]');
+  local.setItem(KEY, '["устаревшая-отметка"]');
   const cloud = { getItem: (k, cb) => cb(null, '') }; // Успешный пустой ответ
   const s = createStorage({ cloud, local, today });
   // Успешный ответ берём как есть, даже если пусто (не подменяем локальными)
@@ -238,7 +242,7 @@ test('ПРАВИЛО 2C: таймаут setItem → пишем в localStorage',
 
 test('ПРАВИЛО 3A: ошибка removeItem → чистим localStorage', async () => {
   const local = fakeLocal();
-  local.setItem('w:legs-mwf:2026-09-14', '["отметка"]');
+  local.setItem(KEY, '["отметка"]');
   const cloud = {
     removeItem: (k, cb) => cb(new Error('нет сети')),
     getItem: (k, cb) => cb(new Error('нет сети')), // getItem тоже отказал
@@ -251,7 +255,7 @@ test('ПРАВИЛО 3A: ошибка removeItem → чистим localStorage',
 
 test('ПРАВИЛО 3B: синхронный throw removeItem → чистим localStorage', async () => {
   const local = fakeLocal();
-  local.setItem('w:legs-mwf:2026-09-14', '["отметка"]');
+  local.setItem(KEY, '["отметка"]');
   const cloud = {
     removeItem: () => { throw new Error('бум'); },
     getItem: (k, cb) => cb(new Error('бум')), // getItem тоже отказал
@@ -264,7 +268,7 @@ test('ПРАВИЛО 3B: синхронный throw removeItem → чистим 
 
 test('ПРАВИЛО 3C: таймаут removeItem → чистим localStorage', async () => {
   const local = fakeLocal();
-  local.setItem('w:legs-mwf:2026-09-14', '["отметка"]');
+  local.setItem(KEY, '["отметка"]');
   const cloud = {
     removeItem: () => { /* никогда не вызовет cb */ },
     getItem: (k, cb) => { /* тоже никогда не вызовет cb */ },
@@ -376,7 +380,7 @@ test('НАХОДКА 2E: вчерашний признак не влияет н�
     getItem: (k, cb) => cb(null, '["облачная-отметка"]'),
   };
   await createStorage({ cloud, local, today: () => '2026-09-13' }).save('legs-mwf', new Set(['вчера']));
-  // Признак вчерашнего дня лежит под ключом w:legs-mwf:2026-09-13:pending
+  // Признак вчерашнего дня лежит под ключом m_legs-mwf_2026-09-13:pending
   // и до сегодняшнего чтения не дотягивается
   const marks = await createStorage({ cloud, local, today }).load('legs-mwf');
   assert.deepEqual([...marks], ['облачная-отметка']);
@@ -569,7 +573,7 @@ test('день по умолчанию берётся по местному вр
 
   const local = fakeLocal();
   await createStorage({ local }).save('legs-mwf', new Set(['вечерняя-отметка']));
-  assert.deepEqual([...local._map.keys()], ['w:legs-mwf:2026-09-14']);
+  assert.deepEqual([...local._map.keys()], [KEY]);
 });
 
 // ФИНАЛЬНОЕ РЕВЬЮ, пункт 1: localStorage — сквозной кэш, а не запасной выход.
@@ -686,4 +690,178 @@ test('СКВОЗНОЙ КЭШ: сброс стирает локальную ко
 
   assert.equal(local.getItem(KEY), null, 'сброшенный день остался в кэше и воскреснет при следующем открытии');
   assert.equal(local.getItem(PENDING), null, 'признак пережил сброс');
+});
+
+// Чистка старых отметок. CloudStorage держит до 1024 записей на человека, а
+// каждый день тренировки без чистки занимал бы одну из них навсегда.
+
+// Облако с getKeys и removeItems, как у настоящего. data — обычный объект:
+// тесты сравнивают его ключи, а не вызовы. calls — порядок обращений к облаку.
+function fakeCloud({ data = {}, failGetKeys = false, failRemoveItems = false } = {}) {
+  const calls = [];
+  return {
+    data,
+    calls,
+    getKeys: cb => {
+      calls.push('getKeys');
+      if (failGetKeys) cb(new Error('нет сети'), ['m_legs-mwf_2026-09-01']);
+      else cb(null, Object.keys(data));
+    },
+    removeItems: (keys, cb) => {
+      calls.push('removeItems');
+      if (failRemoveItems) { cb(new Error('нет сети')); return; }
+      for (const key of keys) delete data[key];
+      cb(null, true);
+    },
+    getItem: (k, cb) => cb(null, data[k] ?? ''),
+    setItem: (k, v, cb) => { data[k] = v; cb(null, true); },
+    removeItem: (k, cb) => { delete data[k]; cb(null, true); },
+  };
+}
+
+function localWith(keys) {
+  const local = fakeLocal();
+  for (const key of keys) local.setItem(key, '[]');
+  return local;
+}
+
+test('yesterday переходит через месяц, год и 29 февраля', () => {
+  assert.equal(yesterday('2026-03-01'), '2026-02-28');
+  assert.equal(yesterday('2027-01-01'), '2026-12-31');
+  assert.equal(yesterday('2028-03-01'), '2028-02-29');
+});
+
+test('yesterday не зависит от часового пояса устройства', t => {
+  const realTZ = process.env.TZ;
+  t.after(() => {
+    if (realTZ === undefined) delete process.env.TZ; else process.env.TZ = realTZ;
+  });
+  // День — это строка, а не момент времени. Восточнее Гринвича местная полночь
+  // по UTC уже вчерашняя, и вычитание через местное время сдвинуло бы день дважды.
+  for (const zone of ['Pacific/Auckland', 'America/New_York', 'UTC']) {
+    process.env.TZ = zone;
+    assert.equal(yesterday('2026-09-14'), '2026-09-13', zone);
+    assert.equal(yesterday('2026-03-09'), '2026-03-08', zone);
+  }
+});
+
+test('prune удаляет из облака отметки старше вчерашнего дня и не трогает вчера, сегодня и чужие ключи', async () => {
+  const cloud = fakeCloud({ data: {
+    'm_legs-mwf_2026-09-12': '[]', 'm_legs-mwf_2026-09-13': '[]', 'm_legs-mwf_2026-09-14': '[]',
+    'm_my-abc_2026-08-01': '[]', 'u_my-abc': '{}',
+  } });
+  await createStorage({ cloud, local: fakeLocal(), today }).prune();
+  assert.deepEqual(Object.keys(cloud.data).sort(), ['m_legs-mwf_2026-09-13', 'm_legs-mwf_2026-09-14', 'u_my-abc']);
+});
+
+test('prune убирает устаревшее из облака одним запросом removeItems', async () => {
+  const cloud = fakeCloud({ data: {
+    'm_legs-mwf_2026-09-10': '[]', 'm_legs-mwf_2026-09-11': '[]', 'm_my-abc_2026-08-01': '[]',
+  } });
+  await createStorage({ cloud, local: fakeLocal(), today }).prune();
+  assert.deepEqual(cloud.calls, ['getKeys', 'removeItems']);
+  assert.deepEqual(cloud.data, {});
+});
+
+test('prune не зовёт removeItems, когда стирать нечего', async () => {
+  const cloud = fakeCloud({ data: { 'm_legs-mwf_2026-09-14': '[]', 'u_my-abc': '{}' } });
+  await createStorage({ cloud, local: fakeLocal(), today }).prune();
+  assert.deepEqual(cloud.calls, ['getKeys']);
+});
+
+test('prune чистит устройство: отметки обоих форматов старше вчерашнего дня вместе с признаками', async () => {
+  const local = localWith([
+    'w:legs-mwf:2026-09-10', 'w:legs-mwf:2026-09-10:pending',
+    'm_legs-mwf_2026-09-12', 'm_legs-mwf_2026-09-12:pending',
+    'm_legs-mwf_2026-09-13', 'section', 'u_my-abc',
+  ]);
+  await createStorage({ local, today }).prune();
+  assert.deepEqual([...local._map.keys()].sort(), ['m_legs-mwf_2026-09-13', 'section', 'u_my-abc']);
+});
+
+test('prune не трогает на устройстве вчера и сегодня — ни отметки, ни признак, ни старый формат', async () => {
+  const kept = [
+    'm_legs-mwf_2026-09-13', 'm_legs-mwf_2026-09-13:pending',
+    'm_legs-mwf_2026-09-14', 'm_legs-mwf_2026-09-14:pending',
+    'w:legs-mwf:2026-09-13', 'w:legs-mwf:2026-09-13:pending',
+    'w:legs-mwf:2026-09-14',
+  ];
+  const local = localWith(kept);
+  await createStorage({ local, today }).prune();
+  assert.deepEqual([...local._map.keys()].sort(), [...kept].sort());
+});
+
+test('prune чистит устройство синхронно и до первого обращения к облаку', async () => {
+  const local = localWith(['m_legs-mwf_2026-09-12', 'm_legs-mwf_2026-09-13']);
+  const cloud = fakeCloud({ data: { 'm_legs-mwf_2026-09-12': '[]' } });
+  let deviceWhenCloudAsked = null;
+  const getKeys = cloud.getKeys;
+  cloud.getKeys = cb => { deviceWhenCloudAsked = [...local._map.keys()]; getKeys(cb); };
+
+  const pending = createStorage({ cloud, local, today }).prune();   // без await: приложение не ждёт
+  assert.deepEqual([...local._map.keys()], ['m_legs-mwf_2026-09-13'], 'устройство не вычищено к моменту возврата из prune');
+  await pending;
+  assert.deepEqual(deviceWhenCloudAsked, ['m_legs-mwf_2026-09-13'], 'облако спросили раньше, чем почистили устройство');
+});
+
+test('отказ getKeys не роняет prune и ничего не удаляет из облака, а устройство всё равно чистится', async () => {
+  const local = localWith(['m_legs-mwf_2026-09-12', 'm_legs-mwf_2026-09-13']);
+  // Вместе с ошибкой облако отдаёт список: ему нельзя верить, как и любому
+  // значению при ошибке, иначе мы стёрли бы по обрывку чужого ответа
+  const cloud = fakeCloud({ data: { 'm_legs-mwf_2026-09-01': '[]' }, failGetKeys: true });
+  await createStorage({ cloud, local, today }).prune();
+  assert.deepEqual(cloud.calls, ['getKeys']);
+  assert.deepEqual(Object.keys(cloud.data), ['m_legs-mwf_2026-09-01']);
+  assert.deepEqual([...local._map.keys()], ['m_legs-mwf_2026-09-13']);
+});
+
+test('синхронное исключение и таймаут getKeys тоже не роняют prune', async () => {
+  const throwing = { getKeys: () => { throw new Error('бум'); } };
+  await withDeadline(createStorage({ cloud: throwing, local: fakeLocal(), today }).prune());
+
+  const silent = { getKeys: () => { /* никогда не ответит */ }, removeItems: () => { throw new Error('не должен вызываться'); } };
+  await withDeadline(createStorage({ cloud: silent, local: fakeLocal(), today, cloudTimeout: 10 }).prune(), 1000);
+});
+
+test('ответ getKeys не списком — prune ничего не удаляет', async () => {
+  const cloud = { getKeys: cb => cb(null, null), removeItems: () => { throw new Error('не должен вызываться'); } };
+  await withDeadline(createStorage({ cloud, local: fakeLocal(), today }).prune());
+});
+
+test('отказ removeItems не роняет prune', async () => {
+  const cloud = fakeCloud({ data: { 'm_legs-mwf_2026-09-01': '[]' }, failRemoveItems: true });
+  await withDeadline(createStorage({ cloud, local: fakeLocal(), today }).prune());
+  assert.deepEqual(cloud.calls, ['getKeys', 'removeItems']);
+});
+
+test('prune с бросающим localStorage и без облака не падает', async () => {
+  const s = createStorage({ local: throwingLocal(), today });
+  await withDeadline(s.prune());
+});
+
+test('prune без облака и без localStorage не падает', async () => {
+  await withDeadline(createStorage({ today }).prune());
+});
+
+test('prune не бросает при today() не в формате ГГГГ-ММ-ДД', async () => {
+  // Границы нет — значит нечего и стирать: ни на устройстве, ни в облаке.
+  // Исключение здесь убило бы запуск приложения: startApp зовёт prune() без защиты.
+  const throwing = () => { throw new Error('часы сломаны'); };
+  for (const badToday of [() => '09/14/2026', () => '', () => 'сегодня', () => undefined, throwing]) {
+    const local = localWith(['m_legs-mwf_2026-09-01']);
+    const cloud = fakeCloud({ data: { 'm_legs-mwf_2026-09-01': '[]' } });
+    const s = createStorage({ cloud, local, today: badToday });
+
+    let pending;
+    assert.doesNotThrow(() => { pending = s.prune(); }, 'prune бросил синхронно');
+    await withDeadline(pending);
+    assert.deepEqual([...local._map.keys()], ['m_legs-mwf_2026-09-01'], 'устройство тронуто без границы');
+    assert.deepEqual(cloud.calls, [], 'облако тронуто без границы');
+  }
+});
+
+test('prune с бросающим localStorage всё равно чистит облако', async () => {
+  const cloud = fakeCloud({ data: { 'm_legs-mwf_2026-09-01': '[]', 'm_legs-mwf_2026-09-14': '[]' } });
+  await createStorage({ cloud, local: throwingLocal(), today }).prune();
+  assert.deepEqual(Object.keys(cloud.data), ['m_legs-mwf_2026-09-14']);
 });

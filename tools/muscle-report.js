@@ -1,5 +1,6 @@
-// Генерирует docs/muscle-map.md — сводку разметки мышц (поле load в
-// workouts/*.js) для вычитки человеком. Разметка составлена по описаниям
+// Генерирует docs/muscle-map.md — сводку разметки мышц (поле load; оно живёт в
+// библиотеке упражнений exercises/, а тренировки в workouts/*.js берут
+// упражнения оттуда) для вычитки человеком. Разметка составлена по описаниям
 // упражнений, это инженерное суждение, а не заключение тренера: ошибка в ней
 // ничего не ломает и нигде не падает, а тихо искажает будущую оценку нагрузки.
 // Отсюда и требование к этому файлу: то, что он печатает, должно быть
@@ -9,6 +10,7 @@
 import { writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { MUSCLES, muscleLabel } from '../muscles.js';
+import { LIBRARY, SLOT_LABELS, DIFFICULTY_LABELS } from '../exercises/index.js';
 import { WORKOUTS } from '../workouts/index.js';
 import { weeklyRows, formatSets } from '../weekly-rows.js';
 
@@ -23,6 +25,15 @@ function kindLabel(kind) {
   const label = KIND_LABELS[kind];
   if (!label) throw new Error(`Неизвестный kind: ${kind}`);
   return label;
+}
+
+// Подписи типа и сложности записи библиотеки — по той же причине, что и у
+// kindLabel: значение, которого нет в словаре, это повод упасть, а не напечатать
+// латиницу из данных в русском отчёте. hasOwn, потому что словарь — обычный
+// объект и по «constructor» из данных нашёл бы функцию.
+function libraryLabel(labels, value, what) {
+  if (!Object.hasOwn(labels, value)) throw new Error(`Неизвестный ${what} в библиотеке: ${value}`);
+  return labels[value];
 }
 
 // Порядок и заголовки сводных таблиц подходов. Силовая идёт первой: именно на
@@ -141,6 +152,42 @@ function weeklyLines(workouts) {
   return lines;
 }
 
+// Библиотека упражнений: одна строка на запись, независимо от того, вошла ли она
+// в какую-нибудь тренировку. Разметка нагрузки здесь та же, что в таблицах по
+// тренировкам ниже, — она общая, тренировка берёт её из библиотеки. А вот
+// сложность и многосуставность есть только у силовых и нужны одной библиотеке
+// (для отбора в конструкторе): в упражнение тренировки они не попадают, так что
+// вычитать их, кроме как здесь, негде. Это то же инженерное суждение, что
+// разметка нагрузки. У несиловых в этих колонках тире — «такого признака нет»,
+// а не «не заполнено». Силовое без сложности или многосуставности сюда не
+// доходит (импорт его не пропускает), а если дойдёт, отчёт упадёт, а не
+// напечатает тире или молчаливое «нет».
+function libraryLines() {
+  const lines = [
+    '## Библиотека упражнений', '',
+    'Все упражнения библиотеки (`exercises/library.csv`), в том числе те, которых',
+    'нет ни в одной тренировке. Сложность и многосуставность — то же инженерное',
+    'суждение, что и разметка мышц: их выставил разработчик, а не специалист по',
+    'тренировкам, и вычитываются они здесь. У несиловых упражнений они не',
+    'ставятся — там тире. Если что-то кажется неверным, правка идёт в таблицу',
+    'упражнений, а не в этот файл.', '',
+    '| Ключ | Упражнение | Тип | Сложность | Многосуставное | Целевые | Вспомогательные |',
+    '|---|---|---|---|---|---|---|',
+  ];
+  for (const e of LIBRARY) {
+    const [primary, secondary] = muscleColumns(e.load);
+    const strength = e.slot === 'strength';
+    const difficulty = strength ? libraryLabel(DIFFICULTY_LABELS, e.difficulty, 'уровень сложности') : '—';
+    if (strength && typeof e.compound !== 'boolean') {
+      throw new Error(`Многосуставность силового упражнения «${e.key}» в библиотеке не «да» и не «нет»: ${e.compound}`);
+    }
+    const compound = strength ? (e.compound ? 'да' : 'нет') : '—';
+    lines.push(`| ${e.key} | ${e.name} | ${libraryLabel(SLOT_LABELS, e.slot, 'тип')} | ${difficulty} | ${compound} | ${primary} | ${secondary} |`);
+  }
+  lines.push('');
+  return lines;
+}
+
 export function buildReportLines(workouts = WORKOUTS) {
   const lines = [
     '# Разметка групп мышц', '',
@@ -202,8 +249,10 @@ export function buildReportLines(workouts = WORKOUTS) {
     'односторонние. В недельном разделе сразу ниже счёт другой — там это сказано',
     'отдельно.', '',
     ...weeklyLines(workouts),
+    ...libraryLines(),
     '_Файл сгенерирован `node tools/muscle-report.js` и перезаписывается им',
-    'целиком; правки вносятся в `workouts/*.js`, а не сюда._', '',
+    'целиком; правки упражнений вносятся в таблицу упражнений и импорт (см.',
+    '`exercises/README.md`), тексты тренировок — в `workouts/*.js`, а не сюда._', '',
   ];
   for (const workout of Object.values(workouts)) {
     lines.push(...reportForWorkout(workout));

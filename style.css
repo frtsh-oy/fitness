@@ -1,4 +1,4 @@
-*{box-sizing:border-box}html{scroll-behavior:smooth;scroll-padding-top:82px}body{margin:0;background:#f4f6f9;color:#152d4a;font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif}button,a,input{-webkit-tap-highlight-color:transparent}button,input{font:inherit}button,a{touch-action:manipulation}button{cursor:pointer}a{color:inherit}button:focus-visible,a:focus-visible,input:focus-visible{outline:3px solid #4267cb;outline-offset:4px}.wrap{max-width:1040px;margin:auto;padding:0 28px}.masthead{background:#152d4a;color:white}.mastrow{height:70px;display:flex;align-items:center;justify-content:space-between;gap:15px}.brand{text-decoration:none;display:flex;align-items:center;gap:10px;font-size:14px;font-weight:750;letter-spacing:.07em}.brand-icon{font-size:32px;color:#ceef69;line-height:1}.schedule{font-size:14px;color:#ceef69;white-space:nowrap}.intro{display:grid;grid-template-columns:1.4fr 1fr;gap:40px;padding:38px 0 30px;align-items:center}.eyebrow{font-size:12px;letter-spacing:.15em;font-weight:750;margin:0 0 10px;color:#53637a}h1{font-size:clamp(34px,5vw,55px);line-height:1.12;letter-spacing:-.04em;margin:0 0 16px}h1 span{color:#486386}.intro-copy{max-width:460px;margin:0;color:#526278}.facts{display:grid;grid-template-columns:1fr 1fr;gap:18px}.facts div{border-left:3px solid #aac94d;padding-left:17px}.facts strong{display:block;font-size:33px;font-weight:650;letter-spacing:-.04em}.facts span{display:block;font-size:14px;line-height:1.5;color:#526278}.block-nav{display:flex;gap:7px;overflow-x:auto;padding:12px 0;position:sticky;top:0;z-index:3;background:#f4f6f9;border-bottom:1px solid #d9e0e9;scrollbar-width:thin}.block-nav a{white-space:nowrap;text-decoration:none;display:flex;align-items:center;min-height:44px;padding:9px 16px;border:1px solid #d4dde8;border-radius:30px;background:white;font-size:14px;font-weight:600}.block-nav a:hover,.block-nav a.active{background:#152d4a;border-color:#152d4a;color:white}.progress-row{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-top:20px;font-size:14px}.text-button{border:0;background:none;color:#53637a;text-decoration:underline;font-size:14px;min-height:44px;padding:5px}progress{display:block;width:100%;height:6px;border:0;border-radius:8px;overflow:hidden;background:#dbe3ed}progress::-webkit-progress-bar{background:#dbe3ed}progress::-webkit-progress-value{background:#557126}progress::-moz-progress-bar{background:#557126}.storage-note{font-size:12px;color:#657289;margin:8px 0 18px}.equipment{padding:14px 18px;border-radius:10px;background:#e8edf4;font-size:14px}.workout-block{margin-top:38px;scroll-margin-top:12px}.block-heading{display:flex;align-items:flex-start;gap:16px;margin-bottom:16px}.block-number{background:#152d4a;color:#ceef69;min-width:44px;height:44px;border-radius:12px;display:grid;place-items:center;font-size:18px;font-weight:650}.block-heading h2{margin:0;font-size:25px;letter-spacing:-.025em;line-height:1.3}.block-heading p{margin:4px 0 0;font-size:14px;color:#526278}.round-tag{margin-left:auto;white-space:nowrap;background:#e0edc2;padding:6px 10px;border-radius:6px;font-size:14px;font-weight:650}.block-note{font-size:14px;color:#53637a;background:#e8edf4;border-radius:10px;padding:13px 16px;margin:0 0 14px}.cards{display:grid;grid-template-columns:1fr 1fr;gap:14px}.exercise{background:#fff;border:1px solid #d8e1eb;border-radius:15px;padding:22px;display:flex;flex-direction:column;transition:border-color .2s}.exercise.completed{border-color:#a3bc65}.exercise-top{display:flex;justify-content:space-between;gap:14px;align-items:baseline;margin-bottom:10px}.exercise-index{font-size:12px;letter-spacing:.1em;color:#61748b;font-weight:650}.muscles{font-size:12px;color:#657289;text-align:right}.exercise h3{font-size:21px;line-height:1.35;letter-spacing:-.02em;margin:0 0 9px}.reps{font-size:16px;font-weight:700;color:#39571b;margin:0 0 17px}.technique{margin:0;color:#46566b;font-size:16px;line-height:1.65}.video{display:flex;align-items:center;justify-content:center;gap:9px;text-decoration:none;min-height:46px;border-radius:8px;border:1px solid #cad6e4;color:#193d6a;background:#f3f7fc;font-size:14px;font-weight:650;padding:0 12px}.video:hover{background:#e4edf8}.video svg{width:17px;height:17px;fill:currentColor;flex-shrink:0}.extra-link{display:block;font-size:14px;margin-top:10px;text-underline-offset:3px}.checks{display:flex;gap:8px;flex-wrap:wrap;margin-top:auto;padding-top:17px}.check{display:flex;align-items:center;gap:7px;font-size:14px;min-height:44px;padding:6px 10px;border-radius:8px;background:#f2f5f8;cursor:pointer}.check:has(input:checked){background:#e6f0d1;color:#345316}.check input{width:19px;height:19px;margin:0;accent-color:#4b6a22;cursor:pointer}.pair-rules{margin:35px 0 0;background:#152d4a;color:white;border-radius:15px;padding:25px}.pair-rules h2{font-size:22px;margin:0 0 10px}.pair-rules p{margin:8px 0;color:#e0e8f3;font-size:15px}.pair-rules strong{color:#ceef69}.guide{margin-top:40px;background:white;border:1px solid #d8e1eb;border-radius:15px;padding:26px}.guide h2,.care h2{font-size:23px;line-height:1.3;margin:0 0 14px}.guide ol{padding-left:23px;margin:0}.guide li+li{margin-top:12px}.care{margin-top:24px;padding:24px;border-left:3px solid #c49346;background:#fff8ed;border-radius:0 12px 12px 0}.care p{font-size:14px;color:#665846;margin:10px 0 0}footer{padding:32px 0 173px;font-size:14px;color:#53637a}footer span{display:block}.timer-sheet{position:fixed;left:0;right:0;bottom:calc(57px + var(--tabbar-safe-bottom));z-index:7;background:#152d4a;color:#fff;border-radius:16px 16px 0 0;padding:14px 14px 16px;box-shadow:0 -10px 30px #142a4647}.timer-sheet-head{display:flex;align-items:center;justify-content:space-between;gap:16px;font-size:12px;letter-spacing:.12em;color:#d7e0ed}.timer-sheet output{display:block;text-align:center;font-size:46px;font-weight:650;line-height:1;margin:6px 0 14px;font-variant-numeric:tabular-nums}.presets{display:flex;gap:5px}.timer-sheet button{min-height:44px;border-radius:8px;padding:9px 13px;font-size:14px;border:1px solid #526982;color:#edf3fb;background:transparent}.timer-sheet button[aria-pressed=true]{background:#344e70;border-color:#7089a8}.timer-sheet .timer-start{background:#ceef69;color:#162c19;border-color:#ceef69;font-weight:700;min-width:80px}.timer-sheet .timer-reset{font-size:22px;padding:3px 12px}.timer-sheet.done{background:#294525}.timer-sheet.done output{color:#ceef69}.tabbar-timer[aria-expanded=true]{color:#152d4a}.tabbar-timer[data-running=true]{background:#ceef69;color:#152d4a}@media(max-width:720px){.wrap{padding:0 18px}.mastrow{height:60px}.brand{font-size:12px;letter-spacing:.035em}.schedule{font-size:12px}.intro{display:block;padding:27px 0 22px}.intro h1{font-size:39px}.intro-copy{font-size:16px}.facts{margin-top:24px;gap:15px;max-width:430px}.facts strong{font-size:26px}.facts span{font-size:14px}.block-nav{margin:0 -18px;padding:10px 18px}.block-nav a{padding:9px 15px}.cards{grid-template-columns:1fr}.exercise{padding:20px}.block-heading{gap:10px}.block-heading h2{font-size:22px}.round-tag{font-size:12px;padding:6px 8px}.block-number{min-width:38px;height:38px;border-radius:10px;font-size:16px}.block-heading p{font-size:14px}.presets{flex:1}.presets button{flex:1;padding:7px 8px}.timer-sheet .timer-start{min-width:77px}.workout-block{margin-top:30px}.pair-rules{padding:21px}.guide,.care{padding:21px}footer{padding-bottom:138px}}@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}*{transition:none!important}}@media print{.masthead,.block-nav,.progress-row,progress,.storage-note,.checks,.timer-sheet{display:none}.intro{padding:0}.cards{display:block}.exercise{break-inside:avoid;margin-bottom:15px}.video{margin:0;justify-content:flex-start;border:0}.video:after{content:attr(href);font-size:10px}footer{padding-bottom:0}body{background:white}}
+*{box-sizing:border-box}html{scroll-behavior:smooth;scroll-padding-top:82px}body{margin:0;background:#f4f6f9;color:#152d4a;font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif}button,a,input{-webkit-tap-highlight-color:transparent}button,input{font:inherit}button,a{touch-action:manipulation}button{cursor:pointer}a{color:inherit}button:focus-visible,a:focus-visible,input:focus-visible{outline:3px solid #4267cb;outline-offset:4px}.wrap{max-width:1040px;margin:auto;padding:0 28px}.masthead{background:#152d4a;color:white}.mastrow{height:70px;display:flex;align-items:center;justify-content:space-between;gap:15px}.brand{text-decoration:none;display:flex;align-items:center;gap:10px;font-size:14px;font-weight:750;letter-spacing:.07em}.brand-icon{font-size:32px;color:#ceef69;line-height:1}.schedule{font-size:14px;color:#ceef69;white-space:nowrap}.intro{display:grid;grid-template-columns:1.4fr 1fr;gap:40px;padding:38px 0 30px;align-items:center}.eyebrow{font-size:12px;letter-spacing:.15em;font-weight:750;margin:0 0 10px;color:#53637a}h1{font-size:clamp(34px,5vw,55px);line-height:1.12;letter-spacing:-.04em;margin:0 0 16px;overflow-wrap:anywhere}h1 span{color:#486386}.intro-copy{max-width:460px;margin:0;color:#526278}.facts{display:grid;grid-template-columns:1fr 1fr;gap:18px}.facts div{border-left:3px solid #aac94d;padding-left:17px}.facts strong{display:block;font-size:33px;font-weight:650;letter-spacing:-.04em}.facts span{display:block;font-size:14px;line-height:1.5;color:#526278}.block-nav{display:flex;gap:7px;overflow-x:auto;padding:12px 0;position:sticky;top:0;z-index:3;background:#f4f6f9;border-bottom:1px solid #d9e0e9;scrollbar-width:thin}.block-nav a{white-space:nowrap;text-decoration:none;display:flex;align-items:center;min-height:44px;padding:9px 16px;border:1px solid #d4dde8;border-radius:30px;background:white;font-size:14px;font-weight:600}.block-nav a:hover,.block-nav a.active{background:#152d4a;border-color:#152d4a;color:white}.progress-row{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-top:20px;font-size:14px}.text-button{border:0;background:none;color:#53637a;text-decoration:underline;font-size:14px;min-height:44px;padding:5px}progress{display:block;width:100%;height:6px;border:0;border-radius:8px;overflow:hidden;background:#dbe3ed}progress::-webkit-progress-bar{background:#dbe3ed}progress::-webkit-progress-value{background:#557126}progress::-moz-progress-bar{background:#557126}.storage-note{font-size:12px;color:#657289;margin:8px 0 18px}.equipment{padding:14px 18px;border-radius:10px;background:#e8edf4;font-size:14px}.workout-block{margin-top:38px;scroll-margin-top:12px}.block-heading{display:flex;align-items:flex-start;gap:16px;margin-bottom:16px}.block-number{background:#152d4a;color:#ceef69;min-width:44px;height:44px;border-radius:12px;display:grid;place-items:center;font-size:18px;font-weight:650}.block-heading h2{margin:0;font-size:25px;letter-spacing:-.025em;line-height:1.3}.block-heading p{margin:4px 0 0;font-size:14px;color:#526278}.round-tag{margin-left:auto;white-space:nowrap;background:#e0edc2;padding:6px 10px;border-radius:6px;font-size:14px;font-weight:650}.block-note{font-size:14px;color:#53637a;background:#e8edf4;border-radius:10px;padding:13px 16px;margin:0 0 14px}.cards{display:grid;grid-template-columns:1fr 1fr;gap:14px}.exercise{background:#fff;border:1px solid #d8e1eb;border-radius:15px;padding:22px;display:flex;flex-direction:column;transition:border-color .2s}.exercise.completed{border-color:#a3bc65}.exercise-top{display:flex;justify-content:space-between;gap:14px;align-items:baseline;margin-bottom:10px}.exercise-index{font-size:12px;letter-spacing:.1em;color:#61748b;font-weight:650}.muscles{font-size:12px;color:#657289;text-align:right}.exercise h3{font-size:21px;line-height:1.35;letter-spacing:-.02em;margin:0 0 9px}.reps{font-size:16px;font-weight:700;color:#39571b;margin:0 0 17px}.technique{margin:0;color:#46566b;font-size:16px;line-height:1.65}.video{display:flex;align-items:center;justify-content:center;gap:9px;text-decoration:none;min-height:46px;border-radius:8px;border:1px solid #cad6e4;color:#193d6a;background:#f3f7fc;font-size:14px;font-weight:650;padding:0 12px}.video:hover{background:#e4edf8}.video svg{width:17px;height:17px;fill:currentColor;flex-shrink:0}.extra-link{display:block;font-size:14px;margin-top:10px;text-underline-offset:3px}.checks{display:flex;gap:8px;flex-wrap:wrap;margin-top:auto;padding-top:17px}.check{display:flex;align-items:center;gap:7px;font-size:14px;min-height:44px;padding:6px 10px;border-radius:8px;background:#f2f5f8;cursor:pointer}.check:has(input:checked){background:#e6f0d1;color:#345316}.check input{width:19px;height:19px;margin:0;accent-color:#4b6a22;cursor:pointer}.pair-rules{margin:35px 0 0;background:#152d4a;color:white;border-radius:15px;padding:25px}.pair-rules h2{font-size:22px;margin:0 0 10px}.pair-rules p{margin:8px 0;color:#e0e8f3;font-size:15px}.pair-rules strong{color:#ceef69}.guide{margin-top:40px;background:white;border:1px solid #d8e1eb;border-radius:15px;padding:26px}.guide h2,.care h2{font-size:23px;line-height:1.3;margin:0 0 14px}.guide ol{padding-left:23px;margin:0}.guide li+li{margin-top:12px}.care{margin-top:24px;padding:24px;border-left:3px solid #c49346;background:#fff8ed;border-radius:0 12px 12px 0}.care p{font-size:14px;color:#665846;margin:10px 0 0}footer{padding:32px 0 173px;font-size:14px;color:#53637a}footer span{display:block}footer span[hidden]{display:none}.timer-sheet{position:fixed;left:0;right:0;bottom:calc(57px + var(--tabbar-safe-bottom));z-index:7;background:#152d4a;color:#fff;border-radius:16px 16px 0 0;padding:14px 14px 16px;box-shadow:0 -10px 30px #142a4647}.timer-sheet-head{display:flex;align-items:center;justify-content:space-between;gap:16px;font-size:12px;letter-spacing:.12em;color:#d7e0ed}.timer-sheet output{display:block;text-align:center;font-size:46px;font-weight:650;line-height:1;margin:6px 0 14px;font-variant-numeric:tabular-nums}.presets{display:flex;gap:5px}.timer-sheet button{min-height:44px;border-radius:8px;padding:9px 13px;font-size:14px;border:1px solid #526982;color:#edf3fb;background:transparent}.timer-sheet button[aria-pressed=true]{background:#344e70;border-color:#7089a8}.timer-sheet .timer-start{background:#ceef69;color:#162c19;border-color:#ceef69;font-weight:700;min-width:80px}.timer-sheet .timer-reset{font-size:22px;padding:3px 12px}.timer-sheet.done{background:#294525}.timer-sheet.done output{color:#ceef69}.tabbar-timer[aria-expanded=true]{color:#152d4a}.tabbar-timer[data-running=true]{background:#ceef69;color:#152d4a}@media(max-width:720px){.wrap{padding:0 18px}.mastrow{height:60px}.brand{font-size:12px;letter-spacing:.035em}.schedule{font-size:12px}.intro{display:block;padding:27px 0 22px}.intro h1{font-size:39px}.intro-copy{font-size:16px}.facts{margin-top:24px;gap:15px;max-width:430px}.facts strong{font-size:26px}.facts span{font-size:14px}.block-nav{margin:0 -18px;padding:10px 18px}.block-nav a{padding:9px 15px}.cards{grid-template-columns:1fr}.exercise{padding:20px}.block-heading{gap:10px}.block-heading h2{font-size:22px}.round-tag{font-size:12px;padding:6px 8px}.block-number{min-width:38px;height:38px;border-radius:10px;font-size:16px}.block-heading p{font-size:14px}.presets{flex:1}.presets button{flex:1;padding:7px 8px}.timer-sheet .timer-start{min-width:77px}.workout-block{margin-top:30px}.pair-rules{padding:21px}.guide,.care{padding:21px}footer{padding-bottom:138px}}@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}*{transition:none!important}}@media print{.masthead,.block-nav,.progress-row,progress,.storage-note,.checks,.timer-sheet{display:none}.intro{padding:0}.cards{display:block}.exercise{break-inside:avoid;margin-bottom:15px}.video{margin:0;justify-content:flex-start;border:0}.video:after{content:attr(href);font-size:10px}footer{padding-bottom:0}body{background:white}}
 /* Нижняя навигация не должна уходить под системную полосу iPhone и под панель
    Telegram. Вне Telegram переменных --tg-* нет, остаётся env(), как было.
    Берём максимум, а не сумму: env() и --tg-safe-area-inset-bottom описывают одну
@@ -182,16 +182,6 @@
 .tabbar{position:fixed;left:0;right:0;bottom:0;z-index:6;display:flex;background:#fff;border-top:1px solid #d8e1eb;padding-bottom:var(--tabbar-safe-bottom)}
 .tabbar button{flex:1 1 0;min-height:56px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;border:0;background:transparent;font-family:inherit;font-size:11px;font-weight:600;color:#657289;cursor:pointer}
 .tabbar button[aria-current=page]{color:#152d4a}
-/* Замок на «Конструкторе» — метка «раздел платный», а не запрет входа (см.
-   docs/superpowers/specs/2026-09-19-sections-shell-design.md): кнопка остаётся
-   рабочей, раздел открывается по тому же клику. Значок — position:absolute
-   в углу кнопки, а не рядом с текстом в потоке: так подпись «Конструктор» не
-   меняет ширину и не переносится на 390px (там на пункт приходится ~94px,
-   короче уже некуда). Значок помечен aria-hidden — сам по себе он не несёт
-   смысла в озвучке («замок» вслух — мусор), а платность до экранного диктора
-   доносит aria-label самой кнопки. */
-.tabbar button[data-section=builder]{position:relative}
-.tabbar .lock-badge{position:absolute;top:6px;right:10px;font-size:10px;line-height:1}
 /* Печать .tabbar — здесь, а НЕ в общем блоке @media print в начале файла: та же
    причина, что у .howto-toggle/.howto-body ниже. Медиазапрос специфичности не
    добавляет, а плоское правило .tabbar стоит в файле позже общего блока и
@@ -218,6 +208,176 @@
 #screen-workouts,#screen-builder{padding:26px 0 96px}
 .workout-card{display:flex;flex-direction:column;align-items:flex-start;gap:4px;width:100%;min-height:64px;margin:0 0 12px;padding:13px 18px;border:1px solid #d8e1eb;border-radius:12px;background:#fff;font:inherit;color:inherit;text-align:left;cursor:pointer}
 .workout-card[aria-current]{border-color:#152d4a;background:#eef3fa}
-.workout-card-title{font-size:18px;font-weight:650;letter-spacing:-.02em}
+/* Название вводит человек, и слово без пробелов (до 60 знаков) иначе вылезло бы
+   за карточку; так же переносится h1 в «Сегодня» (правило в начале файла).
+   anywhere, а не break-word: только оно сужает и минимальную ширину, на которую
+   смотрит flex-элемент. */
+.workout-card-title{font-size:18px;font-weight:650;letter-spacing:-.02em;overflow-wrap:anywhere}
 .workout-card-kicker{font-size:12px;letter-spacing:.08em;font-weight:650;color:#657289}
-.builder-note{max-width:520px;margin:0;font-size:15px;line-height:1.6;color:#33475f}
+/* «Сейчас в «Сегодня»» у текущей тренировки: подпись для глаза, а не кнопка.
+   Та же плашка, что у метки «упор» (.focus-tag), без выравнивания по строке:
+   в карточке она стоит последней и держится слева сама. */
+.workout-card-now{margin-top:2px;padding:2px 8px;border-radius:6px;background:#e0edc2;color:#39571b;font-size:12px;font-weight:650;letter-spacing:.06em}
+/* «Мои» и «Готовые». Своя тренировка — строка из карточки и кнопки «Удалить»:
+   карточка занимает всё, что осталось, и сжимается (min-width:0), чтобы длинная
+   строка под названием переносилась, а не выталкивала кнопку за край. Кнопка по
+   высоте посередине, а не во всю карточку: у карточки в три строки сплошная
+   кнопка такой же высоты выглядела бы главным действием. */
+.workouts-title{margin:28px 0 12px;font-size:22px;line-height:1.3;letter-spacing:-.025em}
+.workouts-title:first-child{margin-top:0}
+.workouts-saved,.workouts-empty{margin:0 0 12px;padding:13px 16px;border-radius:10px;font-size:14px}
+.workouts-saved{background:#e0edc2;color:#39571b}
+.workouts-empty{background:#e8edf4;color:#53637a}
+.workout-item{display:flex;align-items:center;gap:8px;margin:0 0 12px}
+.workout-item .workout-card{flex:1 1 auto;width:auto;min-width:0;margin:0}
+.workout-delete,.workout-edit{flex:none;min-height:44px;padding:0 14px;border:1px solid #d8e1eb;border-radius:12px;background:#fff;font:inherit;font-size:14px;color:#53637a;cursor:pointer}
+.workout-actions{display:flex;flex-direction:column;gap:6px;flex:none}
+/* Пометка про убранные из библиотеки упражнения — между снаряжением и блоками.
+   hidden она скрыта сама, display здесь не задаётся намеренно: он перекрыл бы
+   атрибут. */
+.removed-note{margin:14px 0 0;padding:13px 16px;border-radius:10px;background:#e8edf4;color:#53637a;font-size:14px}
+
+/* Метка «упор» у упражнения, добавленного ради зоны упора своей тренировки
+   (render.js). Подпись, а не кнопка: нажимаемого не прибавляет, поэтому в
+   сторожа высоты нажимаемого не входит. margin-right:auto сажает её вплотную
+   к номеру и отдаёт весь свободный просвет строки списку мышц справа —
+   space-between на трёх элементах поставил бы метку посередине. */
+.focus-tag{margin-right:auto;white-space:nowrap;background:#e0edc2;color:#39571b;padding:2px 8px;border-radius:6px;font-size:12px;font-weight:650;letter-spacing:.06em}
+
+/* Экран библиотеки упражнений (library-view.js), живёт в «Конструкторе». Всё
+   нажимаемое здесь — не ниже 44px, как и остальное в приложении; эти селекторы
+   проверяет сторож высоты (TAP_TARGETS в test/app.test.js). */
+.builder-back{display:inline-flex;align-items:center;gap:6px;min-height:44px;padding:0 14px;border:1px solid #cad6e4;border-radius:12px;background:#f3f7fc;font:inherit;font-size:14px;font-weight:650;color:#193d6a}
+/* Размер шрифта поля — 16px, не меньше: iOS приближает страницу, когда фокус
+   попадает в поле с кеглем ниже, и экран после ввода остаётся увеличенным.
+   appearance:none — иначе iOS рисует поле поиска своим скруглённым видом и
+   рамку с радиусом отсюда не берёт. */
+.library-search{appearance:none;-webkit-appearance:none;display:block;width:100%;min-height:44px;margin:14px 0 0;padding:0 14px;border:1px solid #cad6e4;border-radius:12px;background:#fff;color:inherit;font-size:16px}
+/* Чипы переносятся на следующую строку, а не прокручиваются вбок: «Пресс и
+   кор» и «Сложное» — полноценные фильтры, и прятать их за краем экрана нельзя.
+   Вид — как у чипов блоков (.block-nav a), выбранный — тёмный, как активный.
+   Отступы 11px и просвет 6px подобраны замером при 375px: при 14px и 8px
+   зоны занимали три строки, сложность — две, и первая карточка начиналась ниже
+   середины экрана; с этими — две и одна. */
+.library-filters{display:flex;flex-wrap:wrap;gap:6px;margin:12px 0 0}
+.library-chip{display:inline-flex;align-items:center;min-height:44px;padding:9px 11px;border:1px solid #d4dde8;border-radius:30px;background:#fff;font:inherit;font-size:14px;font-weight:600;color:inherit;white-space:nowrap}
+.library-chip[aria-pressed=true]{background:#152d4a;border-color:#152d4a;color:#fff}
+.library-found{margin:16px 0 12px;font-size:13px;color:#526278}
+/* Причина, по которой «Добавить» недоступна, — той же плашкой, что пометка про
+   убранные упражнения (.removed-note), над списком: она одна на все карточки. */
+.library-blocked{margin:14px 0 0;padding:13px 16px;border-radius:10px;background:#e8edf4;color:#53637a;font-size:14px}
+.library-empty{margin:0 0 12px;padding:18px 16px;border-radius:12px;background:#fff;border:1px solid #d8e1eb}
+.library-empty-title{margin:0;font-size:17px;font-weight:650}
+.library-empty-hint{margin:4px 0 14px;font-size:14px;color:#526278}
+/* Сложность стоит слева в шапке карточки, а список мышц — справа: та же строка
+   .exercise-top, что у номера и мышц в «Сегодня». Подпись не переносится: на
+   узкой строке сжиматься должен список мышц, а не слово «Среднее». */
+.library-level{white-space:nowrap;font-size:12px;letter-spacing:.1em;font-weight:650;color:#61748b}
+.library-add,.builder-add,.builder-save,.builder-generate{display:block;width:100%;min-height:44px;margin:14px 0 0;padding:0 14px;border:1px solid #152d4a;border-radius:8px;background:#152d4a;font:inherit;font-size:14px;font-weight:650;color:#fff}
+.library-add:disabled,.builder-add:disabled,.builder-save:disabled,.builder-generate:disabled{border-color:#d8e1eb;background:#eef3fa;color:#657289;cursor:default}
+.library-foot{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:18px 0 0}
+.library-total{margin:0;font-size:14px;font-weight:600;color:#33475f}
+
+/* Конструктор (builder-view.js): вход, сборка, шторка замены, сохранение. Всё
+   нажимаемое — не ниже 44px, как и в остальном приложении; сторож высоты в
+   test/app.test.js обходит все эти экраны. Раскладка рассчитана на 375px без
+   горизонтальной прокрутки: названия переносятся (overflow-wrap), а не
+   раздвигают строку. Заголовок экрана получает фокус программно, и рамка вокруг
+   него ничего не говорит. */
+.builder h2{margin:16px 0 12px;font-size:24px;line-height:1.25;letter-spacing:-.025em}
+.builder h2:focus{outline:none}
+.builder-entry h2{margin-top:0}
+.builder-lead{max-width:520px;margin:0 0 20px;font-size:15px;line-height:1.6;color:#33475f}
+.builder-path{display:flex;flex-direction:column;align-items:flex-start;gap:4px;width:100%;min-height:64px;margin:0 0 12px;padding:14px 18px;border:1px solid #152d4a;border-radius:12px;background:#152d4a;font:inherit;color:#fff;text-align:left}
+.builder-path:last-of-type{margin-bottom:28px}
+.builder-path-title{font-size:18px;font-weight:650;letter-spacing:-.02em}
+.builder-path-note{font-size:14px;line-height:1.5;color:#d7e0ed}
+.builder-steps-title{margin:0 0 6px;font-size:17px;letter-spacing:-.02em}
+.builder-steps{margin:0;padding:0;list-style:none;counter-reset:step}
+.builder-steps li{position:relative;display:flex;flex-direction:column;padding:10px 0 10px 40px;border-top:1px solid #d8e1eb;counter-increment:step}
+.builder-steps li::before{content:counter(step);position:absolute;left:0;top:10px;width:28px;height:28px;border-radius:50%;background:#e4edf8;font-size:14px;font-weight:700;line-height:28px;text-align:center}
+.builder-steps strong{font-size:15px}
+.builder-steps span{font-size:14px;color:#526278}
+.builder-back:disabled{opacity:.5;cursor:default}
+
+/* Строка покрытия: тот же янтарный оттенок предупреждения, что у .weekly-basis,
+   а когда все группы закрыты — зелёный, как у .workouts-saved. Пустая (без
+   дней покрытие не считается) не занимает места. */
+.builder-coverage{margin:14px 0 0;padding:12px 16px;border-radius:10px;background:#fbe4bd;color:#7a4a06;font-size:14px}
+.builder-coverage.is-ok{background:#e0edc2;color:#39571b}
+.builder-coverage:empty{display:none}
+.builder-coverage p{margin:0}
+.builder-coverage p+p{margin-top:4px}
+.builder-coverage p:first-child{font-weight:650}
+.builder-save,.builder-generate{margin-top:24px}
+.builder-reason{margin:8px 0 0;font-size:13px;line-height:1.5;color:#526278}
+.builder-error,.builder-refusal{margin:12px 0 0;padding:12px 16px;border-radius:10px;background:#fbe4bd;color:#7a4a06;font-size:14px}
+.builder-block{margin:22px 0 0}
+.builder-block-head{display:flex;align-items:baseline;justify-content:space-between;gap:12px}
+.builder-block h3{margin:0;font-size:17px;letter-spacing:-.02em}
+.builder-block-rounds{flex:none;font-size:13px;font-weight:650;color:#526278}
+.builder-block-sub{margin:2px 0 10px;font-size:13px;color:#657289}
+.builder-item{display:flex;align-items:center;gap:10px;margin:0 0 8px;padding:10px 12px;border:1px solid #d8e1eb;border-radius:12px;background:#fff}
+.builder-item-text{display:flex;flex-direction:column;flex:1 1 auto;min-width:0}
+.builder-item-name{font-size:15px;font-weight:650;line-height:1.35;overflow-wrap:anywhere}
+.builder-item-muscles{font-size:12px;color:#657289}
+/* Метки результата: «упор» — тот же зелёный значок, что в «Сегодня» (.focus-tag),
+   но без margin-right:auto: двум меткам в ряд нужен обычный просвет, а не сдвиг
+   второй к правому краю. «заменено» — нейтральный, чтобы не спорить с упором. */
+.builder-item-tags{display:flex;flex-wrap:wrap;gap:4px;margin:2px 0 3px}
+.builder-item-tags .focus-tag{margin-right:0}
+.replaced-tag{white-space:nowrap;background:#e4edf8;color:#33475f;padding:2px 8px;border-radius:6px;font-size:12px;font-weight:650;letter-spacing:.06em}
+.builder-replace,.builder-remove{flex:none;min-height:44px;padding:0 14px;border:1px solid #cad6e4;border-radius:10px;background:#f3f7fc;font:inherit;font-size:14px;font-weight:650;color:#193d6a}
+
+/* Шторка замены встаёт над навигацией, как шторка таймера (.timer-sheet): та же
+   нижняя граница через --tabbar-safe-bottom. Фон над навигацией не лежит, чтобы
+   разделы оставались доступными. */
+.replace-backdrop{position:fixed;top:0;left:0;right:0;bottom:calc(57px + var(--tabbar-safe-bottom));z-index:6;background:#142a4673}
+.replace-sheet{position:fixed;left:0;right:0;bottom:calc(57px + var(--tabbar-safe-bottom));z-index:7;max-width:640px;max-height:70vh;margin:0 auto;overflow-y:auto;padding:16px 14px 18px;border-radius:16px 16px 0 0;background:#fff;box-shadow:0 -10px 30px #142a4647}
+.replace-sheet:focus{outline:none}
+.replace-sheet h3{margin:0;font-size:18px;letter-spacing:-.02em}
+.replace-current{margin:6px 0 0;font-size:15px;font-weight:650}
+.replace-hint{margin:2px 0 12px;font-size:13px;color:#657289}
+.replace-list{margin:0;padding:0;list-style:none}
+.replace-candidate{display:flex;align-items:center;gap:10px;padding:10px 0;border-top:1px solid #d8e1eb}
+.replace-text{display:flex;flex-direction:column;flex:1 1 auto;min-width:0}
+.replace-name{font-size:15px;font-weight:650;line-height:1.35;overflow-wrap:anywhere}
+.replace-muscles,.replace-gear{font-size:12px;color:#657289}
+.replace-pick{flex:none;min-height:44px;padding:0 14px;border:1px solid #152d4a;border-radius:10px;background:#152d4a;font:inherit;font-size:14px;font-weight:650;color:#fff}
+.replace-empty{margin:0 0 12px;padding:13px 16px;border-radius:10px;background:#e8edf4;color:#53637a;font-size:14px}
+.replace-close{display:block;width:100%;min-height:44px;margin:12px 0 0;border:1px solid #cad6e4;border-radius:10px;background:#f3f7fc;font:inherit;font-size:14px;font-weight:650;color:#193d6a}
+
+/* Экран сохранения. Семь дней в одну строку: 7×44px и просветы по 4px дают
+   332px, а при телефонных отступах .wrap в 375px доступно 347 — строка не
+   переносится; на более узком экране чипы переходят на вторую строку, а не
+   уменьшаются ниже 44px. Размер шрифта поля — 16px по той же причине, что у
+   .library-search. */
+.builder-label{display:block;margin:18px 0 0;font-size:14px;font-weight:650}
+.save-name{appearance:none;-webkit-appearance:none;display:block;width:100%;min-height:44px;margin:6px 0 0;padding:0 14px;border:1px solid #cad6e4;border-radius:12px;background:#fff;color:inherit;font-size:16px}
+.day-chips{display:flex;flex-wrap:wrap;gap:4px;margin:8px 0 0}
+.day-chip{flex:1 1 44px;min-width:44px;min-height:44px;padding:0 6px;border:1px solid #d4dde8;border-radius:30px;background:#fff;font:inherit;font-size:14px;font-weight:600;color:inherit}
+.day-chip[aria-pressed=true]{background:#152d4a;border-color:#152d4a;color:#fff}
+.builder-summary{margin:18px 0 0;font-size:14px;font-weight:600;color:#33475f}
+
+/* Генератор (builder-view.js, drawGenerator) и результат. Уровни — три широкие
+   кнопки друг под другом, зоны — чипы, которые переносятся на следующую строку,
+   а не уезжают за край: на 375px «Пресс и кор» не помещается рядом с остальными.
+   Недоступное помечено aria-disabled, а не disabled (так оно остаётся в обходе),
+   поэтому и вид у него задан по этому атрибуту. */
+.builder-subtitle{margin:-6px 0 0;font-size:14px;color:#526278}
+.builder-group-title{margin:22px 0 8px;font-size:17px;letter-spacing:-.02em}
+.level-options{display:flex;flex-direction:column;gap:8px}
+.level-option{display:flex;flex-direction:column;align-items:flex-start;gap:2px;width:100%;min-height:64px;padding:12px 16px;border:1px solid #d4dde8;border-radius:12px;background:#fff;font:inherit;color:inherit;text-align:left}
+.level-option[aria-checked=true]{border-color:#152d4a;background:#eef3fa;box-shadow:0 0 0 1px #152d4a}
+.level-option[aria-disabled=true]{background:#f3f7fc;color:#657289}
+.level-title{font-size:17px;font-weight:650;letter-spacing:-.02em}
+.level-who{margin-bottom:4px;font-size:14px;color:#33475f}
+.level-option[aria-disabled=true] .level-who{color:#657289}
+.level-line{font-size:13px;color:#526278}
+.level-missing,.zone-missing p{margin:6px 0 0;padding:10px 14px;border-radius:10px;background:#e8edf4;color:#53637a;font-size:13px;line-height:1.5}
+.zone-hint{margin:0 0 10px;font-size:13px;line-height:1.5;color:#526278}
+.zone-chips{display:flex;flex-wrap:wrap;gap:6px}
+.zone-chip{display:inline-flex;align-items:center;min-height:44px;padding:9px 14px;border:1px solid #d4dde8;border-radius:30px;background:#fff;font:inherit;font-size:14px;font-weight:600;color:inherit}
+.zone-chip[aria-pressed=true]{background:#152d4a;border-color:#152d4a;color:#fff}
+.zone-chip[aria-disabled=true]{opacity:.5}
+.builder-variant{display:block;width:100%;min-height:44px;margin:14px 0 0;padding:0 14px;border:1px solid #cad6e4;border-radius:8px;background:#f3f7fc;font:inherit;font-size:14px;font-weight:650;color:#193d6a}

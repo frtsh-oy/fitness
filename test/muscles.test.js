@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { MUSCLES, isMuscleId, muscleLabel, toRegions, regionLabel, regionGroups } from '../muscles.js';
+import { MUSCLES, isMuscleId, muscleLabel, toRegions, regionLabel, regionGroups, groupsPhrase } from '../muscles.js';
 import { MuscleType } from '../vendor/body-highlighter.esm.js';
 
 test('словарь содержит ровно 20 групп', () => {
@@ -18,6 +18,7 @@ test('isMuscleId отличает известные группы от выду�
   assert.equal(isMuscleId('glutes'), true);
   assert.equal(isMuscleId('adductors'), true);
   assert.equal(isMuscleId('nonexistent'), false);
+  assert.equal(isMuscleId('constructor'), false, 'унаследованное свойство группой быть не должно');
 });
 
 test('muscleLabel бросает ошибку на неизвестной группе', () => {
@@ -147,4 +148,14 @@ test('regionLabel называет каждую группу из regionGroups',
         `в подписи региона ${region} («${regionLabel(region)}») нет группы ${id}`);
     }
   }
+});
+
+// Фраза стоит внутри предложения («Только в разминке и заминке: …»), поэтому
+// каждое название — со строчной, в том числе первое.
+test('groupsPhrase перечисляет группы строчными через запятую', () => {
+  assert.equal(groupsPhrase(['hip_flexors', 'delts_rear']), 'сгибатели бедра, задняя дельта');
+  assert.equal(groupsPhrase(['biceps']), 'бицепс');
+  assert.equal(groupsPhrase([]), '');
+  assert.equal(groupsPhrase(['glutes_med', 'lats']), 'средняя и малая ягодичные, широчайшие');
+  assert.throws(() => groupsPhrase(['nope']), /nope/);
 });

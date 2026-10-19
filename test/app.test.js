@@ -10,6 +10,10 @@ import { storageKey, currentDay } from '../storage.js';
 import { markId, scheduleShort, scheduleLong } from '../render.js';
 import { getWorkout } from '../workouts/index.js';
 import { countMarks } from '../workouts/schema.js';
+import { recordKey } from '../my-workouts.js';
+import { serializeCompact } from '../builder/compact.js';
+import { LIBRARY, entry } from '../exercises/index.js';
+import { TEST_LIBRARY } from './fixtures/test-library.js';
 
 const PAGE = readFileSync(fileURLToPath(new URL('../index.html', import.meta.url)), 'utf8');
 const WORKOUT = getWorkout(null);
@@ -135,13 +139,19 @@ function widthMatchMedia(screenWidth) {
   };
 }
 
-function mount(t, { marks = null, webApp = null, freezeTimers = false, fakeClock = false, denyStorage = false, screenWidth = null } = {}) {
+function mount(t, { marks = null, preload = {}, webApp = null, freezeTimers = false, fakeClock = false, denyStorage = false, screenWidth = null, scrollStub = false, library } = {}) {
   const { window, document } = makeDom(PAGE);
   t.after(() => window.close());
+  // В jsdom прокрутки нет, а запуск приложения и смена раздела её просят: без
+  // заглушки каждый вызов печатает «Not implemented». Тем, кому она нужна ещё до
+  // startApp, — этот параметр.
+  if (scrollStub) window.scrollTo = () => {};
   // Ширину окна подменяем до startApp: по ней приложение решает при отрисовке,
   // раскрывать ли описания упражнений.
   if (screenWidth !== null) window.matchMedia = widthMatchMedia(screenWidth);
   if (marks) window.localStorage.setItem(todayKey(), JSON.stringify(marks));
+  // Всё, что уже лежало на устройстве до запуска: остатки прошлых дней и прочее
+  for (const [key, value] of Object.entries(preload)) window.localStorage.setItem(key, value);
   // Приватный режим Safari и урезанный WebView: обращение к localStorage
   // бросает ещё до первого getItem.
   if (denyStorage) {
@@ -155,7 +165,7 @@ function mount(t, { marks = null, webApp = null, freezeTimers = false, fakeClock
   // морозит таймеры целиком, а фоновая вкладка браузера их прореживает.
   if (freezeTimers) window.setInterval = () => 0;
   const clock = fakeClock ? installFakeClock(t, window) : null;
-  return { window, document, clock, app: startApp(window) };
+  return { window, document, clock, app: startApp(window, { library }) };
 }
 
 const boxes = document => [...document.querySelectorAll('#workout input[data-mark]')];
@@ -604,6 +614,33 @@ test('пустой объект WebApp не роняет приложение и
 
   assert.deepEqual([...app.marks], [box.dataset.mark]);
   assert.deepEqual(JSON.parse(window.localStorage.getItem(todayKey())), [box.dataset.mark]);
+});
+
+// Чистка старых отметок запускается из startApp и не ждёт ответа облака, поэтому
+// устройство проверяем сразу после запуска, без единого await: оно чистится
+// синхронно. Сегодняшняя отметка при этом остаётся.
+test('при запуске старые отметки удаляются с устройства', t => {
+  const stale = storageKey(WORKOUT.id, '2000-01-01');
+  const { window } = mount(t, {
+    marks: [markOf(0, 0)],
+    preload: { [stale]: '[]', [`${stale}:pending`]: '1' },
+  });
+
+  assert.equal(window.localStorage.getItem(stale), null);
+  assert.equal(window.localStorage.getItem(`${stale}:pending`), null);
+  assert.deepEqual(JSON.parse(window.localStorage.getItem(todayKey())), [markOf(0, 0)], 'сегодняшняя отметка стёрта');
+});
+
+test('при запуске старые отметки удаляются и из облака, а сегодняшние остаются', async t => {
+  const stale = storageKey(WORKOUT.id, '2000-01-01');
+  const cloud = fakeCloud({ data: { [stale]: '[]', [todayKey()]: JSON.stringify([markOf(0, 0)]) } });
+  cloud.getKeys = callback => callback(null, Object.keys(cloud.data));
+  cloud.removeItems = (keys, callback) => { for (const key of keys) delete cloud.data[key]; callback(null, true); };
+  const { app } = mount(t, { webApp: fakeWebApp({ cloud }) });
+  await app.ready;
+  await settle(20);
+
+  assert.deepEqual(Object.keys(cloud.data), [todayKey()]);
 });
 
 test('таймер на странице: пресет, старт, шаг, сброс', t => {
@@ -1212,6 +1249,23 @@ const TAP_TARGETS = [
   'button.extra-link',
   '.player-close',
   '.workout-card',
+  '.workout-delete',
+  '.workout-edit',
+  '.builder-path',
+  '.builder-back',
+  '.builder-add',
+  '.builder-remove',
+  '.builder-replace',
+  '.builder-save',
+  '.library-chip',
+  '.library-add',
+  '.day-chip',
+  '.replace-pick',
+  '.replace-close',
+  '.level-option',
+  '.zone-chip',
+  '.builder-generate',
+  '.builder-variant',
 ];
 
 const HEIGHT_PROPS = ['min-height', 'height', 'max-height'];
@@ -1236,8 +1290,36 @@ const tapPixels = (value, where) => {
 // Узлы берутся с отрисованной страницы ещё и затем, чтобы сторож не остался
 // беззубым молча: селектор, переставший что-либо накрывать (переименованный
 // класс), роняет тест на пустой выборке.
-test(`ни одно правило не опускает нажимаемое ниже ${MIN_TAP_HEIGHT}px`, t => {
-  const { window, document } = mount(t, { screenWidth: 375 });
+test(`ни одно правило не опускает нажимаемое ниже ${MIN_TAP_HEIGHT}px`, async t => {
+  // Кнопки «Удалить» и «Изменить» есть только у своей тренировки, и список своих
+  // приходит следом за запуском: без записи на устройстве и без ожидания списка
+  // выборки `.workout-delete` и `.workout-edit` были бы пустыми.
+  const own = { v: 1, name: 'Моя', days: [1], level: null, zones: [], warmup: ['pelvic-tilt'],
+    circuit: ['chinese-squat'], strength: ['rdl'], focus: [], cooldown: ['breathing'], t: 1760000000000 };
+  // В настоящей библиотеке разминок ровно две, и скелет берёт обе: заменить
+  // нечем, шторка пуста, и выборка `.replace-pick` была бы пустой. Запасная
+  // разминка даёт кандидата и ничего больше не меняет.
+  const library = [...LIBRARY, { ...entry('pelvic-tilt'), key: 'extra-warmup', name: 'Запасная разминка' }];
+  const { window, document } = mount(t, {
+    screenWidth: 375,
+    library,
+    preload: { [recordKey('my-test0001')]: serializeCompact(own) },
+  });
+  // Смена экрана конструктора просит прокрутку, а в jsdom её нет: без заглушки
+  // каждый проход печатает «Not implemented».
+  window.scrollTo = () => {};
+  await settle(0);
+
+  // Нажимаемое каждого экрана собирается на месте, по мере прохода: экраны
+  // конструктора сменяют друг друга в одном узле, и все разом на странице их нет.
+  // Узел, ушедший из разметки, отвечает на matches как прежде, и проверка по
+  // нему честная — высота задаётся правилами, а не местом в документе.
+  const seen = new Map(TAP_TARGETS.map(selector => [selector, new Set()]));
+  const collect = (scope = document) => {
+    for (const [selector, nodes] of seen) {
+      for (const node of scope.querySelectorAll(selector)) nodes.add(node);
+    }
+  };
   // Подбор мышцы и плеер появляются только после нажатий: без них выборки
   // `.bodymap-pick button` и `.player-close` были бы пустыми. Раздел
   // «Тренировки» рисуется тоже только при показе (см. app.js, onShow) — без
@@ -1246,7 +1328,40 @@ test(`ни одно правило не опускает нажимаемое н
   document.querySelector('.bodymap-anterior polygon')
     .dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
   document.querySelector('button.video').click();
+  collect();
   document.querySelector('[data-section="workouts"]').click();
+  collect();
+
+  // Конструктор: вход, сборка, шторка замены, библиотека, сборка с силовым
+  // упражнением (появляется «Убрать») и экран сохранения.
+  const builder = document.getElementById('screen-builder');
+  document.querySelector('[data-section="builder"]').click();
+  collect();
+  builder.querySelector('.builder-path').click();
+  collect();
+  builder.querySelector('.builder-replace').click();
+  collect();
+  builder.querySelector('.replace-close').click();
+  builder.querySelector('.builder-add').click();
+  collect();
+  builder.querySelector('.library-add').click();
+  builder.querySelector('.builder-back').click();
+  collect();
+  builder.querySelector('.builder-save').click();
+  collect();
+
+  // Генератор и результат. В настоящей библиотеке ни один уровень не доступен,
+  // и до результата не дойти: те же экраны проходятся на тестовой, где доступно
+  // всё. Кнопка «Другой вариант» живёт только на результате, а чипы зон и
+  // уровни — на генераторе.
+  const rich = mount(t, { screenWidth: 375, library: TEST_LIBRARY, scrollStub: true });
+  const richBuilder = rich.document.getElementById('screen-builder');
+  rich.document.querySelector('[data-section="builder"]').click();
+  richBuilder.querySelectorAll('.builder-path')[1].click();
+  collect(richBuilder);
+  richBuilder.querySelector('.zone-chip').click();
+  richBuilder.querySelector('.builder-generate').click();
+  collect(richBuilder);
 
   const declarations = [];
   for (const file of ['style.css', 'player.css']) {
@@ -1272,7 +1387,7 @@ test(`ни одно правило не опускает нажимаемое н
   }
   const low = [];
   for (const selector of TAP_TARGETS) {
-    const nodes = [...document.querySelectorAll(selector)];
+    const nodes = [...seen.get(selector)];
     assert.ok(nodes.length > 0,
       `«${selector}» на странице ничего не накрывает — сторож высоты нажимаемого стал беззубым`);
 

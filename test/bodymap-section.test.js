@@ -11,6 +11,7 @@ import legs from '../workouts/legs-mwf.js';
 import { WORKOUTS } from '../workouts/index.js';
 import { warmupOnlyGroups, idleGroups } from '../bodymap.js';
 import { muscleLabel, regionGroups, MUSCLES } from '../muscles.js';
+import { entry } from '../exercises/index.js';
 
 const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 
@@ -327,12 +328,9 @@ test('клик по ягодичным показывает верное чис�
   const title = pickByTitle(d, window, 'Ягодичные');
   assert.equal(title, 'Ягодичные — 6 подх.');
   const names = [...d.querySelectorAll('.bodymap-pick button')].map(b => b.textContent);
-  assert.deepEqual(names, [
-    'Румынская тяга с длинной резинкой',
-    'Ягодичный мост',
-    'Жим двумя ногами лёжа',
-    '«Птица-собака»: противоположные рука и нога',
-  ]);
+  // Состав закреплён ключами, а названия берутся из библиотеки: переименование
+  // упражнения в таблице состава не меняет.
+  assert.deepEqual(names, ['rdl', 'glute-bridge', 'leg-press', 'bird-dog'].map(key => entry(key).name));
 });
 
 test('клик по другой мышце заменяет прежний список, а не дополняет его', () => {

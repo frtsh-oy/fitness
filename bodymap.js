@@ -5,6 +5,7 @@ import createBodyHighlighter, { ModelType } from './vendor/body-highlighter.esm.
 import { regionSummary, setsByGroup } from './volume.js';
 import { MUSCLES, regionLabel } from './muscles.js';
 import { decorate, VIEW_BOX } from './figure.js';
+import { hasOwn } from './own.js';
 
 // Шесть оттенков от бледного к насыщенному. Библиотека выбирает цвет как
 // LIBRARY_COLORS[min(len-1, частота-1)], поэтому порядок здесь и есть шкала.
@@ -57,7 +58,7 @@ export const DEFAULT_MODE = 'strength';
 // Для вызывающего кода, который берёт режим из ненадёжного источника
 // (localStorage переживает и смену версии приложения, и правку руками).
 export function isMode(mode) {
-  return Object.hasOwn(MODE_KINDS, mode);
+  return hasOwn(MODE_KINDS, mode);
 }
 
 function kindsOfMode(mode) {

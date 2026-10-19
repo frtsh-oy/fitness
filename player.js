@@ -4,7 +4,16 @@
 //
 // openLink приходит из telegram.js: внутри Telegram target="_blank" не работает,
 // поэтому «Открыть в YouTube» — кнопка, а не ссылка.
-export function setupPlayers(root, openLink) {
+//
+// idPrefix — начало id панели плеера (`${idPrefix}-${номер ролика}`). Панель
+// вставляется на страницу при открытии ролика, и id у неё обязан быть уникальным
+// на всей странице, а не только внутри root: у «Сегодня» и у библиотеки
+// упражнений свои плееры, и с общим префиксом оба назвали бы первую панель
+// одинаково. Поэтому каждый вызывающий передаёт свой.
+//
+// Возвращает функцию, закрывающую открытое видео (если оно есть) с возвратом
+// фокуса на его кнопку.
+export function setupPlayers(root, openLink, { idPrefix = 'exercise-video' } = {}) {
   const doc = root.ownerDocument;
   const win = doc.defaultView;
   let activeVideo = null;
@@ -30,7 +39,7 @@ export function setupPlayers(root, openLink) {
     button.className = link.className;
     button.innerHTML = link.innerHTML;
     button.setAttribute('aria-expanded', 'false');
-    button.setAttribute('aria-controls', `exercise-video-${index}`);
+    button.setAttribute('aria-controls', `${idPrefix}-${index}`);
     const title = link.closest('.exercise').querySelector('h3').textContent;
     button.setAttribute('aria-label', link.getAttribute('aria-label') || `${title}: ${link.textContent}`);
     const source = link.href;
@@ -42,7 +51,7 @@ export function setupPlayers(root, openLink) {
 
       const panel = doc.createElement('div');
       panel.className = 'player-shell';
-      panel.id = `exercise-video-${index}`;
+      panel.id = `${idPrefix}-${index}`;
 
       const frame = doc.createElement('iframe');
       frame.title = `Видео: ${title}`;
@@ -101,7 +110,8 @@ export function setupPlayers(root, openLink) {
     });
   });
 
-  doc.addEventListener('keydown', event => {
-    if (event.key === 'Escape' && activeVideo) closeExerciseVideo(true);
-  });
+  // Закрывать открытое видео по Escape — дело вызывающего: слушатель клавиши
+  // живёт на document, а setupPlayers зовут заново при каждой смене тренировки,
+  // и слушатель, повешенный отсюда, копился бы по одному на каждую смену.
+  return () => closeExerciseVideo(true);
 }

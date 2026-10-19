@@ -393,3 +393,16 @@ test('блок без preamble по-прежнему проходит прове
   assert.equal(w.blocks[0].preamble, undefined);
   assert.deepEqual(validateWorkout(w), []);
 });
+
+test('необязательный focus допустим только как true', () => {
+  const withFocus = value => {
+    const w = minimalWorkout();
+    w.blocks[0].items[0].focus = value;
+    return validateWorkout(w);
+  };
+  assert.deepEqual(withFocus(true), []);
+  assert.deepEqual(withFocus(undefined), []);
+  assert.match(withFocus('да').join('\n'), /focus — только true/);
+  assert.match(withFocus(false).join('\n'), /focus — только true/);
+  assert.equal(withFocus('да').length, 1);
+});
