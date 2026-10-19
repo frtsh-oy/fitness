@@ -44,6 +44,13 @@ export function scheduleLong(days) {
   return days.map(day => weekday(day).long).join(' · ');
 }
 
+// Есть ли в расписании два дня подряд, считая воскресенье и понедельник
+// соседними: неделя замкнута, а дни по ISO идут от 1 до 7. Нужна подвалу: фраза
+// «между тренировками — день восстановления» при таком расписании неправда.
+export function hasAdjacentDays(days) {
+  return days.some(day => days.includes(day % 7 + 1));
+}
+
 const el = (document, tag, className, text) => {
   const node = document.createElement(tag);
   if (className) node.className = className;
@@ -314,9 +321,13 @@ export function renderIntro(workout, document) {
   // бы с чужим расписанием сразу в двух местах, и ни один тест бы не заметил.
   document.querySelector('.masthead .schedule').textContent = scheduleShort(workout.days);
   // В подвале расписание — ведущий текстовый узел. Примечание рядом с ним
-  // («Между тренировками — день восстановления») остаётся в разметке: оно не
-  // про расписание и от дней недели не зависит.
-  document.querySelector('footer').firstChild.textContent = scheduleLong(workout.days);
+  // («Между тренировками — день восстановления») остаётся в разметке, но
+  // показывается не всегда: при двух днях подряд (своя тренировка может стоять
+  // хоть на все семь) оно неправда. Выставляется при каждой отрисовке, а не
+  // только при скрытии: со сменой тренировки примечание должно вернуться.
+  const footer = document.querySelector('footer');
+  footer.firstChild.textContent = scheduleLong(workout.days);
+  footer.querySelector('span').hidden = hasAdjacentDays(workout.days);
 
   document.querySelector('.equipment').textContent = workout.equipment;
   document.getElementById('progression-list')

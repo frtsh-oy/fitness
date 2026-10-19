@@ -31,6 +31,7 @@ import {
   CORE_GROUPS, LEVELS, ZONES, FOCUS_MIN, SOFT_CEILING, MAX_STRENGTH, MAX_ZONES, PLAN_DAYS, DEFAULT_DAYS, SKELETON,
 } from './rules.js';
 import { defaultName } from './texts.js';
+import { hasOwn } from '../own.js';
 
 // Попыток перебора. Хватает с запасом: в богатой библиотеке подходит почти
 // каждая, а в бедной лишние попытки ничего не меняют.
@@ -181,10 +182,10 @@ function attempt({ pool, rounds, floor, zones, candidates, random }) {
 }
 
 function checkInput(level, zones) {
-  if (!Object.hasOwn(LEVELS, level)) throw new Error(`Неизвестный уровень: ${level}`);
+  if (!hasOwn(LEVELS, level)) throw new Error(`Неизвестный уровень: ${level}`);
   if (zones.length > MAX_ZONES) throw new RangeError('Зон упора не больше двух');
   for (const zone of zones) {
-    if (!Object.hasOwn(ZONES, zone)) throw new Error(`Неизвестная зона: ${zone}`);
+    if (!hasOwn(ZONES, zone)) throw new Error(`Неизвестная зона: ${zone}`);
   }
   // Повтор зоны дал бы запись, которую parseCompact отвергает как нечитаемую.
   if (new Set(zones).size !== zones.length) throw new Error('Зона указана дважды');

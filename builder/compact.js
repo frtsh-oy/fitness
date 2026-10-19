@@ -8,6 +8,7 @@ import { groupsPhrase } from '../muscles.js';
 import { LEVELS, ZONES, MANUAL_ROUNDS, SKELETON } from './rules.js';
 import { KEY_PATTERN } from '../workouts/schema.js';
 import { arrangeStrength } from './arrange.js';
+import { hasOwn } from '../own.js';
 import {
   plural, PAIR_PREAMBLE, BLOCK_TEXTS, CAUTION, progressionFor, kickerFor, leadFor, equipmentFor,
 } from './texts.js';
@@ -32,7 +33,7 @@ export function serializeCompact(compact) {
 
 // Шаблон ключа — тот, по которому импорт принимает упражнения в библиотеку.
 const isKey = value => typeof value === 'string' && KEY_PATTERN.test(value);
-const isOwn = (object, id) => typeof id === 'string' && Object.hasOwn(object, id);
+const isOwn = (object, id) => typeof id === 'string' && hasOwn(object, id);
 const isDistinctArray = (value, ok) => Array.isArray(value) && value.every(ok) && new Set(value).size === value.length;
 
 // Читает запись из текста. Форму проверяем целиком, а не по версии: запись пришла

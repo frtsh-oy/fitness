@@ -17,6 +17,7 @@ import { renderWeekly } from './weekly-view.js';
 import { createSections, savedSection } from './sections.js';
 import { renderWorkouts } from './workouts-view.js';
 import { renderBuilder } from './builder-view.js';
+import { hasOwn } from './own.js';
 
 // Отсчёт сверяется с часами часто, чтобы экран не отставал от них больше чем
 // на глаз: на границе секунды подпись меняется в пределах пятой доли.
@@ -112,7 +113,7 @@ export function startApp(win = globalThis.window, { library = LIBRARY } = {}) {
   // удалили. Облака здесь нет намеренно: открывать тренировку надо сразу, а оно
   // отвечает до пяти секунд.
   function openWorkout(id) {
-    if (Object.hasOwn(WORKOUTS, id)) return { workout: WORKOUTS[id], removed: [] };
+    if (hasOwn(WORKOUTS, id)) return { workout: WORKOUTS[id], removed: [] };
     const compact = store.peek(id);
     return compact ? expandWorkout(id, compact, library) : null;
   }
@@ -126,7 +127,7 @@ export function startApp(win = globalThis.window, { library = LIBRARY } = {}) {
   // запомненное не трогает: она лишь на этот запуск.
   const start = (() => {
     const linked = tg.workoutId;
-    if (linked && Object.hasOwn(WORKOUTS, linked)) return openWorkout(linked);
+    if (linked && hasOwn(WORKOUTS, linked)) return openWorkout(linked);
     return openWorkout(rememberedId()) ?? openWorkout(DEFAULT_WORKOUT_ID);
   })();
   // Открытая в «Сегодня»: её читают обработчики, которые вешаются один раз
@@ -226,8 +227,14 @@ export function startApp(win = globalThis.window, { library = LIBRARY } = {}) {
   // оставили. Другая открывается сверху: сохранённое место прокрутки относилось
   // к прежней тренировке и в новой вело бы в случайную точку.
   function selectWorkout(id) {
-    const next = openWorkout(id);
-    // Своей тренировки, которой на устройстве уже нет, открыть нечем.
+    // Запись на устройстве — первая: она всегда свежее ответа облака. Но её может
+    // не быть там, где карточка есть: запись в localStorage не удалась (место
+    // кончилось), а облако тренировку отдало. Карточка рисуется из списка «Мои»,
+    // и в нём та же запись, из которой тренировка собирается без устройства.
+    const own = mine?.find(entry => entry.id === id);
+    const next = openWorkout(id) ?? (own ? expandWorkout(id, own.compact, library) : null);
+    // Нет ни в реестре, ни на устройстве, ни в списке (удалили, пока карточка
+    // была на экране): открыть нечем.
     if (!next) return;
     const changed = next.workout.id !== workout.id;
     if (changed) showWorkout(next.workout, next.removed);

@@ -160,6 +160,28 @@ test('запомненной своей тренировки на устройс
   assert.equal(heading(document), LEGS_H1);
 });
 
+// Запись есть в облаке и потому в «Мои», а на устройстве её нет: localStorage
+// отказывает в записи (место кончилось), и копия не легла. Раньше тап по такой
+// карточке молча ничего не делал: открывать тренировку приходилось с устройства.
+test('своей тренировки нет на устройстве, а в списке «Мои» она есть — карточка открывает её из списка', async t => {
+  const { document, app } = mount(t, {
+    webApp: fakeWebApp({ cloud: refusingCloud(onDevice()) }),
+    beforeStart: window => {
+      window.Storage.prototype.setItem = () => { throw new Error('место на устройстве кончилось'); };
+    },
+  });
+  await settle(20);
+  assert.equal(app.store.peek(OWN_ID), null, 'условие теста: на устройстве записи нет');
+  assert.equal(heading(document), LEGS_H1);
+
+  pick(document, OWN.name);
+
+  assert.equal(heading(document), OWN.name);
+  assert.equal(app.workout.id, OWN_ID);
+  assert.equal(document.querySelectorAll('#workout .exercise').length, exerciseCount(OWN));
+  assert.deepEqual(shown(document), ['screen-today']);
+});
+
 test('отметки разных тренировок не смешиваются', async t => {
   const { window, document, app } = mount(t, { preload: onDevice() });
   await app.ready;

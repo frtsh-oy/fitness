@@ -18,6 +18,7 @@ test('isMuscleId отличает известные группы от выду�
   assert.equal(isMuscleId('glutes'), true);
   assert.equal(isMuscleId('adductors'), true);
   assert.equal(isMuscleId('nonexistent'), false);
+  assert.equal(isMuscleId('constructor'), false, 'унаследованное свойство группой быть не должно');
 });
 
 test('muscleLabel бросает ошибку на неизвестной группе', () => {

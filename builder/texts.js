@@ -2,6 +2,7 @@
 // подсказки. Русский текст здесь дословный — на него опираются тесты и экран.
 // Подбор в них назван «по правилам»: так он и устроен.
 import { LEVELS, ZONES, MANUAL_ROUNDS, MANUAL_RESERVE } from './rules.js';
+import { hasOwn } from '../own.js';
 
 // Форма слова по числу: [один, несколько, много] — «1 упражнение, 2 упражнения,
 // 5 упражнений». 11–19 всегда «много» (иначе 11 прочиталось бы как «один»).
@@ -45,12 +46,12 @@ export const CAUTION = 'При острой боли в суставе прек�
 // Неизвестный уровень или зона — повод упасть: по голому LEVELS[id] «constructor»
 // нашёлся бы как уровень, и на экран попало бы «СВОЯ · UNDEFINED УРОВЕНЬ».
 function levelOf(id) {
-  if (!Object.hasOwn(LEVELS, id)) throw new Error(`Неизвестный уровень: ${id}`);
+  if (!hasOwn(LEVELS, id)) throw new Error(`Неизвестный уровень: ${id}`);
   return LEVELS[id];
 }
 
 function zoneLabel(id) {
-  if (!Object.hasOwn(ZONES, id)) throw new Error(`Неизвестная зона: ${id}`);
+  if (!hasOwn(ZONES, id)) throw new Error(`Неизвестная зона: ${id}`);
   return ZONES[id].label.toLowerCase();
 }
 
@@ -108,7 +109,7 @@ export function defaultName(zones) {
   if (names.length > 1) {
     list = names.some(name => name.includes(' и '))
       ? names.join(', ')
-      : `${names.slice(0, -1).join(', ')} и ${names.at(-1)}`;
+      : `${names.slice(0, -1).join(', ')} и ${names[names.length - 1]}`;
   }
   return `Всё тело. Упор: ${list}`;
 }

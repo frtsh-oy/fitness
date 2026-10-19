@@ -2,6 +2,7 @@
 // region — идентификатор области на картинке тела; несколько наших групп
 // могут указывать на один регион. Значения region обязаны существовать в
 // словаре библиотеки карты тела — это требование закреплено тестом.
+import { hasOwn } from './own.js';
 
 function deepFreeze(obj) {
   Object.freeze(obj);
@@ -37,7 +38,7 @@ export const MUSCLES = deepFreeze({
 });
 
 export function isMuscleId(id) {
-  return Object.hasOwn(MUSCLES, id);
+  return hasOwn(MUSCLES, id);
 }
 
 export function muscleLabel(id) {
