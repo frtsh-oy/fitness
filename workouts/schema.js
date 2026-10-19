@@ -73,13 +73,28 @@ function isValidPreamblePart(part) {
 // key внутри блока сюда не входит: она про соседей, а у функции на входе одно
 // упражнение. `at` — начало каждого сообщения: «Блок …, упражнение «…»» или
 // своё у вызывающего.
+//
+// Проверки идут двумя частями только затем, чтобы validateWorkout мог вставить
+// проверку уникальности key между ними: сообщение о дубликате стоит там же, где
+// стояло до выноса, и порядок сообщений тренировки не изменился.
 export function itemProblems(item, at) {
+  return [...itemFieldProblems(item, at), ...itemValueProblems(item, at)];
+}
+
+// Какие поля есть и какова форма key.
+function itemFieldProblems(item, at) {
   const problems = [];
   for (const field of ITEM_FIELDS) {
     if (item[field] === undefined) problems.push(`${at}: нет поля ${field}`);
   }
   // Отсутствие key уже названо выше, поэтому здесь только форма.
   if (item.key !== undefined && !isNonEmptyString(item.key)) problems.push(`${at}: key должен быть непустой строкой`);
+  return problems;
+}
+
+// Содержимое остальных полей: тексты, видео, pattern, kind, gear, load.
+function itemValueProblems(item, at) {
+  const problems = [];
   for (const field of ITEM_TEXT_FIELDS) {
     if (item[field] !== undefined && !isNonEmptyString(item[field])) problems.push(`${at}: поле ${field} должно быть непустой строкой`);
   }
@@ -238,8 +253,8 @@ export function validateWorkout(workout) {
     }
 
     // key — устойчивый идентификатор упражнения: из него строится идентификатор
-    // отметки (см. render.js). Требуется у каждого упражнения (itemProblems) и
-    // обязан быть уникальным внутри блока — это проверяется здесь, потому что
+    // отметки (см. render.js). Требуется у каждого упражнения (itemFieldProblems)
+    // и обязан быть уникальным внутри блока — это проверяется здесь, потому что
     // для одного упражнения «внутри блока» ничего не значит. Без первого
     // отметки «переезжают» на соседей при любой вставке упражнения, без второго
     // два чекбокса схлопываются в один идентификатор — и оба раза молча, потому
@@ -247,11 +262,12 @@ export function validateWorkout(workout) {
     const seenKeys = new Set();
     for (const item of block.items) {
       const at = `${where}, упражнение «${item.name ?? '?'}»`;
-      problems.push(...itemProblems(item, at));
+      problems.push(...itemFieldProblems(item, at));
       if (isNonEmptyString(item.key)) {
         if (seenKeys.has(item.key)) problems.push(`${at}: дубликат key ${item.key} внутри блока`);
         seenKeys.add(item.key);
       }
+      problems.push(...itemValueProblems(item, at));
     }
   }
   return problems;

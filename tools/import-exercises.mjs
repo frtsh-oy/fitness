@@ -5,9 +5,11 @@
 // docs/muscle-map.md.
 //
 // Импорт либо принимает таблицу целиком, либо не пишет ничего: полупринятая
-// библиотека хуже старой. Поэтому все ошибки собираются разом, с номером строки
-// и названием колонки (номер — как в Google Sheets, заголовок — строка 1), и
-// человек правит всё найденное за раз, а не по одной ошибке за запуск.
+// библиотека хуже старой. Ошибки строк собираются разом, с номером строки и
+// названием колонки (номер — как в Google Sheets, заголовок — строка 1), и
+// человек правит всё найденное за раз, а не по одной ошибке за запуск. Два
+// исключения: без колонки в заголовке строки не читаются (каждая повторяла бы
+// одно и то же), а незакрытая кавычка останавливает разбор всего файла.
 //
 // Запуск: node tools/import-exercises.mjs <файл.csv | https://…> [--allow-removed=ключ1,ключ2] [--out=каталог]
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -15,7 +17,7 @@ import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 import { MUSCLES } from '../muscles.js';
-import { itemProblems } from '../workouts/schema.js';
+import { itemProblems, NO_LOAD_PATTERN } from '../workouts/schema.js';
 
 export const COLUMNS = ['Ключ', 'Название', 'Тип', 'Паттерн', 'Мышцы (подпись)', 'Дозировка', 'Техника', 'Уточнение',
   'Видео', 'Подпись видео', 'Доп. видео', 'Прогрессия', 'Инвентарь', 'Одностороннее', 'Сложность', 'Многосуставное',
@@ -95,8 +97,14 @@ function parseStart(raw) {
 
 const YOUTUBE_HOSTS = new Set(['www.youtube.com', 'youtube.com', 'm.youtube.com']);
 
-// Ссылка на ролик → { id, start } или null. Формат id здесь не проверяется: это
-// делает itemProblems (одиннадцать символов), так у формата один источник.
+// Идентификатор ролика — ровно одиннадцать символов из этого набора, как
+// YOUTUBE_ID в workouts/schema.js (его же требует player.js). Проверяем и здесь:
+// иначе обрезанная ссылка доходила бы до человека сообщением схемы «v[0] — id
+// ролика…», а не сообщением с названием его колонки.
+const YOUTUBE_ID = /^[A-Za-z0-9_-]{11}$/;
+
+// Ссылка на ролик → { id, start } или null, если это не ссылка на ролик
+// YouTube с правильным id.
 export function parseYoutube(url) {
   let parsed;
   try {
@@ -113,7 +121,7 @@ export function parseYoutube(url) {
     if (kind === 'watch') id = parsed.searchParams.get('v');
     else if (kind === 'shorts' || kind === 'embed') id = rest;
   }
-  if (!id) return null;
+  if (!id || !YOUTUBE_ID.test(id)) return null;
   const start = parseStart(parsed.searchParams.get('t') || parsed.searchParams.get('start') || '');
   return start === null ? null : { id, start };
 }
@@ -124,37 +132,51 @@ export function formatStart(sec) {
   return `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`;
 }
 
-// Ячейки одной строки → поля записи. Ошибки строки уходят в errors все сразу, а
-// запись из полей собирает buildLibrary, и только когда ошибок нет.
+// Заглушка для колонки, не прошедшей свою проверку: непустая строка. Её видит
+// только itemProblems; в библиотеку строка с ошибкой не попадает.
+const STAND_IN = '?';
+
+// Ячейки одной строки → упражнение в форме записи библиотеки. Ошибки колонок
+// уходят в errors все сразу. Колонка, не прошедшая свою проверку, ставится в
+// упражнение заглушкой, чтобы itemProblems, который запускается для каждой
+// строки, сказал только то, что от этой колонки не зависит, а не эхо уже
+// названной ошибки: вместо названия, подписи, дозировки, техники и ключа —
+// STAND_IN, вместо типа — «разминка», вместо паттерна — NO_LOAD_PATTERN (у него
+// пустая разметка нагрузки допустима, так что её пустота не судится), вместо
+// инвентаря — ['none'], вместо «Одностороннее» — false, группа мышц с
+// непонятным значением считается размеченной (1), а видео и строки «Доп. видео»
+// с ошибкой просто не попадают в упражнение.
 function readRow(record, n, columnAt, errors, keyRows) {
   const raw = column => (record[columnAt.get(column)] ?? '').replace(/\r\n?/g, '\n');
   const get = column => raw(column).trim();
   const fail = (column, message) => errors.push(`Строка ${n}, «${column}»: ${message}`);
-  const pick = (column, map, expected) => {
+  const pick = (column, map, expected, standIn) => {
     const value = get(column);
     if (map.has(value.toLowerCase())) return map.get(value.toLowerCase());
     fail(column, `${expected} — получено «${value}»`);
-    return undefined;
+    return standIn;
   };
-  const yesNo = column => pick(column, YES_NO, '«да» или «нет»');
+  const yesNo = (column, standIn) => pick(column, YES_NO, '«да» или «нет»', standIn);
+  const need = column => {
+    const value = get(column);
+    if (value !== '') return value;
+    fail(column, 'не может быть пустым');
+    return STAND_IN;
+  };
 
-  const key = get('Ключ');
+  let key = get('Ключ');
   if (!KEY_PATTERN.test(key)) {
     fail('Ключ', `только строчная латиница, цифры и дефис, до 40 символов — получено «${key}»`);
+    key = STAND_IN;
   } else if (keyRows.has(key)) {
     fail('Ключ', `ключ «${key}» уже есть в строке ${keyRows.get(key)}`);
   } else {
     keyRows.set(key, n);
   }
 
-  const need = column => {
-    const value = get(column);
-    if (value === '') fail(column, 'не может быть пустым');
-    return value;
-  };
   const name = need('Название');
   const slot = pick('Тип', SLOTS, `одно из ${quoted(SLOTS.keys())}`);
-  const pattern = pick('Паттерн', PATTERN_NAMES, `одно из ${quoted(PATTERN_NAMES.keys())}`);
+  const pattern = pick('Паттерн', PATTERN_NAMES, `одно из ${quoted(PATTERN_NAMES.keys())}`, NO_LOAD_PATTERN);
   const muscles = need('Мышцы (подпись)');
   const reps = need('Дозировка');
   const text = need('Техника');
@@ -185,10 +207,13 @@ function readRow(record, n, columnAt, errors, keyRows) {
   });
 
   const gearCell = get('Инвентарь');
-  const gear = gearCell.split(',').map(name => GEAR_NAMES.get(name.trim().toLowerCase()));
-  if (gear.includes(undefined)) fail('Инвентарь', `через запятую из ${quoted(GEAR_NAMES.keys())} — получено «${gearCell}»`);
+  let gear = gearCell.split(',').map(part => GEAR_NAMES.get(part.trim().toLowerCase()));
+  if (gear.includes(undefined)) {
+    fail('Инвентарь', `через запятую из ${quoted(GEAR_NAMES.keys())} — получено «${gearCell}»`);
+    gear = ['none'];
+  }
 
-  const unilateral = yesNo('Одностороннее');
+  const unilateral = yesNo('Одностороннее', false);
 
   // Сложность и многосуставность — только у силовых. При неизвестном типе не
   // проверяем ни то, ни другое: неясно, силовое ли это, и вторая ошибка была бы
@@ -212,11 +237,23 @@ function readRow(record, n, columnAt, errors, keyRows) {
     if (value === '') continue;
     if (value === '1') load[id] = 1;
     else if (value === '0,5' || value === '0.5') load[id] = 0.5;
-    else fail(ru, `пусто, 1 или 0,5 — получено «${value}»`);
+    else {
+      fail(ru, `пусто, 1 или 0,5 — получено «${value}»`);
+      load[id] = 1;
+    }
   }
 
-  return { key, name, slot, pattern, muscles, reps, text, detail: get('Уточнение'), extra: get('Прогрессия'),
-    v, links, gear, unilateral, difficulty, compound, load };
+  const entry = { key, slot: slot ?? 'warmup', name, muscles, reps, text };
+  const detail = get('Уточнение');
+  const extra = get('Прогрессия');
+  if (detail !== '') entry.detail = detail;
+  if (extra !== '') entry.extra = extra;
+  if (v) entry.v = v;
+  if (links.length > 0) entry.links = links;
+  Object.assign(entry, { load, pattern, gear, unilateral,
+    kind: slot === undefined || slot === 'circuit' ? 'warmup' : slot });
+  if (slot === 'strength') Object.assign(entry, { difficulty, compound });
+  return entry;
 }
 
 // records — вывод parseCsv: первая запись заголовок. Возвращает entries: null,
@@ -255,22 +292,13 @@ export function buildLibrary(records, { previousKeys = [], allowRemoved = [] } =
     tableKeys.add((record[columnAt.get('Ключ')] ?? '').trim());
 
     const rowErrors = [];
-    const row = readRow(record, n, columnAt, rowErrors, keyRows);
-    // Упражнение собирается и проходит itemProblems только в строке без других
-    // ошибок: из недособранного itemProblems вернул бы эхо тех же ошибок
-    // («неизвестный pattern undefined» на уже названное «Паттерн»).
-    if (rowErrors.length === 0) {
-      const entry = { key: row.key, slot: row.slot, name: row.name, muscles: row.muscles, reps: row.reps, text: row.text };
-      if (row.detail !== '') entry.detail = row.detail;
-      if (row.extra !== '') entry.extra = row.extra;
-      if (row.v) entry.v = row.v;
-      if (row.links.length > 0) entry.links = row.links;
-      Object.assign(entry, { load: row.load, pattern: row.pattern, gear: row.gear, unilateral: row.unilateral,
-        kind: row.slot === 'circuit' ? 'warmup' : row.slot });
-      if (row.slot === 'strength') Object.assign(entry, { difficulty: row.difficulty, compound: row.compound });
-      for (const problem of itemProblems(entry, `упражнение «${entry.name}»`)) rowErrors.push(`Строка ${n}: ${problem}`);
-      if (rowErrors.length === 0) entries.push(entry);
-    }
+    const entry = readRow(record, n, columnAt, rowErrors, keyRows);
+    // itemProblems — для каждой строки: независимые от колонок ошибки (пустая
+    // разметка нагрузки при известном паттерне) иначе всплыли бы только вторым
+    // запуском. Значения колонок, не прошедших проверку, в упражнении заменены
+    // заглушками — см. readRow.
+    for (const problem of itemProblems(entry, `упражнение «${entry.name}»`)) rowErrors.push(`Строка ${n}: ${problem}`);
+    if (rowErrors.length === 0) entries.push(entry);
     errors.push(...rowErrors);
   }
 

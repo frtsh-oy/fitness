@@ -197,14 +197,16 @@ test('Видео: не ссылка на YouTube', () => {
   }
 });
 
-test('Видео: id не из одиннадцати символов называет проверка схемы', () => {
-  assert.deepEqual(errorsOf([row({ 'Видео': 'https://youtu.be/abc' })]),
-    ['Строка 2: упражнение «Румынская тяга»: v[0] — id ролика YouTube (11 символов), получено "abc"']);
+test('Видео: id не из одиннадцати допустимых символов — тоже не ссылка на ролик', () => {
+  // Сообщение с названием колонки, а не «v[0] — id ролика…» из схемы.
+  for (const bad of ['https://youtu.be/abc', 'https://youtu.be/kOAy8BGdxBcX', 'https://youtu.be/kOAy8BGdxB!']) {
+    assert.deepEqual(errorsOf([row({ 'Видео': bad })]), [`Строка 2, «Видео»: не ссылка на ролик YouTube — «${bad}»`], bad);
+  }
 });
 
-test('Доп. видео: id не из одиннадцати символов называет проверка схемы', () => {
+test('Доп. видео: id не из одиннадцати допустимых символов — строка не по образцу', () => {
   assert.deepEqual(errorsOf([row({ 'Доп. видео': 'Сбоку — https://youtu.be/abc' })]),
-    ['Строка 2: упражнение «Румынская тяга»: links[0][0] — id ролика YouTube (11 символов), получено "abc"']);
+    ['Строка 2, «Доп. видео»: строка 1 — нужно «подпись — ссылка на YouTube», получено «Сбоку — https://youtu.be/abc»']);
 });
 
 test('Видео нет: поля v нет вовсе', () => {
@@ -338,9 +340,9 @@ test('load идёт в порядке MUSCLES при любом порядке �
   const order = [...COLUMNS].reverse();
   const record = row({ 'Икроножные': '1', 'Предплечья': '0,5' });
   const { entries } = buildLibrary([order, order.map(c => record[COLUMNS.indexOf(c)])]);
-  const muscleOrder = Object.keys(MUSCLES);
-  assert.deepEqual(Object.keys(entries[0].load), ['glutes', 'hamstrings', 'calves', 'lower_back', 'forearms']);
-  assert.deepEqual(Object.keys(entries[0].load), muscleOrder.filter(id => Object.hasOwn(entries[0].load, id)));
+  const keys = Object.keys(entries[0].load);
+  assert.ok(keys.length > 2, 'порядок из одного ключа ничего не доказывает');
+  assert.deepEqual(keys, Object.keys(MUSCLES).filter(id => Object.hasOwn(entries[0].load, id)));
 });
 
 test('поля упражнения идут в порядке из описания формата', () => {
@@ -360,26 +362,84 @@ test('проверки itemProblems: у восстановления пуста�
   assert.deepEqual(result.entries[0].load, {});
 });
 
-test('проверки itemProblems не запускаются, пока в строке есть другие ошибки', () => {
-  // Недособранное упражнение дало бы вдобавок «неизвестный pattern undefined»
-  // и «нужен непустой load» — эхо той же ошибки.
+test('itemProblems идёт в каждой строке: независимые ошибки видны сразу, эха названных нет', () => {
+  const NO_LOAD_MESSAGE = 'Строка 2: упражнение «Румынская тяга»: нужен непустой load (пустой разрешён только при pattern recovery)';
+  const GEAR_MESSAGE = 'Строка 2, «Инвентарь»: через запятую из «длинная резинка», «мини-петля», «без инвентаря» — получено «гантели»';
+  // Три независимые ошибки одной строки — за один запуск. Прежде короткий id
+  // и пустая разметка ждали бы, пока человек исправит инвентарь.
+  assert.deepEqual(errorsOf([row({ 'Видео': 'https://youtu.be/abc', 'Инвентарь': 'гантели', ...NO_LOAD })]), [
+    'Строка 2, «Видео»: не ссылка на ролик YouTube — «https://youtu.be/abc»',
+    GEAR_MESSAGE,
+    NO_LOAD_MESSAGE,
+  ]);
+  assert.deepEqual(errorsOf([row({ 'Доп. видео': 'Сбоку — https://youtu.be/abc', ...NO_LOAD })]), [
+    'Строка 2, «Доп. видео»: строка 1 — нужно «подпись — ссылка на YouTube», получено «Сбоку — https://youtu.be/abc»',
+    NO_LOAD_MESSAGE,
+  ]);
+  // Колонка, не прошедшая свою проверку, не даёт эха от itemProblems: неверный
+  // паттерн не судит пустую разметку, неверная группа — тоже размечена, неверный
+  // инвентарь и «Одностороннее» не дают «gear должен быть массивом» и подобного.
   assert.deepEqual(errorsOf([row({ 'Паттерн': 'бег', ...NO_LOAD })]),
     ['Строка 2, «Паттерн»: одно из «наклон от таза», «присед», «выпад», «жим», «тяга», «кор», «изолирующее», '
       + '«подвижность», «растяжка», «восстановление» — получено «бег»']);
+  assert.deepEqual(errorsOf([row({ 'Ягодичные': '2', 'Задняя поверхность бедра': '', 'Разгибатели поясницы': '' })]),
+    ['Строка 2, «Ягодичные»: пусто, 1 или 0,5 — получено «2»']);
+  assert.deepEqual(errorsOf([row({ 'Одностороннее': 'иногда' })]),
+    ['Строка 2, «Одностороннее»: «да» или «нет» — получено «иногда»']);
+  // Названия нет: в сообщении схемы вместо него «?», как у упражнения без name.
+  assert.deepEqual(errorsOf([row({ 'Название': '', ...NO_LOAD })]), [
+    'Строка 2, «Название»: не может быть пустым',
+    'Строка 2: упражнение «?»: нужен непустой load (пустой разрешён только при pattern recovery)',
+  ]);
+  // Ключ и тип тоже не дают эха («key должен быть непустой строкой», «неизвестный kind»).
+  assert.deepEqual(errorsOf([row({ 'Ключ': '', 'Тип': 'кардио', ...NO_LOAD })]), [
+    'Строка 2, «Ключ»: только строчная латиница, цифры и дефис, до 40 символов — получено «»',
+    'Строка 2, «Тип»: одно из «разминка», «разогрев», «силовое», «завершение» — получено «кардио»',
+    NO_LOAD_MESSAGE,
+  ]);
+  assert.deepEqual(errorsOf([row({ 'Ключ': '', 'Название': '', 'Мышцы (подпись)': '', 'Дозировка': '', 'Техника': '' })]), [
+    'Строка 2, «Ключ»: только строчная латиница, цифры и дефис, до 40 символов — получено «»',
+    'Строка 2, «Название»: не может быть пустым',
+    'Строка 2, «Мышцы (подпись)»: не может быть пустым',
+    'Строка 2, «Дозировка»: не может быть пустым',
+    'Строка 2, «Техника»: не может быть пустым',
+  ]);
 });
+
+// Тренировка из одного блока с заданными упражнениями — чтобы сверять
+// validateWorkout с itemProblems и порядок его сообщений.
+const workoutOf = items => ({ id: 'w', kicker: 'k', title: 't', titleLines: ['t'], lead: 'l', days: [1], stats: [],
+  equipment: 'e', blocks: [{ id: 'b1', n: '01', nav: 'n', title: 't', sub: 's', rounds: 1, items }], progression: [], caution: 'c' });
 
 test('itemProblems даёт те же сообщения, что validateWorkout, а уникальность key остаётся за ним', () => {
   const item = { key: 'ex', name: 'Упр', muscles: 'М', reps: '1', text: 'Т', load: {}, pattern: 'hinge', gear: ['x'],
     unilateral: 'нет', kind: 'strength' };
   const at = 'Блок b1, упражнение «Упр»';
-  const workout = { id: 'w', kicker: 'k', title: 't', titleLines: ['t'], lead: 'l', days: [1], stats: [], equipment: 'e',
-    blocks: [{ id: 'b1', n: '01', nav: 'n', title: 't', sub: 's', rounds: 1, items: [item] }], progression: [], caution: 'c' };
+  const workout = workoutOf([item]);
   const problems = itemProblems(item, at);
   assert.ok(problems.length >= 3, 'в фикстуре должно быть несколько ошибок');
   assert.deepEqual(validateWorkout(workout), problems);
   workout.blocks[0].items.push({ ...item });
   assert.deepEqual(itemProblems(item, at), problems, 'повтор ключа — забота validateWorkout, не itemProblems');
   assert.equal(validateWorkout(workout).filter(p => p.includes('дубликат key ex внутри блока')).length, 1);
+});
+
+test('validateWorkout: «дубликат key» стоит после отсутствующих полей и перед проверкой содержимого', () => {
+  // Выделение itemProblems не должно было менять порядок сообщений тренировки:
+  // «дубликат» идёт после «нет поля …» и до «поле … должно быть непустой
+  // строкой», как до выноса.
+  const first = { key: 'ex', name: 'Упр', muscles: 'М', reps: '1', text: 'Т', load: { glutes: 1 }, pattern: 'hinge',
+    gear: ['none'], unilateral: false, kind: 'strength' };
+  const second = { ...first, reps: '', pattern: 'bogus' };
+  delete second.kind;
+  const at = 'Блок b1, упражнение «Упр»';
+  assert.deepEqual(validateWorkout(workoutOf([first, second])), [
+    `${at}: нет поля kind`,
+    `${at}: дубликат key ex внутри блока`,
+    `${at}: поле reps должно быть непустой строкой`,
+    `${at}: неизвестный pattern bogus`,
+    `${at}: неизвестный kind undefined`,
+  ]);
 });
 
 test('пропавший ключ: ошибка с флагом, а с allowRemoved проходит', () => {
@@ -415,6 +475,8 @@ test('строка короче заголовка читается: недос�
     'Строка 2, «Одностороннее»: «да» или «нет» — получено «»',
     'Строка 2, «Сложность»: у силового одно из «базовое», «среднее», «сложное» — получено «»',
     'Строка 2, «Многосуставное»: «да» или «нет» — получено «»',
+    // Ячеек групп мышц тоже нет, то есть разметка пуста — и это не эхо ошибок выше.
+    'Строка 2: упражнение «Румынская тяга»: нужен непустой load (пустой разрешён только при pattern recovery)',
   ]);
 });
 
@@ -502,11 +564,12 @@ test('parseYoutube: все хосты и виды путей из описани
   }
 });
 
-test('parseYoutube: чужой хост, не ссылка, нет id или кривая метка — null', () => {
+test('parseYoutube: чужой хост, не ссылка, нет id или id не из одиннадцати символов, кривая метка — null', () => {
   for (const bad of ['https://example.com/watch?v=kOAy8BGdxBc', 'https://youtube.com.example.com/watch?v=kOAy8BGdxBc',
     'https://notyoutube.com/watch?v=kOAy8BGdxBc', 'youtu.be/kOAy8BGdxBc', 'ftp://youtu.be/kOAy8BGdxBc', '',
     'https://www.youtube.com/watch', 'https://www.youtube.com/', 'https://youtu.be/', 'https://www.youtube.com/channel/kOAy8BGdxBc',
-    'https://www.youtube.com/watch?v=kOAy8BGdxBc&t=abc', 'https://www.youtube.com/watch?v=kOAy8BGdxBc&t=-5']) {
+    'https://www.youtube.com/watch?v=kOAy8BGdxBc&t=abc', 'https://www.youtube.com/watch?v=kOAy8BGdxBc&t=-5',
+    'https://youtu.be/abc', 'https://youtu.be/kOAy8BGdxBcX', 'https://www.youtube.com/watch?v=kOAy8BGdxB!']) {
     assert.equal(parseYoutube(bad), null, bad);
   }
 });
