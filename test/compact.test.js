@@ -4,6 +4,7 @@ import { LIBRARY, entry } from '../exercises/index.js';
 import { validateWorkout } from '../workouts/schema.js';
 import { MAX_STRENGTH } from '../builder/rules.js';
 import { KEY_PATTERN } from '../workouts/schema.js';
+import { TEST_LIBRARY } from './fixtures/test-library.js';
 import { PAIR_PREAMBLE, BLOCK_TEXTS, progressionFor, CAUTION } from '../builder/texts.js';
 import {
   NAME_MAX, VALUE_MAX, serializeCompact, parseCompact, roundsOf, exerciseCount, expandWorkout,
@@ -64,14 +65,19 @@ test('блоки: старт 1 круг, разогрев 3, пары по кр�
   assert.deepEqual(blockOf(workout, 'finish').items.map(i => i.key), COOLDOWN);
 });
 
+// Состав пар зависит от разметки нагрузки, а настоящую правит владелец таблицы:
+// на ней первая же правка доли переставляла бы пары и роняла тест. Поэтому
+// упражнения здесь из тестовой библиотеки, где разметка закреплена.
 test('пара называется по номеру, а подзаголовок — целевые группы пары', () => {
-  const { workout } = expandWorkout('my-test0001', MANUAL);
-  // Порядок силовых: rdl (многосуставное), затем glute-bridge (целит ягодицы,
-  // как и rdl), поэтому rdl идёт в пару с приводящими, а мостик остаётся один.
+  const compact = { ...MANUAL, warmup: [], circuit: [], strength: ['hinge-a', 'adductors-1', 'glutes-1'], cooldown: [] };
+  const { workout } = expandWorkout('my-test0001', compact, TEST_LIBRARY);
+  // Порядок силовых: hinge-a (многосуставное), затем glutes-1 (целит ягодицы,
+  // как и hinge-a), поэтому hinge-a идёт в пару с приводящими, а glutes-1
+  // остаётся один.
   const [pair1, pair2] = ['pair1', 'pair2'].map(id => blockOf(workout, id));
-  assert.deepEqual(pair1.items.map(i => i.key), ['rdl', 'adduction']);
-  assert.deepEqual(pair2.items.map(i => i.key), ['glute-bridge']);
-  assert.deepEqual([pair1.nav, pair1.title, pair1.sub], ['Пара 1', 'Пара 1', 'Ягодичные, задняя поверхность бедра, приводящие']);
+  assert.deepEqual(pair1.items.map(i => i.key), ['hinge-a', 'adductors-1']);
+  assert.deepEqual(pair2.items.map(i => i.key), ['glutes-1']);
+  assert.deepEqual([pair1.nav, pair1.title, pair1.sub], ['Пара 1', 'Пара 1', 'Задняя поверхность бедра, ягодичные, разгибатели поясницы, приводящие']);
   assert.deepEqual([pair2.nav, pair2.title, pair2.sub], ['Пара 2', 'Пара 2', 'Ягодичные']);
 });
 

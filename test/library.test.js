@@ -2,11 +2,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { buildLibrary, parseCsv, renderLibraryJs } from '../tools/import-exercises.mjs';
-import { entry, item, toItem } from '../exercises/index.js';
-
-// Снимок нынешней тренировки (см. legs-mwf-snapshot.test.js): библиотека
-// обязана содержать каждое её упражнение без потерь.
-const SNAPSHOT = JSON.parse(readFileSync(new URL('./fixtures/legs-mwf.json', import.meta.url), 'utf8'));
+import { LIBRARY, DIFFICULTY_LABELS, entry, item } from '../exercises/index.js';
+import legsMwf from '../workouts/legs-mwf.js';
 
 // library.js руками не правится, а прогон через импорт вывод не меняет: если
 // файл разошёлся с таблицей, его правили в обход.
@@ -18,31 +15,44 @@ test('library.js совпадает с тем, что импорт постро�
   assert.equal(js, renderLibraryJs(entries));
 });
 
-test('каждое упражнение нынешней тренировки есть в библиотеке и совпадает полем в поле', () => {
-  const items = SNAPSHOT.blocks.flatMap(b => b.items);
-  assert.equal(items.length, 19);
-  for (const it of items) assert.deepStrictEqual(JSON.parse(JSON.stringify(toItem(entry(it.key)))), it);
+// Сравнения «поле в поле» с прежним текстом тренировки здесь больше нет: оно
+// служило страховкой переезда на библиотеку, а таблицу теперь правит владелец,
+// и любая его правка текста, видео или разметки роняла бы его. Остались свойства,
+// которые правкой таблицы не меняются: форма упражнения тренировки и то, что
+// записи библиотеки лежат в тех слотах, куда их кладёт готовая тренировка.
+
+// slot, difficulty и compound нужны только библиотеке (отбор в конструкторе);
+// в упражнении тренировки схема их не знает, а всё остальное доезжает целиком.
+test('item() отдаёт упражнение в форме тренировки: без slot, difficulty и compound, остальное из записи', () => {
+  const LIBRARY_ONLY = ['slot', 'difficulty', 'compound'];
+  for (const e of LIBRARY) {
+    const it = item(e.key);
+    assert.deepEqual(Object.keys(it).sort(), Object.keys(e).filter(field => !LIBRARY_ONLY.includes(field)).sort(), e.key);
+    for (const field of Object.keys(it)) assert.equal(it[field], e[field], `${e.key}: ${field}`);
+  }
 });
 
-// toItem отбрасывает slot, difficulty и compound, поэтому предыдущий тест их не
-// видит. Разметка библиотеки — то, по чему конструктор будет отбирать
-// упражнения, и закреплена здесь отдельно: значения те, что пишет импорт.
-test('тип, сложность и многосуставность записей совпадают с разметкой нынешней тренировки', () => {
+// Тип записи — слот, в который её кладёт готовая тренировка; kind равен слоту, а
+// у разогрева он тот же, что у разминки. Сложность и многосуставность —
+// суждение владельца таблицы, и при правке их значения меняются, поэтому
+// закреплена только форма: у силового они есть, у остальных нет.
+test('записи упражнений готовой тренировки: тип совпадает с блоком, сложность и многосуставность только у силовых', () => {
   const SLOT_BY_BLOCK = { start: 'warmup', circuit: 'circuit', finish: 'cooldown' };
-  const COMPOUND = new Set(['rdl', 'leg-press', 'seated-row', 'chest-press', 'mini-row']);
   let strength = 0;
-  for (const block of SNAPSHOT.blocks) {
+  for (const block of legsMwf.blocks) {
     const slot = SLOT_BY_BLOCK[block.id] ?? 'strength';
-    for (const it of block.items) {
-      const e = entry(it.key);
-      assert.equal(e.slot, slot, `${it.key}: тип`);
+    for (const { key } of block.items) {
+      const e = entry(key);
+      assert.ok(e, `${key}: нет в библиотеке`);
+      assert.equal(e.slot, slot, `${key}: тип`);
+      assert.equal(e.kind, slot === 'circuit' ? 'warmup' : slot, `${key}: kind`);
       if (slot === 'strength') {
         strength++;
-        assert.equal(e.difficulty, 'basic', `${it.key}: сложность`);
-        assert.equal(e.compound, COMPOUND.has(it.key), `${it.key}: многосуставность`);
+        assert.ok(Object.hasOwn(DIFFICULTY_LABELS, e.difficulty), `${key}: сложность «${e.difficulty}»`);
+        assert.equal(typeof e.compound, 'boolean', `${key}: многосуставность`);
       } else {
-        assert.equal(Object.hasOwn(e, 'difficulty'), false, `${it.key}: у несилового нет сложности`);
-        assert.equal(Object.hasOwn(e, 'compound'), false, `${it.key}: у несилового нет многосуставности`);
+        assert.equal(Object.hasOwn(e, 'difficulty'), false, `${key}: у несилового нет сложности`);
+        assert.equal(Object.hasOwn(e, 'compound'), false, `${key}: у несилового нет многосуставности`);
       }
     }
   }

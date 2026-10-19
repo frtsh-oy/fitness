@@ -318,9 +318,12 @@ test('поле поиска: подпись для диктора, список 
 
 test('«К сборке» сверху и снизу возвращают назад; внизу — сколько упражнений в тренировке', () => {
   let backs = 0;
+  // Записи-заглушки, а не настоящая библиотека: счёт «В тренировке» зависит от
+  // типа упражнения (силовое считается, разминка нет), а тип в настоящей таблице
+  // правит владелец.
   const { host } = mount({
-    entries: [...LIBRARY],
-    isAdded: key => key === 'rdl' || key === 'pelvic-tilt',
+    entries: [strength('a', 'Тяга'), strength('b', 'Жим'), strength('w', 'Мост лёжа', { slot: 'warmup' })],
+    isAdded: key => key === 'a' || key === 'w',
     onBack: () => { backs += 1; },
   });
   const backButtons = [...host.querySelectorAll('button.builder-back')];

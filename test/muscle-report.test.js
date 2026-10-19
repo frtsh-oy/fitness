@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import { buildReportLines } from '../tools/muscle-report.js';
 import { MUSCLES, muscleLabel } from '../muscles.js';
 import legsMwf from '../workouts/legs-mwf.js';
-import { LIBRARY } from '../exercises/index.js';
+import { LIBRARY, SLOT_LABELS, DIFFICULTY_LABELS } from '../exercises/index.js';
 
 const VALID_LABELS = new Set(Object.values(MUSCLES).map(m => m.ru));
 
@@ -387,22 +387,30 @@ test('дробное «наше» число в отчёте печатаетс�
 
 // Задача 4 конструктора: отчёт описывает и библиотеку — сложность и
 // многосуставность силовых упражнений живут там же, где разметка нагрузки, и
-// владелец вычитывает их по этому файлу. Строки взяты дословно из
-// сгенерированного docs/muscle-map.md, а не набраны заново. Две строки — две
-// формы: силовое со сложностью и многосуставностью и несиловое, у которого в
-// обеих колонках тире.
+// владелец вычитывает их по этому файлу. Конкретных строк тест не держит: таблицу
+// правит владелец, и строка с настоящим названием или долей падала бы от первой
+// же правки. Закреплён формат (каждое упражнение одной строкой, подписи типа,
+// сложности и многосуставности по полям самой записи, в колонках мышц — только
+// названия групп из словаря или тире) и то, что в разделе есть вся библиотека.
 test('раздел библиотеки: каждое упражнение ровно один раз, со сложностью и многосуставностью', () => {
   const text = buildReportLines().join('\n');
   const section = text.split('## Библиотека упражнений')[1].split('\n## ')[0];
   const rows = section.split('\n').filter(l => /^\| [a-z0-9-]+ \| /.test(l));
   assert.equal(rows.length, LIBRARY.length);
-  assert.ok(rows.includes('| rdl | Румынская тяга с длинной резинкой | Силовое | Базовое | да | Ягодичные, Задняя поверхность бедра | Разгибатели поясницы, Предплечья |'));
-  assert.ok(rows.includes('| pelvic-tilt | Подкручивание таза лёжа | Разминка | — | — | Прямая мышца живота | Косые мышцы живота |'));
-  // «Разогрев» и «Завершение» — подписи слота (SLOT_LABELS), а не kind: у kind
-  // и разогрев, и разминка — «Разминка», а завершение — «Заминка». Строки выше
-  // этой разницы не видят: у них слот и kind подписаны одинаково.
-  assert.ok(rows.includes('| chinese-squat | «Китайское» приседание с подъёмом таза и разворотом | Разогрев | — | — | Ягодичные, Квадрицепсы | Икроножные, Косые мышцы живота |'));
-  assert.ok(rows.includes('| breathing | Спокойное дыхание | Завершение | — | — | — | — |'));
+
+  const label = `(?:${[...VALID_LABELS].join('|')})`;
+  const cell = `(?:—|${label}(?:, ${label})*)`;
+  const musclesEnd = new RegExp(`^${cell} \\| ${cell} \\|$`);
+  for (const e of LIBRARY) {
+    const own = rows.filter(row => row.startsWith(`| ${e.key} | `));
+    assert.equal(own.length, 1, `${e.key}: строк в разделе`);
+    const strength = e.slot === 'strength';
+    // Тип подписан по слоту (SLOT_LABELS), а не по kind: у kind и разогрев, и
+    // разминка — «Разминка», а завершение — «Заминка».
+    const head = `| ${e.key} | ${e.name} | ${SLOT_LABELS[e.slot]} | ${strength ? DIFFICULTY_LABELS[e.difficulty] : '—'} | ${strength ? (e.compound ? 'да' : 'нет') : '—'} | `;
+    assert.ok(own[0].startsWith(head), `${e.key}: начало строки «${own[0]}» не «${head}»`);
+    assert.match(own[0].slice(head.length), musclesEnd, `${e.key}: колонки мышц`);
+  }
 });
 
 // Файл в репозитории — то, что читает владелец; генератор — то, что он должен
