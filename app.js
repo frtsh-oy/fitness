@@ -193,8 +193,11 @@ export function startApp(win = globalThis.window, { library = LIBRARY } = {}) {
   // пять секунд. Удалили текущую — открывается готовая по умолчанию, раздел
   // остаётся тем же: человек в списке и должен увидеть, что запись пропала.
   async function deleteOwn(id) {
-    const { compact } = mine.find(own => own.id === id);
-    if (!await tg.confirm(`Удалить тренировку «${compact.name}»?`)) return;
+    // Записи может уже не быть: второй тап по «Удалить», пока первый ждал ответа
+    // на вопрос, приходит сюда после того, как первый её убрал.
+    const own = mine.find(entry => entry.id === id);
+    if (!own) return;
+    if (!await tg.confirm(`Удалить тренировку «${own.compact.name}»?`)) return;
     store.remove(id);
     mine = mine.filter(own => own.id !== id);
     if (id === workout.id) {
@@ -496,19 +499,19 @@ export function startApp(win = globalThis.window, { library = LIBRARY } = {}) {
   let ready = Promise.resolve();
 
   function loadMarks() {
-    const mine = { id: workout.id, known, touched: false, reset: false, early: null };
-    marksLoad = mine;
-    ready = storage.load(mine.id).then(saved => {
-      if (mine.reset) return;
+    const load = { id: workout.id, known, touched: false, reset: false, early: null };
+    marksLoad = load;
+    ready = storage.load(load.id).then(saved => {
+      if (load.reset) return;
       // Ответ пришёл после смены тренировки: он принадлежит прежней, и в набор на
       // экране ему не место, иначе он показал бы отметки одной тренировки на
       // экране другой. Но выбросить его нельзя: при смене под прежний id уже ушёл
       // ранний набор, один, без сохранённых (save пишет набор целиком), и они
       // остались бы затёртыми. Поэтому возвращаем в хранилище объединение. Не
       // было ранних отметок — нечего защищать, и записывать нечего.
-      if (mine !== marksLoad) {
-        if (mine.touched) {
-          storage.save(mine.id, new Set([...mine.early, ...[...saved].filter(id => mine.known.has(id))]));
+      if (load !== marksLoad) {
+        if (load.touched) {
+          storage.save(load.id, new Set([...load.early, ...[...saved].filter(id => load.known.has(id))]));
         }
         return;
       }
@@ -525,7 +528,7 @@ export function startApp(win = globalThis.window, { library = LIBRARY } = {}) {
       // Ранняя отметка уже уехала в хранилище — одна, без сохранённых, потому что
       // save пишет набор целиком. Возвращаем туда объединённый набор, иначе старые
       // отметки пропадут из хранилища, даже оставшись на экране.
-      if (mine.touched) queueSave();
+      if (load.touched) queueSave();
       paint();
     });
   }
