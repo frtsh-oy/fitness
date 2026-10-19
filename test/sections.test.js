@@ -140,12 +140,30 @@ test('после сохранения раздел говорит об этом:
     'Тренировка сохранена на этом устройстве: облако Telegram не ответило. Отправим её туда при следующем запуске.');
 });
 
-test('«Конструктор» объясняет, что это и почему платно', () => {
+test('«Конструктор» открывается на входе: как устроена тренировка и одна дорога — собрать самому', () => {
   const { window, document } = mount();
   startApp(window);
   document.querySelector('[data-section="builder"]').click();
-  const text = document.querySelector('#screen-builder').textContent;
-  assert.match(text, /платн/i, 'должно быть сказано, что раздел платный');
-  assert.match(text, /упражнени/i, 'должно быть сказано, что в нём будет');
-  assert.ok(text.trim().length > 80, 'заглушка не должна быть пустым экраном');
+  const screen = document.querySelector('#screen-builder');
+  assert.equal(screen.querySelector('h2').textContent, 'Конструктор');
+  assert.equal(screen.querySelectorAll('.builder-path').length, 1);
+  assert.equal(screen.querySelectorAll('.builder-steps li').length, 4);
+  assert.doesNotMatch(screen.textContent, /платн/i, 'раздел бесплатный');
+});
+
+test('у каждой своей тренировки есть «Изменить», у готовых нет, и нажатие отдаёт id', () => {
+  const { document } = mount();
+  const host = document.createElement('div');
+  const own = { id: 'my-test0001', compact: { v: 1, name: 'Моя', days: [1], level: null, zones: [], warmup: [], circuit: [], strength: ['rdl'], focus: [], cooldown: [], t: 1 }, localOnly: false };
+  const edited = [];
+  renderWorkouts({ host, ready: WORKOUTS, mine: [own], currentId: 'legs-mwf', onPick() {}, onDelete() {}, onEdit: id => edited.push(id) });
+
+  const buttons = host.querySelectorAll('.workout-edit');
+  assert.equal(buttons.length, 1, 'готовые тренировки менять нельзя');
+  assert.equal(buttons[0].textContent, 'Изменить');
+  assert.equal(buttons[0].getAttribute('aria-label'), 'Изменить: Моя');
+  assert.equal(buttons[0].closest('.workout-item'), host.querySelector('.workout-delete').closest('.workout-item'),
+    'рядом с «Удалить», в той же строке');
+  buttons[0].click();
+  assert.deepEqual(edited, ['my-test0001']);
 });

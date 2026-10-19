@@ -182,16 +182,6 @@
 .tabbar{position:fixed;left:0;right:0;bottom:0;z-index:6;display:flex;background:#fff;border-top:1px solid #d8e1eb;padding-bottom:var(--tabbar-safe-bottom)}
 .tabbar button{flex:1 1 0;min-height:56px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;border:0;background:transparent;font-family:inherit;font-size:11px;font-weight:600;color:#657289;cursor:pointer}
 .tabbar button[aria-current=page]{color:#152d4a}
-/* Замок на «Конструкторе» — метка «раздел платный», а не запрет входа (см.
-   docs/superpowers/specs/2026-09-19-sections-shell-design.md): кнопка остаётся
-   рабочей, раздел открывается по тому же клику. Значок — position:absolute
-   в углу кнопки, а не рядом с текстом в потоке: так подпись «Конструктор» не
-   меняет ширину и не переносится на 390px (там на пункт приходится ~94px,
-   короче уже некуда). Значок помечен aria-hidden — сам по себе он не несёт
-   смысла в озвучке («замок» вслух — мусор), а платность до экранного диктора
-   доносит aria-label самой кнопки. */
-.tabbar button[data-section=builder]{position:relative}
-.tabbar .lock-badge{position:absolute;top:6px;right:10px;font-size:10px;line-height:1}
 /* Печать .tabbar — здесь, а НЕ в общем блоке @media print в начале файла: та же
    причина, что у .howto-toggle/.howto-body ниже. Медиазапрос специфичности не
    добавляет, а плоское правило .tabbar стоит в файле позже общего блока и
@@ -236,12 +226,12 @@
 .workouts-empty{background:#e8edf4;color:#53637a}
 .workout-item{display:flex;align-items:center;gap:8px;margin:0 0 12px}
 .workout-item .workout-card{flex:1 1 auto;width:auto;min-width:0;margin:0}
-.workout-delete{flex:none;min-height:44px;padding:0 14px;border:1px solid #d8e1eb;border-radius:12px;background:#fff;font:inherit;font-size:14px;color:#53637a;cursor:pointer}
+.workout-delete,.workout-edit{flex:none;min-height:44px;padding:0 14px;border:1px solid #d8e1eb;border-radius:12px;background:#fff;font:inherit;font-size:14px;color:#53637a;cursor:pointer}
+.workout-actions{display:flex;flex-direction:column;gap:6px;flex:none}
 /* Пометка про убранные из библиотеки упражнения — между снаряжением и блоками.
    hidden она скрыта сама, display здесь не задаётся намеренно: он перекрыл бы
    атрибут. */
 .removed-note{margin:14px 0 0;padding:13px 16px;border-radius:10px;background:#e8edf4;color:#53637a;font-size:14px}
-.builder-note{max-width:520px;margin:0;font-size:15px;line-height:1.6;color:#33475f}
 
 /* Метка «упор» у упражнения, добавленного ради зоны упора своей тренировки
    (render.js). Подпись, а не кнопка: нажимаемого не прибавляет, поэтому в
@@ -251,10 +241,8 @@
 .focus-tag{margin-right:auto;white-space:nowrap;background:#e0edc2;color:#39571b;padding:2px 8px;border-radius:6px;font-size:12px;font-weight:650;letter-spacing:.06em}
 
 /* Экран библиотеки упражнений (library-view.js), живёт в «Конструкторе». Всё
-   нажимаемое здесь — не ниже 44px, как и остальное в приложении; в сторожа
-   высоты (TAP_TARGETS в test/app.test.js) эти селекторы войдут, когда экран
-   встанет на страницу: сторож роняет тест на селекторе, которому не на чём
-   примериться. */
+   нажимаемое здесь — не ниже 44px, как и остальное в приложении; эти селекторы
+   проверяет сторож высоты (TAP_TARGETS в test/app.test.js). */
 .builder-back{display:inline-flex;align-items:center;gap:6px;min-height:44px;padding:0 14px;border:1px solid #cad6e4;border-radius:12px;background:#f3f7fc;font:inherit;font-size:14px;font-weight:650;color:#193d6a}
 /* Размер шрифта поля — 16px, не меньше: iOS приближает страницу, когда фокус
    попадает в поле с кеглем ниже, и экран после ввода остаётся увеличенным.
@@ -281,7 +269,79 @@
    .exercise-top, что у номера и мышц в «Сегодня». Подпись не переносится: на
    узкой строке сжиматься должен список мышц, а не слово «Среднее». */
 .library-level{white-space:nowrap;font-size:12px;letter-spacing:.1em;font-weight:650;color:#61748b}
-.library-add{display:block;width:100%;min-height:44px;margin:14px 0 0;padding:0 14px;border:1px solid #152d4a;border-radius:8px;background:#152d4a;font:inherit;font-size:14px;font-weight:650;color:#fff}
-.library-add:disabled{border-color:#d8e1eb;background:#eef3fa;color:#657289;cursor:default}
+.library-add,.builder-add,.builder-save{display:block;width:100%;min-height:44px;margin:14px 0 0;padding:0 14px;border:1px solid #152d4a;border-radius:8px;background:#152d4a;font:inherit;font-size:14px;font-weight:650;color:#fff}
+.library-add:disabled,.builder-add:disabled,.builder-save:disabled{border-color:#d8e1eb;background:#eef3fa;color:#657289;cursor:default}
 .library-foot{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:18px 0 0}
 .library-total{margin:0;font-size:14px;font-weight:600;color:#33475f}
+
+/* Конструктор (builder-view.js): вход, сборка, шторка замены, сохранение. Всё
+   нажимаемое — не ниже 44px, как и в остальном приложении; сторож высоты в
+   test/app.test.js обходит все эти экраны. Раскладка рассчитана на 375px без
+   горизонтальной прокрутки: названия переносятся (overflow-wrap), а не
+   раздвигают строку. Заголовок экрана получает фокус программно, и рамка вокруг
+   него ничего не говорит. */
+.builder h2{margin:16px 0 12px;font-size:24px;line-height:1.25;letter-spacing:-.025em}
+.builder h2:focus{outline:none}
+.builder-entry h2{margin-top:0}
+.builder-lead{max-width:520px;margin:0 0 20px;font-size:15px;line-height:1.6;color:#33475f}
+.builder-path{display:flex;flex-direction:column;align-items:flex-start;gap:4px;width:100%;min-height:64px;margin:0 0 28px;padding:14px 18px;border:1px solid #152d4a;border-radius:12px;background:#152d4a;font:inherit;color:#fff;text-align:left}
+.builder-path-title{font-size:18px;font-weight:650;letter-spacing:-.02em}
+.builder-path-note{font-size:14px;line-height:1.5;color:#d7e0ed}
+.builder-steps-title{margin:0 0 6px;font-size:17px;letter-spacing:-.02em}
+.builder-steps{margin:0;padding:0;list-style:none;counter-reset:step}
+.builder-steps li{position:relative;display:flex;flex-direction:column;padding:10px 0 10px 40px;border-top:1px solid #d8e1eb;counter-increment:step}
+.builder-steps li::before{content:counter(step);position:absolute;left:0;top:10px;width:28px;height:28px;border-radius:50%;background:#e4edf8;font-size:14px;font-weight:700;line-height:28px;text-align:center}
+.builder-steps strong{font-size:15px}
+.builder-steps span{font-size:14px;color:#526278}
+.builder-back:disabled{opacity:.5;cursor:default}
+
+/* Строка покрытия: тот же янтарный оттенок предупреждения, что у .weekly-basis,
+   а когда все группы закрыты — зелёный, как у .workouts-saved. Пустая (без
+   дней покрытие не считается) не занимает места. */
+.builder-coverage{margin:14px 0 0;padding:12px 16px;border-radius:10px;background:#fbe4bd;color:#7a4a06;font-size:14px}
+.builder-coverage.is-ok{background:#e0edc2;color:#39571b}
+.builder-coverage:empty{display:none}
+.builder-coverage p{margin:0}
+.builder-coverage p+p{margin-top:4px}
+.builder-coverage p:first-child{font-weight:650}
+.builder-save{margin-top:24px}
+.builder-reason{margin:8px 0 0;font-size:13px;line-height:1.5;color:#526278}
+.builder-error{margin:12px 0 0;padding:12px 16px;border-radius:10px;background:#fbe4bd;color:#7a4a06;font-size:14px}
+.builder-block{margin:22px 0 0}
+.builder-block h3{margin:0;font-size:17px;letter-spacing:-.02em}
+.builder-block-sub{margin:2px 0 10px;font-size:13px;color:#657289}
+.builder-item{display:flex;align-items:center;gap:10px;margin:0 0 8px;padding:10px 12px;border:1px solid #d8e1eb;border-radius:12px;background:#fff}
+.builder-item-text{display:flex;flex-direction:column;flex:1 1 auto;min-width:0}
+.builder-item-name{font-size:15px;font-weight:650;line-height:1.35;overflow-wrap:anywhere}
+.builder-item-muscles{font-size:12px;color:#657289}
+.builder-replace,.builder-remove{flex:none;min-height:44px;padding:0 14px;border:1px solid #cad6e4;border-radius:10px;background:#f3f7fc;font:inherit;font-size:14px;font-weight:650;color:#193d6a}
+
+/* Шторка замены встаёт над навигацией, как шторка таймера (.timer-sheet): та же
+   нижняя граница через --tabbar-safe-bottom. Фон над навигацией не лежит, чтобы
+   разделы оставались доступными. */
+.replace-backdrop{position:fixed;top:0;left:0;right:0;bottom:calc(57px + var(--tabbar-safe-bottom));z-index:6;background:#142a4673}
+.replace-sheet{position:fixed;left:0;right:0;bottom:calc(57px + var(--tabbar-safe-bottom));z-index:7;max-width:640px;max-height:70vh;margin:0 auto;overflow-y:auto;padding:16px 14px 18px;border-radius:16px 16px 0 0;background:#fff;box-shadow:0 -10px 30px #142a4647}
+.replace-sheet:focus{outline:none}
+.replace-sheet h3{margin:0;font-size:18px;letter-spacing:-.02em}
+.replace-current{margin:6px 0 0;font-size:15px;font-weight:650}
+.replace-hint{margin:2px 0 12px;font-size:13px;color:#657289}
+.replace-list{margin:0;padding:0;list-style:none}
+.replace-candidate{display:flex;align-items:center;gap:10px;padding:10px 0;border-top:1px solid #d8e1eb}
+.replace-text{display:flex;flex-direction:column;flex:1 1 auto;min-width:0}
+.replace-name{font-size:15px;font-weight:650;line-height:1.35;overflow-wrap:anywhere}
+.replace-muscles,.replace-gear{font-size:12px;color:#657289}
+.replace-pick{flex:none;min-height:44px;padding:0 14px;border:1px solid #152d4a;border-radius:10px;background:#152d4a;font:inherit;font-size:14px;font-weight:650;color:#fff}
+.replace-empty{margin:0 0 12px;padding:13px 16px;border-radius:10px;background:#e8edf4;color:#53637a;font-size:14px}
+.replace-close{display:block;width:100%;min-height:44px;margin:12px 0 0;border:1px solid #cad6e4;border-radius:10px;background:#f3f7fc;font:inherit;font-size:14px;font-weight:650;color:#193d6a}
+
+/* Экран сохранения. Семь дней в одну строку: 7×44px и просветы по 4px дают
+   332px, а при телефонных отступах .wrap в 375px доступно 347 — строка не
+   переносится; на более узком экране чипы переходят на вторую строку, а не
+   уменьшаются ниже 44px. Размер шрифта поля — 16px по той же причине, что у
+   .library-search. */
+.builder-label{display:block;margin:18px 0 0;font-size:14px;font-weight:650}
+.save-name{appearance:none;-webkit-appearance:none;display:block;width:100%;min-height:44px;margin:6px 0 0;padding:0 14px;border:1px solid #cad6e4;border-radius:12px;background:#fff;color:inherit;font-size:16px}
+.day-chips{display:flex;flex-wrap:wrap;gap:4px;margin:8px 0 0}
+.day-chip{flex:1 1 44px;min-width:44px;min-height:44px;padding:0 6px;border:1px solid #d4dde8;border-radius:30px;background:#fff;font:inherit;font-size:14px;font-weight:600;color:inherit}
+.day-chip[aria-pressed=true]{background:#152d4a;border-color:#152d4a;color:#fff}
+.builder-summary{margin:18px 0 0;font-size:14px;font-weight:600;color:#33475f}

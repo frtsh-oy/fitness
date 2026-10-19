@@ -17,7 +17,6 @@ import { renderWeekly } from './weekly-view.js';
 import { createSections, savedSection } from './sections.js';
 import { renderWorkouts } from './workouts-view.js';
 import { renderBuilder } from './builder-view.js';
-import { hasSubscription } from './access.js';
 
 // Отсчёт сверяется с часами часто, чтобы экран не отставал от них больше чем
 // на глаз: на границе секунды подпись меняется в пределах пятой доли.
@@ -137,21 +136,43 @@ export function startApp(win = globalThis.window, { library = LIBRARY } = {}) {
 
   // Свои тренировки, как их вернул list(): null, пока ответа ещё нет.
   let mine = null;
+  // Сохранённое, пока список ещё не пришёл. Ответ list() снят до сохранения и о
+  // нём не знает: без этого он затёр бы новую тренировку, и человек, только что
+  // нажавший «Сохранить», не нашёл бы её в «Мои».
+  const savedEarly = new Map();
+  // Плашка «Тренировка сохранена» нужна ровно на тот показ раздела, который
+  // вызвало сохранение; любой следующий показ и любая перерисовка идут без неё.
+  let savedNote = null;
+
+  // «Мои» идут от новой к старой, а сохранённая либо новая, либо переписывает
+  // свою прежнюю запись.
+  const withSaved = (list, entry) => [entry, ...list.filter(own => own.id !== entry.id)]
+    .sort((a, b) => b.compact.t - a.compact.t);
 
   // «Конструктор» рисуется при первом показе, а не при запуске: до тех пор,
   // пока человек ни разу не открыл раздел, готовить его разметку незачем.
   // «Тренировки» рисуются при КАЖДОМ показе: список зависит от того, какая
   // тренировка открыта сейчас, какие свои есть и что только что удалили.
-  let builderDrawn = false;
+  let builder = null;
+
+  function ensureBuilder() {
+    builder ??= renderBuilder({
+      host: document.getElementById('screen-builder'),
+      win,
+      library,
+      store,
+      confirm: question => tg.confirm(question),
+      onSaved,
+      openLink: url => tg.openLink(url),
+    });
+    return builder;
+  }
 
   const sections = createSections({
     win,
     onShow(id) {
       if (id === 'workouts') drawWorkouts();
-      if (id === 'builder' && !builderDrawn) {
-        builderDrawn = true;
-        renderBuilder({ host: document.getElementById('screen-builder'), hasSubscription });
-      }
+      if (id === 'builder') ensureBuilder();
     },
   });
   sections.show(savedSection(win) ?? 'today');
@@ -162,10 +183,37 @@ export function startApp(win = globalThis.window, { library = LIBRARY } = {}) {
       ready: WORKOUTS,
       mine,
       currentId: workout.id,
+      saved: savedNote,
       library,
       onPick: selectWorkout,
       onDelete: deleteOwn,
+      onEdit: editOwn,
     });
+  }
+
+  // Конструктор сохранил тренировку. Если это текущая, «Сегодня» показывает
+  // прежнюю версию, а selectWorkout при том же id ничего не перерисовывает:
+  // перерисовываем сами, из записи, которую только что сохранили (а не из
+  // устройства: при ответе облака без записи на устройстве её там может не быть).
+  function onSaved(id, compact, { localOnly }) {
+    const entry = { id, compact, localOnly };
+    if (mine === null) savedEarly.set(id, entry);
+    else mine = withSaved(mine, entry);
+    if (id === workout.id) {
+      const next = expandWorkout(id, compact, library);
+      showWorkout(next.workout, next.removed);
+    }
+    savedNote = { id, localOnly };
+    sections.show('workouts');
+    savedNote = null;
+  }
+
+  // «Изменить»: сборка открывается на этой тренировке, если человек не отказался
+  // бросить начатую. Раздел меняется только после согласия.
+  async function editOwn(id) {
+    const own = mine.find(entry => entry.id === id);
+    if (!own) return;
+    if (await ensureBuilder().edit(id, own.compact)) sections.show('builder');
   }
 
   // Запоминание — только на устройстве, см. CURRENT_KEY.
@@ -815,7 +863,7 @@ export function startApp(win = globalThis.window, { library = LIBRARY } = {}) {
   // list: параллельный второй повторил бы досылку и удаление, которые первый
   // уже делает.
   store.list().then(list => {
-    mine = list;
+    mine = [...savedEarly.values()].reduce(withSaved, list);
     if (!document.getElementById('screen-workouts').hidden) drawWorkouts();
   });
 

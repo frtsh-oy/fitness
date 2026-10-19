@@ -1,6 +1,7 @@
 // Раздел «Тренировки»: свои тренировки человека («Мои») и готовые из реестра
-// («Готовые»). Карточка делает тренировку текущей, «Удалить» убирает свою;
-// что именно при этом происходит, решает app.js, здесь только разметка.
+// («Готовые»). Карточка делает тренировку текущей, «Изменить» открывает свою в
+// конструкторе, «Удалить» убирает; что именно при этом происходит, решает
+// app.js, здесь только разметка.
 import { scheduleShort } from './render.js';
 import { LEVELS } from './builder/rules.js';
 import { expandWorkout, exerciseCount } from './builder/compact.js';
@@ -53,7 +54,7 @@ function ownKicker({ id, compact, localOnly }, library) {
 // было бы неправдой. Пока списка нет, под заголовком «Мои» пусто.
 // library — откуда брать упражнения для счёта: та же, по которой открывается
 // своя тренировка в «Сегодня».
-export function renderWorkouts({ host, ready, mine, currentId, saved = null, library = LIBRARY, onPick, onDelete }) {
+export function renderWorkouts({ host, ready, mine, currentId, saved = null, library = LIBRARY, onPick, onDelete, onEdit }) {
   const document = host.ownerDocument;
   host.textContent = '';
 
@@ -73,6 +74,14 @@ export function renderWorkouts({ host, ready, mine, currentId, saved = null, lib
     // отличить одну от другой. Видимая подпись стоит в начале имени.
     remove.setAttribute('aria-label', `Удалить: ${own.compact.name}`);
     remove.addEventListener('click', () => onDelete(own.id));
+    const edit = el(document, 'button', 'workout-edit', 'Изменить');
+    edit.type = 'button';
+    edit.setAttribute('aria-label', `Изменить: ${own.compact.name}`);
+    edit.addEventListener('click', () => onEdit(own.id));
+    // Две кнопки столбиком: в строку они съели бы у карточки на узком экране
+    // больше половины ширины, и название переносилось бы по слову.
+    const actions = el(document, 'div', 'workout-actions');
+    actions.append(edit, remove);
     item.append(
       card(document, {
         title: own.compact.name,
@@ -80,7 +89,7 @@ export function renderWorkouts({ host, ready, mine, currentId, saved = null, lib
         current: own.id === currentId,
         onPick: () => onPick(own.id),
       }),
-      remove,
+      actions,
     );
     host.append(item);
   }

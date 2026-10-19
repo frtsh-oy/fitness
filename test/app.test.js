@@ -12,6 +12,7 @@ import { getWorkout } from '../workouts/index.js';
 import { countMarks } from '../workouts/schema.js';
 import { recordKey } from '../my-workouts.js';
 import { serializeCompact } from '../builder/compact.js';
+import { LIBRARY, entry } from '../exercises/index.js';
 
 const PAGE = readFileSync(fileURLToPath(new URL('../index.html', import.meta.url)), 'utf8');
 const WORKOUT = getWorkout(null);
@@ -137,7 +138,7 @@ function widthMatchMedia(screenWidth) {
   };
 }
 
-function mount(t, { marks = null, preload = {}, webApp = null, freezeTimers = false, fakeClock = false, denyStorage = false, screenWidth = null } = {}) {
+function mount(t, { marks = null, preload = {}, webApp = null, freezeTimers = false, fakeClock = false, denyStorage = false, screenWidth = null, library } = {}) {
   const { window, document } = makeDom(PAGE);
   t.after(() => window.close());
   // Ширину окна подменяем до startApp: по ней приложение решает при отрисовке,
@@ -159,7 +160,7 @@ function mount(t, { marks = null, preload = {}, webApp = null, freezeTimers = fa
   // морозит таймеры целиком, а фоновая вкладка браузера их прореживает.
   if (freezeTimers) window.setInterval = () => 0;
   const clock = fakeClock ? installFakeClock(t, window) : null;
-  return { window, document, clock, app: startApp(window) };
+  return { window, document, clock, app: startApp(window, { library }) };
 }
 
 const boxes = document => [...document.querySelectorAll('#workout input[data-mark]')];
@@ -1244,6 +1245,18 @@ const TAP_TARGETS = [
   '.player-close',
   '.workout-card',
   '.workout-delete',
+  '.workout-edit',
+  '.builder-path',
+  '.builder-back',
+  '.builder-add',
+  '.builder-remove',
+  '.builder-replace',
+  '.builder-save',
+  '.library-chip',
+  '.library-add',
+  '.day-chip',
+  '.replace-pick',
+  '.replace-close',
 ];
 
 const HEIGHT_PROPS = ['min-height', 'height', 'max-height'];
@@ -1269,16 +1282,32 @@ const tapPixels = (value, where) => {
 // беззубым молча: селектор, переставший что-либо накрывать (переименованный
 // класс), роняет тест на пустой выборке.
 test(`ни одно правило не опускает нажимаемое ниже ${MIN_TAP_HEIGHT}px`, async t => {
-  // Кнопка «Удалить» есть только у своей тренировки, и список своих приходит
-  // следом за запуском: без записи на устройстве и без ожидания списка выборка
-  // `.workout-delete` была бы пустой.
+  // Кнопки «Удалить» и «Изменить» есть только у своей тренировки, и список своих
+  // приходит следом за запуском: без записи на устройстве и без ожидания списка
+  // выборки `.workout-delete` и `.workout-edit` были бы пустыми.
   const own = { v: 1, name: 'Моя', days: [1], level: null, zones: [], warmup: ['pelvic-tilt'],
     circuit: ['chinese-squat'], strength: ['rdl'], focus: [], cooldown: ['breathing'], t: 1760000000000 };
+  // В настоящей библиотеке разминок ровно две, и скелет берёт обе: заменить
+  // нечем, шторка пуста, и выборка `.replace-pick` была бы пустой. Запасная
+  // разминка даёт кандидата и ничего больше не меняет.
+  const library = [...LIBRARY, { ...entry('pelvic-tilt'), key: 'extra-warmup', name: 'Запасная разминка' }];
   const { window, document } = mount(t, {
     screenWidth: 375,
+    library,
     preload: { [recordKey('my-test0001')]: serializeCompact(own) },
   });
   await settle(0);
+
+  // Нажимаемое каждого экрана собирается на месте, по мере прохода: экраны
+  // конструктора сменяют друг друга в одном узле, и все разом на странице их нет.
+  // Узел, ушедший из разметки, отвечает на matches как прежде, и проверка по
+  // нему честная — высота задаётся правилами, а не местом в документе.
+  const seen = new Map(TAP_TARGETS.map(selector => [selector, new Set()]));
+  const collect = () => {
+    for (const [selector, nodes] of seen) {
+      for (const node of document.querySelectorAll(selector)) nodes.add(node);
+    }
+  };
   // Подбор мышцы и плеер появляются только после нажатий: без них выборки
   // `.bodymap-pick button` и `.player-close` были бы пустыми. Раздел
   // «Тренировки» рисуется тоже только при показе (см. app.js, onShow) — без
@@ -1287,7 +1316,27 @@ test(`ни одно правило не опускает нажимаемое н
   document.querySelector('.bodymap-anterior polygon')
     .dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
   document.querySelector('button.video').click();
+  collect();
   document.querySelector('[data-section="workouts"]').click();
+  collect();
+
+  // Конструктор: вход, сборка, шторка замены, библиотека, сборка с силовым
+  // упражнением (появляется «Убрать») и экран сохранения.
+  const builder = document.getElementById('screen-builder');
+  document.querySelector('[data-section="builder"]').click();
+  collect();
+  builder.querySelector('.builder-path').click();
+  collect();
+  builder.querySelector('.builder-replace').click();
+  collect();
+  builder.querySelector('.replace-close').click();
+  builder.querySelector('.builder-add').click();
+  collect();
+  builder.querySelector('.library-add').click();
+  builder.querySelector('.builder-back').click();
+  collect();
+  builder.querySelector('.builder-save').click();
+  collect();
 
   const declarations = [];
   for (const file of ['style.css', 'player.css']) {
@@ -1313,7 +1362,7 @@ test(`ни одно правило не опускает нажимаемое н
   }
   const low = [];
   for (const selector of TAP_TARGETS) {
-    const nodes = [...document.querySelectorAll(selector)];
+    const nodes = [...seen.get(selector)];
     assert.ok(nodes.length > 0,
       `«${selector}» на странице ничего не накрывает — сторож высоты нажимаемого стал беззубым`);
 
