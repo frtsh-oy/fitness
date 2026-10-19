@@ -16,7 +16,7 @@ import { recordKey, OWN_LIMIT } from '../my-workouts.js';
 import { serializeCompact, exerciseCount, expandWorkout, NAME_MAX } from '../builder/compact.js';
 import { generate, availability, missingGroupsMessage } from '../builder/generator.js';
 import { belowFloor } from '../builder/coverage.js';
-import { CORE_GROUPS, LEVELS, MAX_STRENGTH } from '../builder/rules.js';
+import { CORE_GROUPS, LEVELS, MAX_STRENGTH, SKELETON } from '../builder/rules.js';
 import { plural } from '../builder/texts.js';
 import { LIBRARY } from '../exercises/index.js';
 import { groupsPhrase } from '../muscles.js';
@@ -190,13 +190,21 @@ test('ручная сборка: разминка, разогрев и заве�
   assert.deepEqual(blocks.map(b => b.querySelector('h3').textContent),
     ['Стартовая разминка', 'Круговой разогрев', 'Завершение']);
 
-  // В настоящей библиотеке упражнений каждого типа ровно столько, сколько
-  // скелет берёт целиком, поэтому набор по блокам известен, а порядок нет.
-  const namesOf = block => [...block.querySelectorAll('.builder-item-name')].map(n => n.textContent).sort();
-  const library = slot => LIBRARY.filter(e => e.slot === slot).map(e => e.name).sort();
-  assert.deepEqual(blocks.map(namesOf), [library('warmup'), library('circuit'), library('cooldown')]);
+  // Скелет берёт из библиотеки «сколько есть, но не больше»: в каждом блоке
+  // разные упражнения своего типа, и их столько, сколько позволяют оба.
+  const namesOf = block => [...block.querySelectorAll('.builder-item-name')].map(n => n.textContent);
+  const library = slot => LIBRARY.filter(e => e.slot === slot).map(e => e.name);
+  const slots = ['warmup', 'circuit', 'cooldown'];
+  blocks.forEach((block, i) => {
+    const names = namesOf(block);
+    const slot = slots[i];
+    assert.equal(names.length, Math.min(SKELETON[slot].count, library(slot).length), `сколько упражнений в «${slot}»`);
+    assert.equal(new Set(names).size, names.length, `без повторов в «${slot}»`);
+    assert.ok(names.every(name => library(slot).includes(name)), `в «${slot}» только упражнения своего типа`);
+  });
 
-  assert.equal(root.querySelectorAll('.builder-replace').length, 9);
+  assert.equal(root.querySelectorAll('.builder-replace').length,
+    slots.reduce((sum, slot) => sum + Math.min(SKELETON[slot].count, library(slot).length), 0));
   assert.equal(root.querySelectorAll('.builder-remove').length, 0);
 
   assert.equal(root.querySelector('.builder-coverage').getAttribute('role'), 'status');
@@ -298,11 +306,12 @@ test('замена разминки: кандидаты того же типа; 
   assert.ok([...again.querySelectorAll('.replace-name')].some(n => n.textContent === current),
     'заменённое упражнение снова свободно');
 
-  // В настоящей библиотеке разминок две, и обе уже в тренировке.
-  const real = mount(t);
-  openBuilder(real.document);
-  startManual(real.root);
-  const empty = openReplace(real.root, 'Стартовая разминка');
+  // Разминок ровно столько, сколько берёт скелет: все уже в тренировке.
+  const warmups = TEST_LIBRARY.filter(e => e.slot === 'warmup').slice(0, SKELETON.warmup.count);
+  const tight = mount(t, { library: TEST_LIBRARY.filter(e => e.slot !== 'warmup' || warmups.includes(e)) });
+  openBuilder(tight.document);
+  startManual(tight.root);
+  const empty = openReplace(tight.root, 'Стартовая разминка');
   assert.equal(empty.querySelector('.replace-empty').textContent,
     'Похожих упражнений больше нет: все подходящие уже в тренировке.');
   assert.equal(empty.querySelectorAll('.replace-pick').length, 0);
