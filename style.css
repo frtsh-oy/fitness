@@ -220,6 +220,27 @@
 .workout-card[aria-current]{border-color:#152d4a;background:#eef3fa}
 .workout-card-title{font-size:18px;font-weight:650;letter-spacing:-.02em}
 .workout-card-kicker{font-size:12px;letter-spacing:.08em;font-weight:650;color:#657289}
+/* «Сейчас в «Сегодня»» у текущей тренировки: подпись для глаза, а не кнопка.
+   Та же плашка, что у метки «упор» (.focus-tag), без выравнивания по строке:
+   в карточке она стоит последней и держится слева сама. */
+.workout-card-now{margin-top:2px;padding:2px 8px;border-radius:6px;background:#e0edc2;color:#39571b;font-size:12px;font-weight:650;letter-spacing:.06em}
+/* «Мои» и «Готовые». Своя тренировка — строка из карточки и кнопки «Удалить»:
+   карточка занимает всё, что осталось, и сжимается (min-width:0), чтобы длинная
+   строка под названием переносилась, а не выталкивала кнопку за край. Кнопка по
+   высоте посередине, а не во всю карточку: у карточки в три строки сплошная
+   кнопка такой же высоты выглядела бы главным действием. */
+.workouts-title{margin:28px 0 12px;font-size:22px;line-height:1.3;letter-spacing:-.025em}
+.workouts-title:first-child{margin-top:0}
+.workouts-saved,.workouts-empty{margin:0 0 12px;padding:13px 16px;border-radius:10px;font-size:14px}
+.workouts-saved{background:#e0edc2;color:#39571b}
+.workouts-empty{background:#e8edf4;color:#53637a}
+.workout-item{display:flex;align-items:center;gap:8px;margin:0 0 12px}
+.workout-item .workout-card{flex:1 1 auto;width:auto;min-width:0;margin:0}
+.workout-delete{flex:none;min-height:44px;padding:0 14px;border:1px solid #d8e1eb;border-radius:12px;background:#fff;font:inherit;font-size:14px;color:#53637a;cursor:pointer}
+/* Пометка про убранные из библиотеки упражнения — между снаряжением и блоками.
+   hidden она скрыта сама, display здесь не задаётся намеренно: он перекрыл бы
+   атрибут. */
+.removed-note{margin:14px 0 0;padding:13px 16px;border-radius:10px;background:#e8edf4;color:#53637a;font-size:14px}
 .builder-note{max-width:520px;margin:0;font-size:15px;line-height:1.6;color:#33475f}
 
 /* Метка «упор» у упражнения, добавленного ради зоны упора своей тренировки

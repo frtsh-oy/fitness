@@ -5,6 +5,8 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { makeDom } from './setup.js';
 import { startApp } from '../app.js';
+import { renderWorkouts } from '../workouts-view.js';
+import { WORKOUTS } from '../workouts/index.js';
 
 const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 const mount = () => {
@@ -109,17 +111,33 @@ test('текущая тренировка помечена в списке', () 
   document.querySelector('[data-section="workouts"]').click();
   const marked = document.querySelectorAll('#screen-workouts .workout-card[aria-current]');
   assert.equal(marked.length, 1);
+  assert.match(marked[0].textContent, /Сейчас в «Сегодня»/);
 });
 
 test('нажатие на карточку тренировки открывает «Сегодня»', () => {
-  // Смены текущей тренировки здесь нет и не будет, пока не появится загрузка
-  // тренировок с сервера — в реестре сегодня одна запись, и она же текущая.
-  // Карточка лишь возвращает человека туда, откуда он и хотел тренироваться.
+  // Карточка текущей тренировки ничего не меняет, а лишь возвращает человека
+  // туда, откуда он и хотел тренироваться; смена тренировки — в test/switch.test.js.
   const { window, document } = mount();
   startApp(window);
   document.querySelector('[data-section="workouts"]').click();
   document.querySelector('#screen-workouts .workout-card').click();
   assert.deepEqual(shown(document), ['screen-today']);
+});
+
+test('после сохранения раздел говорит об этом: у сохранённой на устройстве — другим текстом', () => {
+  const { document } = mount();
+  const host = document.createElement('div');
+  const draw = saved => {
+    renderWorkouts({ host, ready: WORKOUTS, mine: [], currentId: 'legs-mwf', saved, onPick() {}, onDelete() {} });
+    return host.querySelector('.workouts-saved');
+  };
+
+  assert.equal(draw(null), null, 'без сохранения сообщения нет');
+  const saved = draw({ localOnly: false });
+  assert.equal(saved.getAttribute('role'), 'status');
+  assert.equal(saved.textContent, 'Тренировка сохранена');
+  assert.equal(draw({ localOnly: true }).textContent,
+    'Тренировка сохранена на этом устройстве: облако Telegram не ответило. Отправим её туда при следующем запуске.');
 });
 
 test('«Конструктор» объясняет, что это и почему платно', () => {

@@ -10,6 +10,8 @@ import { storageKey, currentDay } from '../storage.js';
 import { markId, scheduleShort, scheduleLong } from '../render.js';
 import { getWorkout } from '../workouts/index.js';
 import { countMarks } from '../workouts/schema.js';
+import { recordKey } from '../my-workouts.js';
+import { serializeCompact } from '../builder/compact.js';
 
 const PAGE = readFileSync(fileURLToPath(new URL('../index.html', import.meta.url)), 'utf8');
 const WORKOUT = getWorkout(null);
@@ -1241,6 +1243,7 @@ const TAP_TARGETS = [
   'button.extra-link',
   '.player-close',
   '.workout-card',
+  '.workout-delete',
 ];
 
 const HEIGHT_PROPS = ['min-height', 'height', 'max-height'];
@@ -1265,8 +1268,17 @@ const tapPixels = (value, where) => {
 // Узлы берутся с отрисованной страницы ещё и затем, чтобы сторож не остался
 // беззубым молча: селектор, переставший что-либо накрывать (переименованный
 // класс), роняет тест на пустой выборке.
-test(`ни одно правило не опускает нажимаемое ниже ${MIN_TAP_HEIGHT}px`, t => {
-  const { window, document } = mount(t, { screenWidth: 375 });
+test(`ни одно правило не опускает нажимаемое ниже ${MIN_TAP_HEIGHT}px`, async t => {
+  // Кнопка «Удалить» есть только у своей тренировки, и список своих приходит
+  // следом за запуском: без записи на устройстве и без ожидания списка выборка
+  // `.workout-delete` была бы пустой.
+  const own = { v: 1, name: 'Моя', days: [1], level: null, zones: [], warmup: ['pelvic-tilt'],
+    circuit: ['chinese-squat'], strength: ['rdl'], focus: [], cooldown: ['breathing'], t: 1760000000000 };
+  const { window, document } = mount(t, {
+    screenWidth: 375,
+    preload: { [recordKey('my-test0001')]: serializeCompact(own) },
+  });
+  await settle(0);
   // Подбор мышцы и плеер появляются только после нажатий: без них выборки
   // `.bodymap-pick button` и `.player-close` были бы пустыми. Раздел
   // «Тренировки» рисуется тоже только при показе (см. app.js, onShow) — без

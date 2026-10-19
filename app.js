@@ -2,9 +2,12 @@
 // соединяются здесь и больше нигде. Точка входа — index.html, который импортирует
 // startApp и зовёт её; сам модуль ничего не делает при импорте, поэтому связывание
 // проверяется тестами на jsdom.
-import { getWorkout, WORKOUTS } from './workouts/index.js';
+import { WORKOUTS, DEFAULT_WORKOUT_ID } from './workouts/index.js';
 import { renderWorkout, renderIntro } from './render.js';
 import { createStorage } from './storage.js';
+import { createMyWorkouts } from './my-workouts.js';
+import { expandWorkout } from './builder/compact.js';
+import { LIBRARY } from './exercises/index.js';
 import { initTelegram } from './telegram.js';
 import { createTimer, formatTime } from './timer.js';
 import { setupPlayers } from './player.js';
@@ -26,6 +29,11 @@ const TIMER_PERIOD_MS = 200;
 // Склейка безопасна ровно потому, что save получает набор целиком, а не разницу:
 // промежуточные состояния никому не нужны, важно только последнее.
 const SAVE_DELAY_MS = 500;
+
+// Ключ в localStorage, под которым запомнена текущая тренировка: id готовой
+// (реестр WORKOUTS) или своей. Только на устройстве: это признак «что открыто
+// у меня», а не данные человека, и в облако ему незачем.
+export const CURRENT_KEY = 'current-workout';
 
 // Вопрос перед сбросом — дословно из src-original/app.js.
 const RESET_QUESTION = 'Сбросить все отметки за сегодня?';
@@ -86,39 +94,60 @@ function scrollBehavior(win) {
   return win.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth';
 }
 
-export function startApp(win = globalThis.window) {
+export function startApp(win = globalThis.window, { library = LIBRARY } = {}) {
   const document = win.document;
   const tg = initTelegram(win);
-  const workout = getWorkout(tg.workoutId);
-  const storage = createStorage({
-    cloud: cloudStorage(tg.webApp),
-    local: localStore(win),
-  });
+  const cloud = cloudStorage(tg.webApp);
+  const local = localStore(win);
+  const storage = createStorage({ cloud, local });
+  // Один на всё время работы приложения: счётчик правок, по которому он отличает
+  // свежее состояние тренировки от устаревшего ответа облака, у каждого
+  // экземпляра свой, и второй экземпляр его бы не видел.
+  const store = createMyWorkouts({ cloud, local });
   // Старые отметки чистим при каждом запуске и не ждём: устройство очищается
   // тут же, облако — когда ответит, а сбой чистки на запуск не влияет.
   storage.prune();
 
-  // «Тренировки» и «Конструктор» рисуются при первом показе, а не при
-  // запуске: до тех пор, пока человек ни разу не открыл раздел, готовить его
-  // разметку незачем. Признаки drawn — не кеш содержимого (оно не меняется
-  // за время сеанса), а просто «строить один раз».
-  let workoutsDrawn = false;
+  // Тренировка по id: готовая из реестра или своя с устройства, собранная из
+  // сжатой записи. null — такой нет: неизвестный id или своя, которую уже
+  // удалили. Облака здесь нет намеренно: открывать тренировку надо сразу, а оно
+  // отвечает до пяти секунд.
+  function openWorkout(id) {
+    if (Object.hasOwn(WORKOUTS, id)) return { workout: WORKOUTS[id], removed: [] };
+    const compact = store.peek(id);
+    return compact ? expandWorkout(id, compact, library) : null;
+  }
+
+  function rememberedId() {
+    try { return win.localStorage.getItem(CURRENT_KEY); } catch { return null; }
+  }
+
+  // Что открыть при запуске: тренировка из ссылки (`?w=` или startapp), если
+  // она есть в реестре; иначе запомненная; иначе готовая по умолчанию. Ссылка
+  // запомненное не трогает: она лишь на этот запуск.
+  const start = (() => {
+    const linked = tg.workoutId;
+    if (linked && Object.hasOwn(WORKOUTS, linked)) return openWorkout(linked);
+    return openWorkout(rememberedId()) ?? openWorkout(DEFAULT_WORKOUT_ID);
+  })();
+  // Открытая в «Сегодня»: её читают обработчики, которые вешаются один раз
+  // (отметки, сброс, карта), поэтому она одна на всё время работы, а не
+  // параметр каждого из них. Меняется только в showWorkout.
+  let workout = start.workout;
+
+  // Свои тренировки, как их вернул list(): null, пока ответа ещё нет.
+  let mine = null;
+
+  // «Конструктор» рисуется при первом показе, а не при запуске: до тех пор,
+  // пока человек ни разу не открыл раздел, готовить его разметку незачем.
+  // «Тренировки» рисуются при КАЖДОМ показе: список зависит от того, какая
+  // тренировка открыта сейчас, какие свои есть и что только что удалили.
   let builderDrawn = false;
 
   const sections = createSections({
     win,
     onShow(id) {
-      if (id === 'workouts' && !workoutsDrawn) {
-        workoutsDrawn = true;
-        renderWorkouts({
-          host: document.getElementById('screen-workouts'),
-          workouts: WORKOUTS,
-          currentId: workout.id,
-          // Смены текущей тренировки здесь нет: в реестре она одна и уже
-          // открыта на экране «Сегодня». Карточка лишь возвращает туда.
-          onPick: () => sections.show('today'),
-        });
-      }
+      if (id === 'workouts') drawWorkouts();
       if (id === 'builder' && !builderDrawn) {
         builderDrawn = true;
         renderBuilder({ host: document.getElementById('screen-builder'), hasSubscription });
@@ -127,17 +156,57 @@ export function startApp(win = globalThis.window) {
   });
   sections.show(savedSection(win) ?? 'today');
 
-  renderIntro(workout, document);
+  function drawWorkouts() {
+    renderWorkouts({
+      host: document.getElementById('screen-workouts'),
+      ready: WORKOUTS,
+      mine,
+      currentId: workout.id,
+      library,
+      onPick: selectWorkout,
+      onDelete: deleteOwn,
+    });
+  }
+
+  // Запоминание — только на устройстве, см. CURRENT_KEY.
+  function remember(id) {
+    try { win.localStorage.setItem(CURRENT_KEY, id); } catch { /* приватный режим */ }
+  }
+
+  // Смена по выбору человека: карточка в «Тренировках». Та же тренировка
+  // ничего не перерисовывает — «Сегодня» просто открывается там, где его
+  // оставили. Другая открывается сверху: сохранённое место прокрутки относилось
+  // к прежней тренировке и в новой вело бы в случайную точку.
+  function selectWorkout(id) {
+    const next = openWorkout(id);
+    // Своей тренировки, которой на устройстве уже нет, открыть нечем.
+    if (!next) return;
+    const changed = next.workout.id !== workout.id;
+    if (changed) showWorkout(next.workout, next.removed);
+    remember(id);
+    sections.show('today');
+    if (changed) win.scrollTo({ top: 0, behavior: 'instant' });
+  }
+
+  // Удаление своей: сначала спрашиваем. Запись исчезает с устройства сразу, а
+  // облаку удаление уходит в фоне: экран не ждёт ответа, которого может не быть
+  // пять секунд. Удалили текущую — открывается готовая по умолчанию, раздел
+  // остаётся тем же: человек в списке и должен увидеть, что запись пропала.
+  async function deleteOwn(id) {
+    const { compact } = mine.find(own => own.id === id);
+    if (!await tg.confirm(`Удалить тренировку «${compact.name}»?`)) return;
+    store.remove(id);
+    mine = mine.filter(own => own.id !== id);
+    if (id === workout.id) {
+      const fallback = openWorkout(DEFAULT_WORKOUT_ID);
+      showWorkout(fallback.workout, fallback.removed);
+      remember(DEFAULT_WORKOUT_ID);
+    }
+    drawWorkouts();
+  }
 
   const host = document.getElementById('workout');
-  // Описания упражнений: на телефоне свёрнуты, в широком окне раскрыты — там
-  // места хватает, и прятать текст незачем. Решение принимается один раз, при
-  // отрисовке. Перерисовки при повороте экрана нет намеренно: она стёрла бы
-  // то, что человек успел раскрыть руками, а поворот телефона сам по себе
-  // просьбы «покажи мне технику» не означает.
-  const expandDescriptions = !win.matchMedia(`(max-width: ${PHONE_MAX_WIDTH}px)`).matches;
-  host.replaceChildren(renderWorkout(workout, document, { expandDescriptions }));
-  setupPlayers(host, url => tg.openLink(url));
+  const removedNote = document.getElementById('removed-note');
 
   // Раскрытие описания — делегированием на host: кнопок девятнадцать, и своего
   // обработчика каждой не нужно. Кнопку ищем через closest, потому что цель
@@ -310,14 +379,13 @@ export function startApp(win = globalThis.window) {
     if (isMode(savedMode)) mapMode = savedMode;
   } catch { /* см. выше */ }
   paintModeButtons();
-  // Подписи не ждут раскрытия: они не стоят ничего, а зависят от режима, а не
-  // от построенной карты.
-  fillNotes();
-  if (mapWasOpen) setMapOpen(true);
 
   // Секция недельного объёма. Устроена как секция карты выше: рисуется при
   // первом раскрытии, состояние помнится. Повторное раскрытие не
   // перерисовывает — renderWeekly очистил бы host и собрал те же строки заново.
+  // Неделя человека — это текущая тренировка, повторённая в её дни, поэтому
+  // считается она одна, а не весь реестр; со сменой тренировки секция
+  // рисуется заново (showWorkout).
   const WEEKLY_KEY = 'weekly-open';
   const weeklyToggle = document.querySelector('.weekly-toggle');
   const weeklyBody = document.querySelector('.weekly-body');
@@ -325,7 +393,7 @@ export function startApp(win = globalThis.window) {
 
   function drawWeekly() {
     if (weeklyDrawn) return;
-    renderWeekly({ host: weeklyBody, workouts: Object.values(WORKOUTS) });
+    renderWeekly({ host: weeklyBody, workouts: [workout] });
     weeklyDrawn = true;
   }
 
@@ -350,17 +418,17 @@ export function startApp(win = globalThis.window) {
 
   let weeklyWasOpen = false;
   try { weeklyWasOpen = win.localStorage.getItem(WEEKLY_KEY) === '1'; } catch { /* см. выше */ }
-  if (weeklyWasOpen) setWeeklyOpen(true);
 
+  // Один набор на всё время работы: при смене тренировки он очищается и
+  // заполняется заново, а не заменяется новым, — на него смотрят снаружи.
   const marks = new Set();
   const progress = document.getElementById('progress');
   const progressText = document.getElementById('progress-text');
   // Отметки, которые есть на экране: сколько их всего и какие именно. Второе
-  // нужно на слияние с хранилищем — см. ready ниже.
-  const onScreen = [...host.querySelectorAll('input[data-mark]')].map(box => box.dataset.mark);
-  const known = new Set(onScreen);
-  const total = onScreen.length;
-  progress.max = total;
+  // нужно на слияние с хранилищем — см. loadMarks ниже. Пересчитываются при
+  // каждой смене тренировки (showWorkout).
+  let known = new Set();
+  let total = 0;
 
   function paint() {
     for (const box of host.querySelectorAll('input[data-mark]')) {
@@ -419,25 +487,37 @@ export function startApp(win = globalThis.window) {
   // случае ранний набор вообще пуст), а в хранилище уже лежит обрезанный набор
   // или пустота. Значение имеет сам факт изменения, а не его размер.
   let touchedBeforeLoad = false;
-  const ready = storage.load(workout.id).then(saved => {
-    if (resetBeforeLoad) return;
-    // Приехавшее сверяется с экраном. В хранилище за сегодня могут лежать
-    // идентификаторы, которых на странице уже нет: упражнению сменили key,
-    // упражнение убрали, блок переименовали. Без сверки такая отметка попадает
-    // в marks, и счётчик показывает «Сегодня: 4 из 37» при одном отмеченном
-    // чекбоксе, а при достатке мусора перевалит и за 37 — потому что и текст,
-    // и полоса прогресса считаются по размеру набора. Из набора они уходят
-    // насовсем: сохраняется он целиком, поэтому первая же запись вычистит их
-    // и из хранилища. В оригинале ровно для этого была явная чистка
-    // (src-original/app.js: удаление ключей по маске при переименовании).
-    for (const id of saved) if (known.has(id)) marks.add(id);
-    // Ранняя отметка уже уехала в хранилище — одна, без сохранённых, потому что
-    // save пишет набор целиком. Возвращаем туда объединённый набор, иначе старые
-    // отметки пропадут из хранилища, даже оставшись на экране.
-    if (touchedBeforeLoad) queueSave();
-    paint();
-  });
-  paint();
+  // Номер загрузки отметок. Ответ хранилища приходит позже смены тренировки, и
+  // тогда он принадлежит прежней: положенный в набор, он показал бы отметки
+  // одной тренировки на экране другой. Загрузка помнит номер, с которым
+  // началась, и чужой ответ отбрасывает.
+  let generation = 0;
+  let ready = Promise.resolve();
+
+  function loadMarks() {
+    generation += 1;
+    const loading = generation;
+    resetBeforeLoad = false;
+    touchedBeforeLoad = false;
+    ready = storage.load(workout.id).then(saved => {
+      if (loading !== generation || resetBeforeLoad) return;
+      // Приехавшее сверяется с экраном. В хранилище за сегодня могут лежать
+      // идентификаторы, которых на странице уже нет: упражнению сменили key,
+      // упражнение убрали, блок переименовали. Без сверки такая отметка попадает
+      // в marks, и счётчик показывает «Сегодня: 4 из 37» при одном отмеченном
+      // чекбоксе, а при достатке мусора перевалит и за 37 — потому что и текст,
+      // и полоса прогресса считаются по размеру набора. Из набора они уходят
+      // насовсем: сохраняется он целиком, поэтому первая же запись вычистит их
+      // и из хранилища. В оригинале ровно для этого была явная чистка
+      // (src-original/app.js: удаление ключей по маске при переименовании).
+      for (const id of saved) if (known.has(id)) marks.add(id);
+      // Ранняя отметка уже уехала в хранилище — одна, без сохранённых, потому что
+      // save пишет набор целиком. Возвращаем туда объединённый набор, иначе старые
+      // отметки пропадут из хранилища, даже оставшись на экране.
+      if (touchedBeforeLoad) queueSave();
+      paint();
+    });
+  }
 
   // Отметка — чекбокс, поэтому слушаем change: это событие смены состояния, оно
   // приходит при любом способе переключения и уже с новым checked. Клик по самому
@@ -647,7 +727,87 @@ export function startApp(win = globalThis.window) {
       }
     }
   }, { rootMargin: '-70px 0px -65% 0px', threshold: 0 });
-  for (const section of host.querySelectorAll('.workout-block')) observer.observe(section);
 
-  return { workout, marks, timer, total, ready };
+  // Всё, что зависит от тренировки, собрано здесь, и первая отрисовка при
+  // запуске идёт тем же путём, что и смена на другую: расходиться им не с чего.
+  // Обработчики, которые вешаются один раз (отметки, раскрытие, сброс, таймер,
+  // прокрутка), сюда не входят и читают тренировку из замыкания. Таймер не
+  // трогается вовсе: отдых идёт, пока человек выбирает, чем заняться дальше.
+  // skipped — ключи, которых уже нет в библиотеке (expandWorkout).
+  function showWorkout(next, skipped) {
+    // Отложенная запись отметок уходит немедленно и под ПРЕЖНИМ id: после
+    // присваивания ниже она записала бы их под id новой тренировки.
+    flushSave();
+    workout = next;
+
+    renderIntro(workout, document);
+    removedNote.textContent = skipped.length
+      ? `Убрано из библиотеки и пропущено упражнений: ${skipped.length}.`
+      : '';
+    removedNote.hidden = skipped.length === 0;
+
+    // Описания упражнений: на телефоне свёрнуты, в широком окне раскрыты — там
+    // места хватает, и прятать текст незачем. Решение принимается один раз, при
+    // отрисовке тренировки. Перерисовки при повороте экрана нет намеренно: она
+    // стёрла бы то, что человек успел раскрыть руками, а поворот телефона сам по
+    // себе просьбы «покажи мне технику» не означает.
+    const expandDescriptions = !win.matchMedia(`(max-width: ${PHONE_MAX_WIDTH}px)`).matches;
+    host.replaceChildren(renderWorkout(workout, document, { expandDescriptions }));
+    setupPlayers(host, url => tg.openLink(url));
+
+    // Блоки прежней тренировки из документа ушли, наблюдать за ними нечего.
+    observer.disconnect();
+    for (const section of host.querySelectorAll('.workout-block')) observer.observe(section);
+
+    // Карта: подбор относился к прежней тренировке, и число подходов в нём
+    // чужое; построенная карта — тоже её. Раскрытая строится заново сразу,
+    // свёрнутая — при раскрытии (openMap строит только то, чего ещё нет).
+    // Подписи под картой не ждут раскрытия: они не стоят ничего, а зависят от
+    // режима и от тренировки, а не от построенной карты.
+    mapPick.replaceChildren();
+    bodyMap?.destroy();
+    bodyMap = null;
+    fillNotes();
+    if (mapToggle.getAttribute('aria-expanded') === 'true') openMap();
+
+    // Недельная нагрузка: раскрытая перерисовывается сразу, свёрнутая — при
+    // раскрытии (drawWeekly рисует только то, чего ещё нет).
+    weeklyDrawn = false;
+    if (!weeklyBody.hidden) drawWeekly();
+
+    marks.clear();
+    const onScreen = [...host.querySelectorAll('input[data-mark]')].map(box => box.dataset.mark);
+    known = new Set(onScreen);
+    total = onScreen.length;
+    progress.max = total;
+    loadMarks();
+    paint();
+  }
+
+  showWorkout(start.workout, start.removed);
+
+  // Раскрытые в прошлый раз секции восстанавливаются после первой отрисовки:
+  // карта и неделя строятся по открытой тренировке, и до неё их пришлось бы
+  // строить дважды.
+  if (mapWasOpen) setMapOpen(true);
+  if (weeklyWasOpen) setWeeklyOpen(true);
+
+  // Свои тренировки приезжают в фоне и ничего не задерживают: облако отвечает до
+  // пяти секунд, а «Сегодня» уже нарисовано с устройства. Если человек успел
+  // открыть «Тренировки», раздел перерисовывается по ответу. Единственный вызов
+  // list: параллельный второй повторил бы досылку и удаление, которые первый
+  // уже делает.
+  store.list().then(list => {
+    mine = list;
+    if (!document.getElementById('screen-workouts').hidden) drawWorkouts();
+  });
+
+  return {
+    get workout() { return workout; },
+    marks,
+    timer,
+    get total() { return total; },
+    get ready() { return ready; },
+    store,
+  };
 }
