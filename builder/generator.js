@@ -115,7 +115,7 @@ export function missingGroupsMessage(level, groups) {
 }
 
 export function missingZoneMessage(level, zone) {
-  return `Для упора на зону «${ZONES[zone].label}» на ${LEVELS[level].genitive} уровне в библиотеке пока не хватает упражнений: нужно второе упражнение на ту же группу.`;
+  return `Для упора на зону «${ZONES[zone].label}» на ${LEVELS[level].prepositional} уровне в библиотеке пока не хватает упражнений: нужно второе упражнение на ту же группу.`;
 }
 
 // Девять пар — это MAX_STRENGTH, поделённое на два упражнения в паре.
@@ -143,17 +143,22 @@ const preferCompound = list => {
 
 // Одна попытка: сначала упражнения упора, затем добор по одному на ту группу,
 // которой не хватает, пока все основные не дойдут до своих границ или не
-// кончится место.
-function attempt({ pool, rounds, floor, zones, random }) {
+// кончится место. candidates — кандидаты упора по зонам (focusCandidates).
+function attempt({ pool, rounds, floor, zones, candidates, random }) {
   const chosen = [];
   const focus = [];
   const need = new Map(CORE_GROUPS.map(group => [group, floor]));
 
-  for (const zone of zones) {
-    const free = focusCandidates(pool, zone).filter(entry => !chosen.includes(entry));
+  for (const [index, zone] of zones.entries()) {
+    const free = candidates.get(zone).filter(entry => !chosen.includes(entry));
     if (free.length === 0) return { ok: false, kind: 'missing', groups: [...ZONES[zone].groups] };
+    // Жадный выбор не должен забирать упражнение, которое осталось единственным
+    // у одной из следующих зон: тогда та зона получила бы отказ, хотя у этой
+    // нашлась бы замена. Если замены нет, берём из всех, как раньше.
+    const later = zones.slice(index + 1);
+    const spare = free.filter(entry => later.every(next => candidates.get(next).some(other => other !== entry && !chosen.includes(other))));
     const inZone = entry => targetsOf(entry).filter(group => ZONES[zone].groups.includes(group)).length;
-    const entry = pick(topBy(preferCompound(free), inZone), random);
+    const entry = pick(topBy(preferCompound(spare.length > 0 ? spare : free), inZone), random);
     chosen.push(entry);
     focus.push([entry.key, zone]);
     for (const group of targetsOf(entry)) {
@@ -202,6 +207,7 @@ export function generate({ level, zones, seed, library = LIBRARY, now = Date.now
   }
 
   const pool = poolOf(library, level);
+  const candidates = new Map(zones.map(zone => [zone, focusCandidates(pool, zone)]));
   const random = makeRandom(seed);
   // Скелет набирается тем же зерном, но после перебора: так упор и добор не
   // зависят от того, сколько в библиотеке разминок.
@@ -228,7 +234,7 @@ export function generate({ level, zones, seed, library = LIBRARY, now = Date.now
   let firstValid = null;
   let closest = null;
   for (let i = 0; i < ATTEMPTS; i += 1) {
-    const result = attempt({ pool, rounds, floor, zones, random });
+    const result = attempt({ pool, rounds, floor, zones, candidates, random });
     if (result.ok) {
       const sets = weeklyOf(result.chosen, rounds);
       if (CORE_GROUPS.every(group => sets.get(group).comparable <= SOFT_CEILING)) return finish(result);

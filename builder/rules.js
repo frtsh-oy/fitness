@@ -18,13 +18,14 @@ export const CORE_GROUPS = Object.keys(MUSCLES).filter(group => !NOT_CORE.includ
 
 // Уровень задаёт круги силовых пар, какие по сложности упражнения берутся
 // (pool), нижнюю границу недельных подходов на каждую основную группу (floor) и
-// запас повторов до отказа (reserve). Подписи (label, genitive, who, poolWords)
-// стоят в тексте экрана и сообщений, поэтому лежат рядом с числами: так падеж
-// не разъезжается с уровнем.
+// запас повторов до отказа (reserve). Подписи (label, genitive, prepositional,
+// who, poolWords) стоят в тексте экрана и сообщений, поэтому лежат рядом с
+// числами: так падеж не разъезжается с уровнем («для начального уровня», «на
+// начальном уровне»).
 export const LEVELS = {
-  beginner:     { label: 'Начальный',   genitive: 'начального',   who: 'Занятий не было или перерыв в несколько лет', rounds: 2, pool: ['basic'],                   poolWords: 'базовых упражнений',           floor: 5, reserve: '3–4' },
-  intermediate: { label: 'Средний',     genitive: 'среднего',     who: 'Около полугода регулярных занятий',          rounds: 2, pool: ['basic', 'medium'],         poolWords: 'базовых и средних упражнений', floor: 5, reserve: '2–3' },
-  advanced:     { label: 'Продвинутый', genitive: 'продвинутого', who: 'Годы регулярных занятий',                    rounds: 3, pool: ['basic', 'medium', 'hard'], poolWords: 'упражнений',                   floor: 9, reserve: '1–2' },
+  beginner:     { label: 'Начальный',   genitive: 'начального',   prepositional: 'начальном',   who: 'Занятий не было или перерыв в несколько лет', rounds: 2, pool: ['basic'],                   poolWords: 'базовых упражнений',           floor: 5, reserve: '3–4' },
+  intermediate: { label: 'Средний',     genitive: 'среднего',     prepositional: 'среднем',     who: 'Около полугода регулярных занятий',          rounds: 2, pool: ['basic', 'medium'],         poolWords: 'базовых и средних упражнений', floor: 5, reserve: '2–3' },
+  advanced:     { label: 'Продвинутый', genitive: 'продвинутого', prepositional: 'продвинутом', who: 'Годы регулярных занятий',                    rounds: 3, pool: ['basic', 'medium', 'hard'], poolWords: 'упражнений',                   floor: 9, reserve: '1–2' },
 };
 
 // Зоны упора: семь, и каждая основная группа ровно в одной. Предплечья и

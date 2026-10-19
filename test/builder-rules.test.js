@@ -33,7 +33,7 @@ test('уровни: порядок, вложенные пулы сложност
   const ids = Object.keys(LEVELS);
   ids.forEach((id, i) => {
     const L = LEVELS[id];
-    for (const field of ['label', 'genitive', 'who', 'poolWords', 'reserve']) {
+    for (const field of ['label', 'genitive', 'prepositional', 'who', 'poolWords', 'reserve']) {
       assert.ok(typeof L[field] === 'string' && L[field].length > 0, `${id}.${field}`);
     }
     // Следующий уровень берёт всё, что брал предыдущий, и что-то сверх.

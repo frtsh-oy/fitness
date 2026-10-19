@@ -79,10 +79,17 @@ export function withoutTargets(groups) {
   return TEST_LIBRARY.filter(entry => !groups.some(group => targets(entry, group)));
 }
 
+// Запись с правками, тоже заморожена глубоко: тест, который строит свои записи
+// из фикстуры, не должен получить изменяемые копии (изменяемую копию можно
+// случайно поправить, и поправка переживёт тест).
+export function variant(entry, changes) {
+  return deepFreeze({ ...entry, ...changes });
+}
+
 // Только односуставные `-1`…`-4`, все двусторонние: самая бедная библиотека, в
 // которой всё же есть упражнение на каждую группу.
 export function singlesOnly() {
-  return SINGLES.map(entry => ({ ...entry, unilateral: false }));
+  return SINGLES.map(entry => variant(entry, { unilateral: false }));
 }
 
 // Копия, где на эту группу целевое ровно одно упражнение — `${id}-1`. Для зоны

@@ -11,7 +11,7 @@ import { expandWorkout, serializeCompact, parseCompact, NAME_MAX, VALUE_MAX } fr
 import { weeklySets } from '../weekly.js';
 import { itemProblems, KEY_PATTERN, NO_LOAD_PATTERN } from '../workouts/schema.js';
 import { LIBRARY, toItem } from '../exercises/index.js';
-import { TEST_LIBRARY, withoutTargets, singlesOnly, onlyOneFor } from './fixtures/test-library.js';
+import { TEST_LIBRARY, withoutTargets, singlesOnly, onlyOneFor, variant } from './fixtures/test-library.js';
 
 const ZONE_SETS = [[], ...Object.keys(ZONES).map(z => [z]), ['glutes', 'back'], ['arms', 'core']];
 const byKey = new Map(TEST_LIBRARY.map(e => [e.key, e]));
@@ -82,7 +82,8 @@ test('нет упражнения на группу — отказ с её на�
 
 test('не хватает второго упражнения для зоны — отказ с названием зоны', () => {
   const r = generate({ level: 'beginner', zones: ['chest'], seed: 1, library: onlyOneFor('chest') });
-  assert.deepEqual([r.ok, r.reason, r.zone, r.message], [false, 'missing', 'chest', missingZoneMessage('beginner', 'chest')]);
+  assert.deepEqual([r.ok, r.reason, r.zone, r.groups, r.message], [false, 'missing', 'chest', ['chest'],
+    'Для упора на зону «Грудь» на начальном уровне в библиотеке пока не хватает упражнений: нужно второе упражнение на ту же группу.']);
   assert.equal(availability(onlyOneFor('chest'), 'beginner').zones.chest, false);
 });
 
@@ -111,8 +112,10 @@ test('неизвестный уровень, неизвестная зона и 
 test('сообщения отказов дословны', () => {
   assert.equal(missingGroupsMessage('advanced', ['delts_rear', 'biceps']), 'Для продвинутого уровня в библиотеке пока нет упражнений на: задняя дельта, бицепс.');
   assert.equal(missingGroupsMessage('intermediate', ['calves']), 'Для среднего уровня в библиотеке пока нет базовых и средних упражнений на: икроножные.');
-  assert.match(missingZoneMessage('intermediate', 'core'),
-    /^Для упора на зону «Пресс и кор» на .+ уровне в библиотеке пока не хватает упражнений: нужно второе упражнение на ту же группу\.$/);
+  assert.equal(missingZoneMessage('intermediate', 'core'),
+    'Для упора на зону «Пресс и кор» на среднем уровне в библиотеке пока не хватает упражнений: нужно второе упражнение на ту же группу.');
+  assert.equal(missingZoneMessage('advanced', 'arms'),
+    'Для упора на зону «Руки» на продвинутом уровне в библиотеке пока не хватает упражнений: нужно второе упражнение на ту же группу.');
   assert.equal(ceilingMessage(['abs', 'obliques']), 'Не получилось уложиться в 9 силовых пар: ниже границы остались прямая мышца живота, косые мышцы живота.');
 });
 
@@ -140,8 +143,8 @@ test('мягкая граница — предпочтение, а не усло
   // Четыре упражнения, каждое на ягодицы и на свою группу, у которой других
   // упражнений нет: все четыре обязательны, и ягодицы получают 4 × 6 = 24 > 20.
   const alone = ['adductors', 'calves', 'abs', 'obliques'];
-  const forced = alone.map(group => ({
-    ...byKey.get(`${group}-1`), key: `forced-${group}`, unilateral: false, load: { glutes: 1, [group]: 1 },
+  const forced = alone.map(group => variant(byKey.get(`${group}-1`), {
+    key: `forced-${group}`, unilateral: false, load: { glutes: 1, [group]: 1 },
   }));
   const library = [...singlesOnly().filter(e => !alone.some(g => e.load[g] === 1)), ...forced,
     ...TEST_LIBRARY.filter(e => e.slot !== 'strength')];
@@ -200,4 +203,52 @@ test('кандидат упора: целевая группа зоны и ещ�
   assert.deepEqual(keys('chest'), ['chest-only', 'chest-grip']);
   assert.deepEqual(keys('shoulders'), ['front-only']);
   assert.deepEqual(keys('arms'), []);
+});
+
+// Маленькая библиотека для упора: скелет и по одному базовому односуставному на
+// каждую группу, кроме грудных, бицепса и икроножных. Односуставное, которому
+// нет пары на ту же группу, кандидатом упора не становится, так что кандидаты
+// остаются только там, где их задали.
+//   PRESS — многосуставное на грудные и бицепс;
+//   EXTRA — односуставное на грудные, бицепс и икроножные: икроножные только у
+//           него, поэтому само оно кандидатом не станет, но даёт PRESS «второе
+//           упражнение на ту же группу» и по грудным, и по бицепсу.
+const PRESS = variant(byKey.get('chest-1'), { key: 'chest-biceps', load: { chest: 1, biceps: 1 }, compound: true, unilateral: false });
+const EXTRA = variant(byKey.get('chest-1'), { key: 'chest-biceps-calves', load: { chest: 1, biceps: 1, calves: 1 }, unilateral: false });
+const lean = (...extra) => [
+  ...TEST_LIBRARY.filter(e => e.slot !== 'strength'),
+  ...TEST_LIBRARY.filter(e => e.slot === 'strength' && e.key.endsWith('-1') && !['chest-1', 'biceps-1', 'calves-1'].includes(e.key)),
+  PRESS, EXTRA, ...extra,
+];
+
+test('упор: упражнение, единственное у следующей зоны, первая зона не забирает', () => {
+  // У «Грудь» один кандидат — PRESS, он же единственное многосуставное
+  // у «Руки». Жадно «Руки» взяли бы его, и «Грудь» получила бы
+  // отказ, хотя у «Рук» есть трицепс.
+  const library = lean(byKey.get('triceps-2'));
+  assert.deepEqual(focusCandidates(library, 'chest').map(e => e.key), ['chest-biceps']);
+  for (const zones of [['arms', 'chest'], ['chest', 'arms']]) for (let seed = 1; seed <= 10; seed += 1) {
+    const r = generate({ level: 'beginner', zones, seed, library, now: () => 1 });
+    assert.ok(r.ok, `${zones} ${seed}: ${r.message}`);
+    const focus = Object.fromEntries(r.compact.focus.map(([key, zone]) => [zone, key]));
+    assert.equal(focus.chest, 'chest-biceps');
+    assert.ok(['triceps-1', 'triceps-2'].includes(focus.arms), `${zones} ${seed}: ${focus.arms}`);
+  }
+});
+
+test('упор: если замены у первой зоны нет, берётся то же единственное упражнение и отказ называет вторую зону', () => {
+  // Без triceps-2 и у «Рук», и у «Груди» кандидат один и тот же: двух разных не
+  // набрать, и «Грудь» остаётся без упражнения.
+  const library = lean();
+  assert.deepEqual(focusCandidates(library, 'arms').map(e => e.key), ['chest-biceps']);
+  const r = generate({ level: 'beginner', zones: ['arms', 'chest'], seed: 1, library, now: () => 1 });
+  assert.deepEqual([r.ok, r.reason, r.groups], [false, 'missing', ['chest']]);
+});
+
+test('копии фикстуры заморожены глубоко', () => {
+  const frozen = value => Object.isFrozen(value)
+    && Object.values(value).every(inner => typeof inner !== 'object' || inner === null || frozen(inner));
+  const copies = [TEST_LIBRARY, withoutTargets(['biceps']), singlesOnly(), onlyOneFor('chest'), [PRESS, EXTRA]];
+  for (const copy of copies) for (const e of copy) assert.ok(frozen(e), e.key);
+  assert.throws(() => { singlesOnly()[0].load.glutes = 0; }, TypeError);
 });
