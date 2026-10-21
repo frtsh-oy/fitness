@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  GEAR, GEAR_IDS, NO_GEAR, NO_GEAR_LABEL, DEFAULT_OWNED, gearLabel, gearText, fitsGear, fitLibrary,
+  GEAR, GEAR_IDS, NO_GEAR, NO_GEAR_LABEL, DEFAULT_OWNED, gearLabel, gearText, fitsGear, fitLibrary, unownedGear,
 } from '../gear.js';
 
 // Записи свои и крохотные: fitsGear читает только gear, а состав настоящей
@@ -97,4 +97,13 @@ test('fitLibrary оставляет подходящие, порядок сох�
   assert.deepEqual(keys(['band_long', 'dumbbells']), ['rows', 'curl', 'plank', 'thruster']);
   assert.deepEqual(keys([]), ['plank']);
   assert.deepEqual(library, before);
+});
+
+test('unownedGear: нужное и не отмеченное, в порядке словаря, без повторов и без «без инвентаря»', () => {
+  const entries = [needing('a', 'kettlebell', 'band_long'), needing('b', 'dumbbells'), needing('c', NO_GEAR), needing('d', 'kettlebell')];
+  assert.deepEqual(unownedGear(entries, []), ['band_long', 'dumbbells', 'kettlebell'], 'порядок словаря, а не упражнений');
+  assert.deepEqual(unownedGear(entries, ['band_long']), ['dumbbells', 'kettlebell'], 'отмеченное не называется');
+  assert.deepEqual(unownedGear(entries, ['band_long', 'dumbbells', 'kettlebell']), []);
+  assert.deepEqual(unownedGear([needing('c', NO_GEAR)], []), [], '«без инвентаря» всегда у человека');
+  assert.deepEqual(unownedGear([], []), []);
 });

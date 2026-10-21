@@ -59,3 +59,12 @@ export function fitsGear(entry, owned) {
 export function fitLibrary(library, owned) {
   return library.filter(entry => fitsGear(entry, owned));
 }
+
+// Виды инвентаря, которые нужны этим упражнениям, а у человека не отмечены, в
+// порядке словаря: «Есть с инвентарём: …» в отказе генератора и в шторке замены
+// читается одинаково, в каком бы порядке ни шли упражнения. «Без инвентаря» сюда
+// не попадает: оно доступно всегда.
+export function unownedGear(entries, owned) {
+  return GEAR.map(([id]) => id)
+    .filter(id => !owned.includes(id) && entries.some(entry => entry.gear.includes(id)));
+}

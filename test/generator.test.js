@@ -1,9 +1,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  makeRandom, pickSkeleton, focusCandidates, availability, generate,
+  makeRandom, pickSkeleton, focusCandidates, availability, generate, missingGear,
   missingGroupsMessage, missingZoneMessage, ceilingMessage,
 } from '../builder/generator.js';
+import { fitLibrary } from '../gear.js';
 import {
   CORE_GROUPS, LEVELS, ZONES, FOCUS_MIN, SOFT_CEILING, MAX_STRENGTH, SKELETON,
 } from '../builder/rules.js';
@@ -265,4 +266,103 @@ test('копии фикстуры заморожены глубоко', () => {
   const copies = [TEST_LIBRARY, withoutTargets(['biceps']), singlesOnly(), onlyOneFor('chest'), [PRESS, EXTRA]];
   for (const copy of copies) for (const e of copy) assert.ok(frozen(e), e.key);
   assert.throws(() => { singlesOnly()[0].load.glutes = 0; }, TypeError);
+});
+
+// — Инвентарь ————————————————————————————————————————————————————————
+// Записи свои: у фикстуры весь инвентарь «без инвентаря», а нужное для проверки
+// ставится поверх. variant замораживает копию, как и сама фикстура.
+const needing = (gear, keys, library = TEST_LIBRARY) => library.map(entry => (keys.includes(entry.key) ? variant(entry, { gear }) : entry));
+const BICEPS = ['biceps-1', 'biceps-2', 'biceps-3', 'biceps-4'];
+
+test('missingGear: виды инвентаря, без которых группа осталась пустой, в порядке словаря', () => {
+  // Базовые на бицепс: одному нужны гантели, другому гиря; средний и сложный не
+  // трогаем. Порядок записей у упражнений обратный словарю.
+  const library = needing(['kettlebell'], ['biceps-1'], needing(['dumbbells'], ['biceps-2']));
+  assert.deepEqual(missingGear(library, [], 'beginner', ['biceps']), ['dumbbells', 'kettlebell']);
+  assert.deepEqual(missingGear(library, ['dumbbells'], 'beginner', ['biceps']), ['kettlebell'], 'отмеченное не называется');
+  assert.deepEqual(missingGear(library, ['dumbbells', 'kettlebell'], 'beginner', ['biceps']), []);
+});
+
+test('missingGear: упражнению нужно всё перечисленное — называется только неотмеченное', () => {
+  const library = needing(['band_long', 'dumbbells'], BICEPS);
+  assert.deepEqual(missingGear(library, ['band_long'], 'beginner', ['biceps']), ['dumbbells']);
+  assert.deepEqual(missingGear(library, [], 'beginner', ['biceps']), ['band_long', 'dumbbells']);
+  assert.deepEqual(missingGear(library, ['dumbbells'], 'beginner', ['biceps']), ['band_long']);
+});
+
+test('missingGear: считает пул уровня, целевую долю и силовой слот, а «без инвентаря» не называет', () => {
+  // На бицепс: базовые без инвентаря, среднее с гантелями, сложное с гирей.
+  const library = needing(['kettlebell'], ['biceps-4'], needing(['dumbbells'], ['biceps-3']));
+  assert.deepEqual(missingGear(library, [], 'beginner', ['biceps']), [], 'в пуле начального только базовые');
+  assert.deepEqual(missingGear(library, [], 'intermediate', ['biceps']), ['dumbbells']);
+  assert.deepEqual(missingGear(library, [], 'advanced', ['biceps']), ['dumbbells', 'kettlebell']);
+
+  // У row бицепс вспомогательный (0.5), а в разминке гантели не ищут вовсе.
+  const assisted = needing(['dumbbells'], ['row-a', 'row-b', 'warm-1']);
+  assert.deepEqual(missingGear(assisted, [], 'advanced', ['biceps']), [], 'доля 0.5 не в счёт');
+  assert.deepEqual(missingGear(assisted, [], 'advanced', ['upper_back']), ['dumbbells'], 'а целевая — в счёт');
+  assert.deepEqual(missingGear(assisted, [], 'advanced', ['forearms', 'traps', 'hip_flexors']), [], 'не силовой слот не в счёт');
+});
+
+test('missingGear: группа, которой нет в библиотеке вовсе, ничего не называет', () => {
+  assert.deepEqual(missingGear(withoutTargets(['biceps']), [], 'advanced', ['biceps']), []);
+  assert.deepEqual(missingGear(TEST_LIBRARY, [], 'advanced', ['biceps']), [], 'и подходящая по инвентарю тоже');
+  assert.deepEqual(missingGear([], [], 'beginner', ['biceps']), []);
+});
+
+test('missingGear: несколько групп — вместе, а группа без пустот ничего не добавляет', () => {
+  const library = needing(['dumbbells'], ['biceps-1', 'biceps-2'], needing(['kettlebell'], ['triceps-1']));
+  assert.deepEqual(missingGear(library, [], 'beginner', ['biceps', 'triceps']), ['dumbbells', 'kettlebell']);
+  assert.deepEqual(missingGear(library, [], 'beginner', ['triceps']), ['kettlebell']);
+  assert.deepEqual(missingGear(library, [], 'beginner', ['chest']), []);
+});
+
+test('сообщения отказов с подсказкой про инвентарь дословны; без подсказки прежние', () => {
+  assert.equal(missingGroupsMessage('beginner', ['biceps'], ['dumbbells']),
+    'Для начального уровня с отмеченным инвентарём нет базовых упражнений на: бицепс. Есть с инвентарём: гантели.');
+  assert.equal(missingGroupsMessage('advanced', ['delts_rear', 'biceps'], ['dumbbells', 'kettlebell']),
+    'Для продвинутого уровня с отмеченным инвентарём нет упражнений на: задняя дельта, бицепс. Есть с инвентарём: гантели, гиря.');
+  assert.equal(missingGroupsMessage('intermediate', ['calves'], ['band_handles']),
+    'Для среднего уровня с отмеченным инвентарём нет базовых и средних упражнений на: икроножные. Есть с инвентарём: резинка с ручками.');
+  assert.equal(missingZoneMessage('intermediate', 'core', ['kettlebell']),
+    'Для упора на зону «Пресс и кор» на среднем уровне с отмеченным инвентарём не хватает упражнений: нужно второе упражнение на ту же группу. Есть с инвентарём: гиря.');
+  assert.equal(missingZoneMessage('beginner', 'arms', ['band_long', 'loop_short']),
+    'Для упора на зону «Руки» на начальном уровне с отмеченным инвентарём не хватает упражнений: нужно второе упражнение на ту же группу. Есть с инвентарём: длинная резинка, мини-петля.');
+
+  // Пустой список и его отсутствие — тот же прежний текст.
+  assert.equal(missingGroupsMessage('beginner', ['biceps'], []), missingGroupsMessage('beginner', ['biceps']));
+  assert.equal(missingGroupsMessage('beginner', ['biceps'], []), 'Для начального уровня в библиотеке пока нет базовых упражнений на: бицепс.');
+  assert.equal(missingZoneMessage('beginner', 'chest', []), missingZoneMessage('beginner', 'chest'));
+  assert.equal(missingZoneMessage('beginner', 'chest', []),
+    'Для упора на зону «Грудь» на начальном уровне в библиотеке пока не хватает упражнений: нужно второе упражнение на ту же группу.');
+});
+
+test('неизвестный инвентарь в подсказке — ошибка вызова, а не «undefined» на экране', () => {
+  assert.throws(() => missingGroupsMessage('beginner', ['biceps'], ['barbell']), /Неизвестный инвентарь: barbell/);
+  assert.throws(() => missingZoneMessage('beginner', 'arms', ['barbell']), /Неизвестный инвентарь: barbell/);
+});
+
+test('генератор получает отфильтрованную библиотеку: без гантелей отказ про библиотеку, с гантелями тренировка', () => {
+  const library = needing(['dumbbells'], BICEPS);
+  const without = generate({ level: 'beginner', zones: [], seed: 1, library: fitLibrary(library, []), now: () => 1 });
+  // Про инвентарь generate не знает: подсказку дописывает экран, у которого
+  // есть полная библиотека (missingGear).
+  assert.deepEqual(without,
+    { ok: false, reason: 'missing', groups: ['biceps'], message: 'Для начального уровня в библиотеке пока нет базовых упражнений на: бицепс.' });
+  assert.deepEqual(missingGear(library, [], 'beginner', without.groups), ['dumbbells']);
+
+  const withDumbbells = generate({ level: 'beginner', zones: [], seed: 1, library: fitLibrary(library, ['dumbbells']), now: () => 1 });
+  assert.ok(withDumbbells.ok, withDumbbells.message);
+  assert.ok(withDumbbells.compact.strength.some(key => BICEPS.includes(key)), 'бицепс закрыт упражнением с гантелями');
+});
+
+test('подбор по отфильтрованной библиотеке не берёт упражнение с неотмеченным инвентарём', () => {
+  // Из двух базовых на бицепс одному нужны гантели, а второе без инвентаря:
+  // подбор обязан взять именно второе, как бы ни легло зерно.
+  const library = needing(['dumbbells'], ['biceps-2']);
+  for (let seed = 1; seed <= 20; seed += 1) {
+    const r = generate({ level: 'beginner', zones: ['arms'], seed, library: fitLibrary(library, []), now: () => 1 });
+    assert.ok(r.ok, `${seed}: ${r.message}`);
+    assert.ok(!r.compact.strength.includes('biceps-2'), `${seed}: гантельное упражнение попало в тренировку`);
+  }
 });

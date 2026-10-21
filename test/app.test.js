@@ -1359,7 +1359,9 @@ test(`ни одно правило не опускает нажимаемое н
   rich.document.querySelector('[data-section="builder"]').click();
   richBuilder.querySelectorAll('.builder-path')[1].click();
   collect(richBuilder);
-  richBuilder.querySelector('.zone-chip').click();
+  // Первый .zone-chip на экране — переключатель инвентаря: зону выбираем по
+  // тому, что это не он.
+  richBuilder.querySelector('.zone-chip:not(.gear-chip)').click();
   richBuilder.querySelector('.builder-generate').click();
   collect(richBuilder);
 

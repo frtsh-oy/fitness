@@ -32,6 +32,7 @@ import {
 } from './rules.js';
 import { defaultName } from './texts.js';
 import { hasOwn } from '../own.js';
+import { gearLabel, fitsGear, unownedGear } from '../gear.js';
 
 // Попыток перебора. Хватает с запасом: в богатой библиотеке подходит почти
 // каждая, а в бедной лишние попытки ничего не меняют.
@@ -110,13 +111,36 @@ export function availability(library, level) {
   };
 }
 
-export function missingGroupsMessage(level, groups) {
+// Каким инвентарём человек закрыл бы то, чего не хватает: виды из упражнений
+// пула уровня (полной библиотеки, а не отфильтрованной), которые целят одну из
+// groups и не подходят по отмеченному инвентарю. Пустой список — в библиотеке этого
+// нет вовсе, и отказ остаётся прежним: «пока нет». Подсказка нужна затем, чтобы
+// отказ не выглядел так, будто дело в библиотеке, когда дело в «Что есть дома».
+export function missingGear(library, owned, level, groups) {
+  const lacking = poolOf(library, level)
+    .filter(entry => groups.some(group => entry.load[group] === 1) && !fitsGear(entry, owned));
+  return unownedGear(lacking, owned);
+}
+
+// Подписи для «Есть с инвентарём: …».
+const gearPhrase = gear => gear.map(gearLabel).join(', ');
+
+// gear — что называет подсказка (missingGear); пустой — текст прежний, про
+// библиотеку в целом.
+export function missingGroupsMessage(level, groups, gear = []) {
   const { genitive, poolWords } = LEVELS[level];
+  if (gear.length > 0) {
+    return `Для ${genitive} уровня с отмеченным инвентарём нет ${poolWords} на: ${groupsPhrase(groups)}. Есть с инвентарём: ${gearPhrase(gear)}.`;
+  }
   return `Для ${genitive} уровня в библиотеке пока нет ${poolWords} на: ${groupsPhrase(groups)}.`;
 }
 
-export function missingZoneMessage(level, zone) {
-  return `Для упора на зону «${ZONES[zone].label}» на ${LEVELS[level].prepositional} уровне в библиотеке пока не хватает упражнений: нужно второе упражнение на ту же группу.`;
+export function missingZoneMessage(level, zone, gear = []) {
+  const { prepositional } = LEVELS[level];
+  if (gear.length > 0) {
+    return `Для упора на зону «${ZONES[zone].label}» на ${prepositional} уровне с отмеченным инвентарём не хватает упражнений: нужно второе упражнение на ту же группу. Есть с инвентарём: ${gearPhrase(gear)}.`;
+  }
+  return `Для упора на зону «${ZONES[zone].label}» на ${prepositional} уровне в библиотеке пока не хватает упражнений: нужно второе упражнение на ту же группу.`;
 }
 
 // Девять пар — это MAX_STRENGTH, поделённое на два упражнения в паре.
@@ -193,6 +217,10 @@ function checkInput(level, zones) {
 
 // Результат: { ok: true, compact } либо { ok: false, reason, groups, message }.
 // Ключ zone есть только у отказа из-за зоны упора.
+// library — уже отфильтрованная по инвентарю человека (fitLibrary): правила
+// подбора про инвентарь не знают. Поэтому message у отказа 'missing' говорит про
+// библиотеку, и подсказку «Есть с инвентарём» дописывает вызывающий, у которого
+// есть и полная библиотека (missingGear).
 export function generate({ level, zones, seed, library = LIBRARY, now = Date.now }) {
   checkInput(level, zones);
 
