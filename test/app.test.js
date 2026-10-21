@@ -1211,16 +1211,22 @@ test('телефонные размеры лежат в медиазапросе
     `телефонные размеры включаются на ${max[1]}px, а app.js считает порогом ${PHONE_MAX_WIDTH}px`);
 });
 
-// Минимальная высота нажимаемого. Требование владельца программы: всё, во что
-// тыкают пальцем, не ниже 44px — приложением пользуются между подходами, и
-// промах стоит дороже лишних пикселей.
+// Минимальная высота нажимаемого — три ступени (style.css, комментарий к
+// телефонному блоку). До 2026-10-21 всё было не ниже 44px; владелец попросил
+// мельче («очень крупные кнопки сейчас»), и ступени теперь такие:
+// - чип, 32px — чипы и второстепенные кнопки;
+// - кнопка, 36px — то, чем пользуются по ходу тренировки: промах между
+//   подходами стоит дороже, поэтому ниже чипа ей нельзя;
+// - главная, 44px — одно главное действие экрана и пункты навигации.
 //
 // До этого теста требование держалось на одном комментарии в style.css:
 // возврат `.timer button{min-height:43px}` в блок 720px и возврат
 // `.check{min-height:36px}` оставляли все тесты зелёными.
-const MIN_TAP_HEIGHT = 44;
+const TAP_CHIP = 32;
+const TAP_BUTTON = 36;
+const TAP_MAIN = 44;
 
-// Всё нажимаемое страницы. Список — из требования Task 9 («чипы блоков, кнопки
+// Всё нажимаемое страницы и его ступень. Список — из требования Task 9 («чипы блоков, кнопки
 // режимов карты, видео, отметка, пресеты таймера, кнопка раскрытия секции»)
 // плюс кнопка «Как выполнять», сброс отметок, мышцы в подборе, кнопка секции
 // недельного объёма (Task 3 калькулятора) и обе кнопки плеера, которым высоту
@@ -1234,46 +1240,51 @@ const MIN_TAP_HEIGHT = 44;
 //   их нет, и придумывать им проверку значит придумывать требование;
 // - `.block-number` — не нажимаемое, это номер блока (по медиазапросам он
 //   как раз и уезжает 44 → 38 → 34px).
-const TAP_TARGETS = [
-  '.block-nav a',
-  '.text-button',
-  '.video',
-  '.check',
-  '.timer-sheet button',
-  '.tabbar button',
-  '.bodymap-toggle',
-  '.bodymap-modes button',
-  '.bodymap-pick button',
-  '.weekly-toggle',
-  '.howto-toggle',
-  'button.extra-link',
-  '.player-close',
-  '.workout-card',
-  '.workout-delete',
-  '.workout-edit',
-  '.builder-path',
-  '.builder-back',
-  '.builder-add',
-  '.builder-remove',
-  '.builder-replace',
-  '.builder-save',
-  '.library-chip',
-  '.library-add',
-  '.library-more',
-  '.library-reset',
-  '.day-chip',
-  '.replace-pick',
-  '.replace-close',
-  '.level-option',
-  '.zone-chip',
-  '.builder-generate',
-  '.builder-variant',
-];
+//
+// Ступень сверяется со ВСЕМИ объявлениями высоты, которые накрывают узлы
+// селектора, без учёта каскада. Поэтому у группы ступень — по самому низкому
+// её члену: «Старт» таймера стоит в 44px, но правило `.timer-sheet button`
+// накрывает и его, и пресеты, и проверяется на 36.
+const TAP_TARGETS = new Map([
+  ['.block-nav a', TAP_CHIP],
+  ['.text-button', TAP_CHIP],
+  ['.video', TAP_BUTTON],
+  ['.check', TAP_BUTTON],
+  ['.timer-sheet button', TAP_BUTTON],
+  ['.tabbar button', TAP_MAIN],
+  ['.bodymap-toggle', TAP_BUTTON],
+  ['.bodymap-modes button', TAP_CHIP],
+  ['.bodymap-pick button', TAP_CHIP],
+  ['.weekly-toggle', TAP_BUTTON],
+  ['.howto-toggle', TAP_BUTTON],
+  ['button.extra-link', TAP_CHIP],
+  ['.player-close', TAP_CHIP],
+  ['.workout-card', TAP_MAIN],
+  ['.workout-delete', TAP_CHIP],
+  ['.workout-edit', TAP_CHIP],
+  ['.builder-path', TAP_MAIN],
+  ['.builder-back', TAP_CHIP],
+  ['.builder-add', TAP_MAIN],
+  ['.builder-remove', TAP_CHIP],
+  ['.builder-replace', TAP_CHIP],
+  ['.builder-save', TAP_MAIN],
+  ['.library-chip', TAP_CHIP],
+  ['.library-add', TAP_CHIP],
+  ['.library-more', TAP_CHIP],
+  ['.library-reset', TAP_CHIP],
+  ['.day-chip', TAP_BUTTON],
+  ['.replace-pick', TAP_CHIP],
+  ['.replace-close', TAP_BUTTON],
+  ['.level-option', TAP_MAIN],
+  ['.zone-chip', TAP_CHIP],
+  ['.builder-generate', TAP_MAIN],
+  ['.builder-variant', TAP_BUTTON],
+]);
 
 const HEIGHT_PROPS = ['min-height', 'height', 'max-height'];
 
 // Проверять можно только пиксели: процент считается от родителя, vh — от окна,
-// и «не ниже 44px» о них ничего не говорит. Поэтому не-пиксельное значение у
+// и «не ниже 32px» о них ничего не говорит. Поэтому не-пиксельное значение у
 // нажимаемого — это падение с объяснением, а не молчаливый пропуск.
 const tapPixels = (value, where) => {
   const px = /^(\d+(?:\.\d+)?)px$/.exec(value.trim());
@@ -1292,7 +1303,7 @@ const tapPixels = (value, where) => {
 // Узлы берутся с отрисованной страницы ещё и затем, чтобы сторож не остался
 // беззубым молча: селектор, переставший что-либо накрывать (переименованный
 // класс), роняет тест на пустой выборке.
-test(`ни одно правило не опускает нажимаемое ниже ${MIN_TAP_HEIGHT}px`, async t => {
+test('ни одно правило не опускает нажимаемое ниже его ступени (32, 36 или 44px)', async t => {
   // Кнопки «Удалить» и «Изменить» есть только у своей тренировки, и список своих
   // приходит следом за запуском: без записи на устройстве и без ожидания списка
   // выборки `.workout-delete` и `.workout-edit` были бы пустыми.
@@ -1316,7 +1327,7 @@ test(`ни одно правило не опускает нажимаемое н
   // конструктора сменяют друг друга в одном узле, и все разом на странице их нет.
   // Узел, ушедший из разметки, отвечает на matches как прежде, и проверка по
   // нему честная — высота задаётся правилами, а не местом в документе.
-  const seen = new Map(TAP_TARGETS.map(selector => [selector, new Set()]));
+  const seen = new Map([...TAP_TARGETS.keys()].map(selector => [selector, new Set()]));
   const collect = (scope = document) => {
     for (const [selector, nodes] of seen) {
       for (const node of scope.querySelectorAll(selector)) nodes.add(node);
@@ -1390,7 +1401,7 @@ test(`ни одно правило не опускает нажимаемое н
     }
   }
   const low = [];
-  for (const selector of TAP_TARGETS) {
+  for (const [selector, min] of TAP_TARGETS) {
     const nodes = [...seen.get(selector)];
     assert.ok(nodes.length > 0,
       `«${selector}» на странице ничего не накрывает — сторож высоты нажимаемого стал беззубым`);
@@ -1398,15 +1409,15 @@ test(`ни одно правило не опускает нажимаемое н
     const applied = declarations.filter(
       declaration => nodes.some(node => declaration.selectors.some(s => node.matches(s))));
     // Высота обязана быть задана: снятое `min-height` вернуло бы высоту по
-    // содержимому, и одной проверкой «ни одно объявление не ниже 44px» такое
+    // содержимому, и одной проверкой «ни одно объявление не ниже ступени» такое
     // снятие прошло бы мимо — объявлять стало бы нечего.
     const floors = applied.filter(declaration => declaration.prop === 'min-height'
-      && tapPixels(declaration.value, declaration.where) >= MIN_TAP_HEIGHT);
+      && tapPixels(declaration.value, declaration.where) >= min);
     assert.ok(floors.length > 0,
-      `у «${selector}» нет объявления min-height не ниже ${MIN_TAP_HEIGHT}px`);
+      `у «${selector}» нет объявления min-height не ниже ${min}px`);
 
     for (const declaration of applied) {
-      if (tapPixels(declaration.value, declaration.where) < MIN_TAP_HEIGHT) low.push(declaration.where);
+      if (tapPixels(declaration.value, declaration.where) < min) low.push(`${declaration.where} (ступень ${min}px)`);
     }
   }
   assert.deepEqual(low, []);

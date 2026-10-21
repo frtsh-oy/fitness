@@ -235,15 +235,8 @@ export function renderLibrary({ host, entries, isAdded, addBlocked, onAdd, onBac
       el(document, 'span', 'library-gear', gearText(entry)),
       el(document, 'span', 'muscles', entry.muscles),
     );
-    article.append(top, el(document, 'h3', null, entry.name));
-
-    const { refs, body, links } = renderHowto(document, {
-      idPrefix: HOWTO_ID_PREFIX,
-      item: toItem(entry),
-      expanded: false,
-    });
-    article.append(refs, body, ...links);
-
+    // «Добавить» — в строке названия, справа: полоса во всю ширину под каждой
+    // карточкой перебивала в списке сами упражнения.
     const add = el(document, 'button', 'library-add');
     add.type = 'button';
     add.addEventListener('click', () => {
@@ -251,7 +244,16 @@ export function renderLibrary({ host, entries, isAdded, addBlocked, onAdd, onBac
       refresh();
     });
     addButtons.set(entry.key, { button: add, name: entry.name });
-    article.append(add);
+    const head = el(document, 'div', 'library-card-head');
+    head.append(el(document, 'h3', null, entry.name), add);
+    article.append(top, head);
+
+    const { refs, body, links } = renderHowto(document, {
+      idPrefix: HOWTO_ID_PREFIX,
+      item: toItem(entry),
+      expanded: false,
+    });
+    article.append(refs, body, ...links);
     return article;
   }
 
@@ -330,6 +332,9 @@ export function renderLibrary({ host, entries, isAdded, addBlocked, onAdd, onBac
       // диктору их не отличить.
       button.setAttribute('aria-label', `${button.textContent}: ${name}`);
       button.disabled = added || reason !== null;
+      // Уже добавленное выглядит иначе, чем недоступное по другой причине: оба
+      // disabled, и по одному атрибуту стиль их не различил бы.
+      button.classList.toggle('is-added', added);
     }
     total.textContent = `В тренировке: ${strengthEntries.filter(entry => isAdded(entry.key)).length}`;
   }
