@@ -633,6 +633,9 @@ export function startApp(win = globalThis.window, { library = LIBRARY } = {}) {
   const toggle = document.getElementById('timer-toggle');
 
   const openButton = document.getElementById('timer-open');
+  // Подпись пункта — отдельный узел рядом со значком: textContent самой кнопки
+  // стёр бы значок.
+  const openLabel = document.getElementById('timer-label');
 
   function setSheetOpen(open) {
     sheet.hidden = !open;
@@ -651,7 +654,7 @@ export function startApp(win = globalThis.window, { library = LIBRARY } = {}) {
       sheet.classList.toggle('done', remaining === 0);
       // Пока отдых идёт, время видно в навигации: это единственное место, где
       // таймер занимает место постоянно, и ради него шторку открывать не надо.
-      openButton.textContent = timer.running ? formatTime(remaining) : 'Отдых';
+      openLabel.textContent = timer.running ? formatTime(remaining) : 'Отдых';
       // Подсветка пункта навигации держится на состоянии отсчёта, а не на
       // открытости шторки: закрыв шторку крестиком во время отдыха, человек
       // обязан по-прежнему видеть, что где-то идёт время. aria-expanded для

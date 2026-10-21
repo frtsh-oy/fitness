@@ -123,6 +123,11 @@ test('карточка: название, мышцы, сложность и «Д
   const adds = cards.map(c => c.querySelector('button.library-add'));
   assert.deepEqual(adds.map(b => b.textContent), ['Добавить', 'В тренировке', 'Добавить']);
   assert.deepEqual(adds.map(b => b.disabled), [false, true, false]);
+  // Добавленное отличается от недоступного по другой причине классом: оба disabled.
+  assert.deepEqual(adds.map(b => b.classList.contains('is-added')), [false, true, false]);
+  // Кнопка стоит в строке названия, а не полосой под карточкой.
+  assert.ok(adds.every((b, i) => b.parentElement === cards[i].querySelector('h3').parentElement),
+    'кнопка — рядом с названием');
   assert.ok(adds.every(b => b.type === 'button'));
   // Таких кнопок много, и по голой подписи диктору их не отличить.
   assert.deepEqual(adds.map(b => b.getAttribute('aria-label')),
