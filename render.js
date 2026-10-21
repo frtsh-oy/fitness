@@ -79,6 +79,20 @@ const PLAY_PATH = 'M8 5v14l12-7z';
 // поворачивает его на 180° — по aria-expanded самой кнопки.
 const CARET_PATH = 'M12 16 4 8h16z';
 
+// Уголок раскрытия. Отдельно от renderHowto, потому что тот же уголок нужен
+// кнопке «Ещё фильтры» в библиотеке (library-view.js): свой, нарисованный
+// символом, вышел бы другого размера, чем у «Как выполнять» рядом.
+// Класс атрибутом, а не присваиванием в className: у SVG это не строка, а
+// SVGAnimatedString, причём свойство только для чтения, и присваивание в
+// модуле (строгий режим) бросило бы TypeError — то есть уронило бы отрисовку
+// карточки целиком, а не потеряло бы один класс. По этому классу style.css и
+// поворачивает уголок в раскрытом виде.
+export function renderCaret(document, className) {
+  const caret = renderIcon(document, CARET_PATH);
+  caret.setAttribute('class', className);
+  return caret;
+}
+
 // Подпись кнопки, под которой лежат тексты техники. Не «Техника»: кнопка
 // отвечает на вопрос, который задают, глядя на незнакомое упражнение.
 const HOWTO_LABEL = 'Как выполнять';
@@ -121,14 +135,7 @@ export function renderHowto(document, { idPrefix, item, expanded }) {
   // Видимая подпись стоит в начале имени, поэтому голосовое управление по ней
   // кнопку по-прежнему находит.
   toggle.setAttribute('aria-label', `${HOWTO_LABEL}: ${item.name}`);
-  const caret = renderIcon(document, CARET_PATH);
-  // Класс атрибутом, а не присваиванием в className: у SVG это не строка, а
-  // SVGAnimatedString, причём свойство только для чтения, и присваивание в
-  // модуле (строгий режим) бросило бы TypeError — то есть уронило бы отрисовку
-  // карточки целиком, а не потеряло бы один класс. По этому классу style.css и
-  // поворачивает уголок в раскрытом виде.
-  caret.setAttribute('class', 'howto-caret');
-  toggle.append(el(document, 'span', null, HOWTO_LABEL), caret);
+  toggle.append(el(document, 'span', null, HOWTO_LABEL), renderCaret(document, 'howto-caret'));
 
   // Кнопка раскрытия и ссылка на видео — в одну строку: и то и другое
   // справочное, нужное в первые разы. Отметки в эту строку не идут и остаются

@@ -1259,6 +1259,8 @@ const TAP_TARGETS = [
   '.builder-save',
   '.library-chip',
   '.library-add',
+  '.library-more',
+  '.library-reset',
   '.day-chip',
   '.replace-pick',
   '.replace-close',
