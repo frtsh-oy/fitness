@@ -262,6 +262,24 @@
 .library-filters{display:flex;flex-wrap:wrap;gap:6px;margin:12px 0 0}
 .library-chip{display:inline-flex;align-items:center;min-height:44px;padding:9px 11px;border:1px solid #d4dde8;border-radius:30px;background:#fff;font:inherit;font-size:14px;font-weight:600;color:inherit;white-space:nowrap}
 .library-chip[aria-pressed=true]{background:#152d4a;border-color:#152d4a;color:#fff}
+/* Строка под зонами: «Ещё фильтры» слева, «Сбросить» справа. Кнопка панели —
+   того же вида, что «К сборке» (.builder-back): это переход, а не фильтр, и
+   с чипами путаться не должна. Счёт включённых в панели — отдельным span с
+   white-space:pre: во флекс-кнопке пробел в начале текста иначе съедается, и
+   выходило бы «фильтры· 2». Уголок — как у «Как выполнять» и так же смотрит
+   вверх, когда панель раскрыта.
+   «Сбросить» — текстовая кнопка: действие второстепенное и рядом с основным
+   кнопкой выглядеть не должно, но высота у неё та же, 44px. */
+.library-tools{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:12px 0 0}
+.library-more{display:inline-flex;align-items:center;min-height:44px;padding:0 14px;border:1px solid #cad6e4;border-radius:12px;background:#f3f7fc;font:inherit;font-size:14px;font-weight:650;color:#193d6a}
+.library-more-count{white-space:pre}
+.library-more-caret{width:12px;height:12px;flex-shrink:0;margin-left:8px;fill:currentColor;transition:transform .2s}
+.library-more[aria-expanded=true] .library-more-caret{transform:rotate(180deg)}
+.library-reset{min-height:44px;padding:0 4px;border:0;background:none;font:inherit;font-size:14px;font-weight:650;color:#193d6a;text-decoration:underline;text-underline-offset:3px}
+/* В панели у каждой группы свой заголовок, поэтому верхний отступ у чипов
+   не нужен, а заголовки ближе друг к другу, чем в генераторе. */
+.library-more-panel .builder-group-title{margin:16px 0 8px}
+.library-more-panel .library-filters{margin:0}
 .library-found{margin:16px 0 12px;font-size:13px;color:#526278}
 /* Причина, по которой «Добавить» недоступна, — той же плашкой, что пометка про
    убранные упражнения (.removed-note), над списком: она одна на все карточки. */

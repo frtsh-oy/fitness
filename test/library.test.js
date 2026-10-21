@@ -2,7 +2,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { buildLibrary, parseCsv, renderLibraryJs } from '../tools/import-exercises.mjs';
-import { LIBRARY, DIFFICULTY_LABELS, entry, item } from '../exercises/index.js';
+import { LIBRARY, DIFFICULTY_LABELS, PATTERN_LABELS, entry, item } from '../exercises/index.js';
+import { PATTERNS } from '../workouts/schema.js';
 import legsMwf from '../workouts/legs-mwf.js';
 
 // library.js руками не правится, а прогон через импорт вывод не меняет: если
@@ -13,6 +14,14 @@ test('library.js совпадает с тем, что импорт постро�
   const { entries, errors } = buildLibrary(parseCsv(csv));
   assert.deepEqual(errors, []);
   assert.equal(js, renderLibraryJs(entries));
+});
+
+// Подпись есть у каждого движения схемы, и в том же порядке: новое движение без
+// подписи дало бы чип «undefined» в библиотеке, а порядок чипов — это порядок
+// словаря.
+test('PATTERN_LABELS: по подписи на каждое движение схемы, в порядке схемы', () => {
+  assert.deepEqual(Object.keys(PATTERN_LABELS), PATTERNS);
+  assert.ok(Object.values(PATTERN_LABELS).every(label => typeof label === 'string' && label !== ''));
 });
 
 // Сравнения «поле в поле» с прежним текстом тренировки здесь больше нет: оно

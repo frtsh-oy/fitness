@@ -10,6 +10,21 @@ export { LIBRARY };
 // импорта; русский текст живёт здесь, а не в данных.
 export const SLOT_LABELS = { warmup: 'Разминка', circuit: 'Разогрев', strength: 'Силовое', cooldown: 'Завершение' };
 export const DIFFICULTY_LABELS = { basic: 'Базовое', medium: 'Среднее', hard: 'Сложное' };
+// Подписи pattern — те же слова, что в колонке «Движение» таблицы (PATTERN_NAMES
+// в импорте), но с заглавной: на экране это отдельная подпись чипа. Порядок —
+// порядок чипов в библиотеке, он же порядок PATTERNS в схеме.
+export const PATTERN_LABELS = {
+  hinge: 'Наклон от таза',
+  squat: 'Присед',
+  lunge: 'Выпад',
+  push: 'Жим',
+  pull: 'Тяга',
+  core: 'Кор',
+  isolation: 'Изолирующее',
+  mobility: 'Подвижность',
+  stretch: 'Растяжка',
+  recovery: 'Восстановление',
+};
 
 // Map, а не объект: по объекту «constructor» или «__proto__» нашёлся бы как
 // упражнение, и item() вернул бы не ошибку, а мусор.
