@@ -32,6 +32,7 @@ import {
 } from './rules.js';
 import { defaultName } from './texts.js';
 import { hasOwn } from '../own.js';
+import { gearNames, fitsGear, unownedGear } from '../gear.js';
 
 // Попыток перебора. Хватает с запасом: в богатой библиотеке подходит почти
 // каждая, а в бедной лишние попытки ничего не меняют.
@@ -110,13 +111,49 @@ export function availability(library, level) {
   };
 }
 
-export function missingGroupsMessage(level, groups) {
-  const { genitive, poolWords } = LEVELS[level];
-  return `Для ${genitive} уровня в библиотеке пока нет ${poolWords} на: ${groupsPhrase(groups)}.`;
+// Упражнения пула уровня (полной библиотеки, а не отфильтрованной), которые
+// целят одну из groups и не подходят по отмеченному инвентарю: то, чем отказ
+// мог бы быть закрыт.
+const blockedByGear = (library, owned, level, groups) => poolOf(library, level)
+  .filter(entry => groups.some(group => entry.load[group] === 1) && !fitsGear(entry, owned));
+
+// Каким инвентарём человек закрыл бы то, чего не хватает: виды из этих
+// упражнений, которые не отмечены. Пустой список — в библиотеке этого нет вовсе,
+// и отказ остаётся прежним: «пока нет». Подсказка нужна затем, чтобы отказ не
+// выглядел так, будто дело в библиотеке, когда дело в «Что есть дома».
+export function missingGear(library, owned, level, groups) {
+  return unownedGear(blockedByGear(library, owned, level, groups), owned);
 }
 
-export function missingZoneMessage(level, zone) {
-  return `Для упора на зону «${ZONES[zone].label}» на ${LEVELS[level].prepositional} уровне в библиотеке пока не хватает упражнений: нужно второе упражнение на ту же группу.`;
+// Какие из groups закрыл бы неотмеченный инвентарь: на группу есть упражнение
+// пула, не подходящее по инвентарю. Остальные группы не закрыть никак: ни с
+// каким инвентарём упражнений на них в библиотеке нет. Порядок — как в groups.
+export function closableGroups(library, owned, level, groups) {
+  const blocked = blockedByGear(library, owned, level, groups);
+  return groups.filter(group => blocked.some(entry => entry.load[group] === 1));
+}
+
+// gear — что называет подсказка (missingGear), closable — какие из groups он
+// закрывает (closableGroups); по умолчанию все. Пустой gear — текст прежний, про
+// библиотеку в целом. Если закрывается лишь часть групп, текст делит их: иначе
+// человек отметил бы названный инвентарь, а уровень остался бы недоступен из-за
+// групп, которых инвентарь не касается.
+export function missingGroupsMessage(level, groups, gear = [], closable = groups) {
+  const { genitive, poolWords } = LEVELS[level];
+  if (gear.length === 0 || closable.length === 0) {
+    return `Для ${genitive} уровня в библиотеке пока нет ${poolWords} на: ${groupsPhrase(groups)}.`;
+  }
+  const withGear = `Для ${genitive} уровня с отмеченным инвентарём нет ${poolWords} на: ${groupsPhrase(closable)}. Есть с инвентарём: ${gearNames(gear)}.`;
+  const rest = groups.filter(group => !closable.includes(group));
+  return rest.length === 0 ? withGear : `${withGear} В библиотеке пока нет ${poolWords} на: ${groupsPhrase(rest)}.`;
+}
+
+export function missingZoneMessage(level, zone, gear = []) {
+  const { prepositional } = LEVELS[level];
+  if (gear.length > 0) {
+    return `Для упора на зону «${ZONES[zone].label}» на ${prepositional} уровне с отмеченным инвентарём не хватает упражнений: нужно второе упражнение на ту же группу. Есть с инвентарём: ${gearNames(gear)}.`;
+  }
+  return `Для упора на зону «${ZONES[zone].label}» на ${prepositional} уровне в библиотеке пока не хватает упражнений: нужно второе упражнение на ту же группу.`;
 }
 
 // Девять пар — это MAX_STRENGTH, поделённое на два упражнения в паре.
@@ -193,6 +230,10 @@ function checkInput(level, zones) {
 
 // Результат: { ok: true, compact } либо { ok: false, reason, groups, message }.
 // Ключ zone есть только у отказа из-за зоны упора.
+// library — уже отфильтрованная по инвентарю человека (fitLibrary): правила
+// подбора про инвентарь не знают. Поэтому message у отказа 'missing' говорит про
+// библиотеку, и подсказку «Есть с инвентарём» дописывает вызывающий, у которого
+// есть и полная библиотека (missingGear).
 export function generate({ level, zones, seed, library = LIBRARY, now = Date.now }) {
   checkInput(level, zones);
 

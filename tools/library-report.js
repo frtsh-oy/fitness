@@ -4,12 +4,18 @@
 // Но генератор называет человеку одну причину, а отчёт показывает все: и группы
 // без единого упражнения, и зоны, которым не хватает второго.
 //
+// Хватает ли упражнений, зависит от того, что есть у человека (gear.js), поэтому
+// командная строка печатает отчёт по трём профилям: у кого есть весь инвентарь,
+// у кого только резинки (выбор по умолчанию) и у кого нет ничего. По нему видно,
+// кому генератор пока откажет.
+//
 // Запуск: node tools/library-report.js
 import { fileURLToPath } from 'node:url';
 import { LIBRARY } from '../exercises/index.js';
 import { groupsPhrase } from '../muscles.js';
 import { LEVELS, ZONES } from '../builder/rules.js';
 import { availability } from '../builder/generator.js';
+import { GEAR, DEFAULT_OWNED, fitLibrary, gearNames } from '../gear.js';
 
 // Строка про зону. Причины идут по тяжести: нет ни одного упражнения на группу
 // зоны (это и есть отказ уровня, второе упражнение тут ещё рано), нет второго
@@ -37,10 +43,22 @@ export function buildLibraryReport(library = LIBRARY) {
   return lines;
 }
 
+// Тот же отчёт по упражнениям, которые подошли бы человеку каждого из трёх
+// профилей, и перед каждым профилем — заголовок. buildLibraryReport при этом
+// остаётся отчётом по всей библиотеке без фильтра.
+export function buildGearReport(library = LIBRARY) {
+  const profiles = [
+    ['Весь инвентарь', GEAR.map(([id]) => id)],
+    [`Только резинки: ${gearNames(DEFAULT_OWNED)}`, DEFAULT_OWNED],
+    ['Без инвентаря', []],
+  ];
+  return profiles.flatMap(([title, owned]) => [`== ${title} ==`, ...buildLibraryReport(fitLibrary(library, owned))]);
+}
+
 function isMainModule() {
   return process.argv[1] === fileURLToPath(import.meta.url);
 }
 
 if (isMainModule()) {
-  console.log(buildLibraryReport().join('\n'));
+  console.log(buildGearReport().join('\n'));
 }

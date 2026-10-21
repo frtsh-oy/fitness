@@ -15,6 +15,8 @@ import { renderBuilder } from '../builder-view.js';
 import { recordKey, OWN_LIMIT } from '../my-workouts.js';
 import { serializeCompact, exerciseCount, expandWorkout, NAME_MAX } from '../builder/compact.js';
 import { generate, availability, missingGroupsMessage } from '../builder/generator.js';
+import { replaceCandidates } from '../builder/replace.js';
+import { createGearProfile, GEAR_KEY } from '../gear-profile.js';
 import { belowFloor } from '../builder/coverage.js';
 import { CORE_GROUPS, LEVELS, MAX_STRENGTH, SKELETON } from '../builder/rules.js';
 import { plural } from '../builder/texts.js';
@@ -68,14 +70,14 @@ function mount(t, { library, preload = {}, webApp = null, denyStorage = false } 
 
 // Экран отдельно от приложения, со своим store. Возвращает корень и то, что
 // экран отдал наружу.
-function mountScreen(t, { store, library = LIBRARY, confirm = async () => true, seed = () => 1 } = {}) {
+function mountScreen(t, { store, library = LIBRARY, confirm = async () => true, seed = () => 1, gearProfile } = {}) {
   const { window, document } = makeDom('<!doctype html><html><body><div id="host"></div></body></html>');
   t.after(() => window.close());
   window.scrollTo = () => {};
   const root = document.getElementById('host');
   const saved = [];
   const view = renderBuilder({
-    host: root, win: window, library, store, confirm, seed, openLink() {},
+    host: root, win: window, library, store, confirm, seed, openLink() {}, gearProfile,
     onSaved: (...args) => saved.push(args),
   });
   return { window, document, root, saved, view };
@@ -134,8 +136,11 @@ const generateNow = root => root.querySelector('.builder-generate').click();
 const otherVariant = root => root.querySelector('.builder-variant').click();
 const levelOption = (root, label) => [...root.querySelectorAll('.level-option')]
   .find(option => option.querySelector('.level-title').textContent === label);
-const zoneChip = (root, label) => [...root.querySelectorAll('.zone-chip')].find(chip => chip.textContent === label);
-const pressedZones = root => [...root.querySelectorAll('.zone-chip[aria-pressed="true"]')].map(chip => chip.textContent);
+// Чипы зон. У переключателей инвентаря тот же класс .zone-chip (внешний вид у них
+// общий), поэтому зоны отличаются отсутствием .gear-chip.
+const zoneChips = root => [...root.querySelectorAll('.zone-chip:not(.gear-chip)')];
+const zoneChip = (root, label) => zoneChips(root).find(chip => chip.textContent === label);
+const pressedZones = root => zoneChips(root).filter(chip => chip.getAttribute('aria-pressed') === 'true').map(chip => chip.textContent);
 const checkedLevels = root => [...root.querySelectorAll('.level-option[aria-checked="true"]')]
   .map(option => option.querySelector('.level-title').textContent);
 const tagsIn = (row, className) => [...row.querySelectorAll(`.${className}`)].map(tag => tag.textContent);
@@ -949,7 +954,7 @@ function expectNothingSelectable(root) {
   assert.equal(generateButton.disabled, true);
   generateButton.click();
   assert.equal(root.querySelector('h2').textContent, 'Генератор');
-  assert.ok([...root.querySelectorAll('.zone-chip')].every(chip => chip.getAttribute('aria-disabled') === 'true'),
+  assert.ok(zoneChips(root).every(chip => chip.getAttribute('aria-disabled') === 'true'),
     'без выбранного уровня зоны выбрать нельзя');
 }
 
@@ -1017,7 +1022,7 @@ test('генерация: тренировка на всё тело с метк�
   assert.deepEqual(checkedLevels(root), ['Начальный'], 'выбран первый из доступных');
   assert.equal(root.querySelector('.zone-hint').textContent,
     'Упор добавит упражнение на каждую выбранную зону, не больше двух. Остальные группы мышц остаются в тренировке.');
-  assert.deepEqual([...root.querySelectorAll('.zone-chip')].map(chip => chip.textContent),
+  assert.deepEqual(zoneChips(root).map(chip => chip.textContent),
     ['Ноги', 'Ягодицы', 'Спина', 'Грудь', 'Плечи', 'Руки', 'Пресс и кор']);
 
   zoneChip(root, 'Ягодицы').click();
@@ -1350,4 +1355,467 @@ test('«Изменить» другой подобранной сбрасыва�
   assert.equal(await view.edit('my-gen00002', other), true);
   assert.ok(rowOf(root, nameOf('warm-3', TEST_LIBRARY)), 'открыта другая тренировка, и разминка в ней есть');
   assert.equal(root.querySelectorAll('.replaced-tag').length, 0);
+});
+
+// — «Что есть дома» ————————————————————————————————————————————————————
+// Записи свои: у тестовой библиотеки весь инвентарь «без инвентаря», нужное для
+// проверки ставится поверх. variant замораживает копию, как и сама фикстура.
+const needing = (gear, keys, library = TEST_LIBRARY) => library.map(entry => (keys.includes(entry.key) ? variant(entry, { gear }) : entry));
+const BICEPS = ['biceps-1', 'biceps-2', 'biceps-3', 'biceps-4'];
+// Все упражнения на грудь, кроме одного: с гантелями грудь выбирается как упор
+// (есть второе упражнение), без них у зоны одна опора, и упор невозможен, хотя
+// сама группа закрыта.
+const CHEST_EXCEPT_ONE = TEST_LIBRARY.filter(entry => entry.load.chest === 1 && entry.key !== 'chest-1').map(entry => entry.key);
+
+const profileOf = (...owned) => {
+  const profile = createGearProfile(null);
+  profile.set(owned);
+  return profile;
+};
+const gearChip = (root, id) => root.querySelector(`.gear-chip[data-gear="${id}"]`);
+const pressedGear = root => [...root.querySelectorAll('.gear-chip[aria-pressed="true"]')].map(chip => chip.dataset.gear);
+const levelNotes = root => [...root.querySelectorAll('.level-missing')].map(note => note.textContent);
+const zoneNotes = root => [...root.querySelectorAll('.zone-missing p')].filter(p => !p.hidden).map(p => p.textContent);
+const refusalOf = root => root.querySelector('.builder-refusal');
+const namesIn = block => [...block.querySelectorAll('.builder-item-name')].map(node => node.textContent);
+const blockOf = (root, title) => [...root.querySelectorAll('.builder-block')].find(block => block.querySelector('h3').textContent === title);
+const candidateNames = sheet => [...sheet.querySelectorAll('.replace-name')].map(node => node.textContent);
+
+// Ручная тренировка из ключей тестовой библиотеки: что лежит «на устройстве» у
+// человека, у которого могло быть и другое «Что есть дома».
+const MANUAL = {
+  v: 1, name: 'Ручная', days: [1, 3, 5], level: null, zones: [],
+  warmup: ['warm-1', 'warm-2'], circuit: ['circ-1', 'circ-2', 'circ-3', 'circ-4'],
+  strength: ['squat-a', 'hinge-a', 'row-a', 'press-a'], focus: [],
+  cooldown: ['stretch-1', 'stretch-2', 'breathing'], t: 1760000000000,
+};
+
+test('генератор: переключатели «Что есть дома» между подзаголовком и уровнями, по умолчанию отмечены резинки', t => {
+  const { root } = mountScreen(t, { library: TEST_LIBRARY });
+  startGenerator(root);
+
+  const picker = root.querySelector('.gear-picker');
+  assert.ok(picker, 'блок есть на экране генератора');
+  assert.equal(root.querySelector('.builder-subtitle').nextElementSibling, picker);
+  assert.equal(picker.nextElementSibling, root.querySelector('#generator-levels'));
+  assert.equal(picker.querySelector('h3').id, 'generator-gear-title');
+  assert.deepEqual(pressedGear(root), ['band_long', 'loop_short']);
+  assert.equal(root.querySelector('[data-gear="none"]'), null, '«без инвентаря» среди переключателей нет');
+});
+
+test('снятие инвентаря делает уровень недоступным: выбор переходит на первый доступный, причина называет инвентарь', t => {
+  // Базовых упражнений на бицепс два, и обоим нужны гантели; среднее и сложное
+  // без инвентаря. С гантелями доступны все уровни, без них начальный отпадает.
+  const library = needing(['dumbbells'], ['biceps-1', 'biceps-2']);
+  const profile = profileOf('dumbbells');
+  const { root } = mountScreen(t, { library, gearProfile: profile });
+  startGenerator(root);
+  assert.deepEqual(checkedLevels(root), ['Начальный']);
+  assert.deepEqual(levelNotes(root), []);
+
+  gearChip(root, 'dumbbells').click();
+  assert.deepEqual(profile.get(), [], 'выбор записан в профиль');
+  assert.deepEqual(pressedGear(root), []);
+  assert.deepEqual(checkedLevels(root), ['Средний'], 'выбранный уровень стал недоступен — выбран первый доступный');
+  assert.deepEqual(levelNotes(root),
+    ['Для начального уровня с отмеченным инвентарём нет базовых упражнений на: бицепс. Есть с инвентарём: гантели.']);
+  assert.equal(levelOption(root, 'Начальный').getAttribute('aria-disabled'), 'true');
+  assert.equal(root.querySelector('.builder-generate').disabled, false);
+
+  // Вернули инвентарь: начальный снова доступен, а выбор человека не прыгает назад.
+  gearChip(root, 'dumbbells').click();
+  assert.deepEqual(levelNotes(root), []);
+  assert.deepEqual(checkedLevels(root), ['Средний']);
+  levelOption(root, 'Начальный').click();
+  assert.deepEqual(checkedLevels(root), ['Начальный']);
+});
+
+test('снятие инвентаря снимает зону упора, которую уже не выполнить; причина зоны называет инвентарь', t => {
+  const library = needing(['dumbbells'], CHEST_EXCEPT_ONE);
+  const profile = profileOf('dumbbells');
+  const { root } = mountScreen(t, { library, gearProfile: profile });
+  startGenerator(root);
+  zoneChip(root, 'Грудь').click();
+  zoneChip(root, 'Спина').click();
+  assert.deepEqual(pressedZones(root), ['Спина', 'Грудь'], 'чипы идут в порядке зон, а не нажатий');
+
+  gearChip(root, 'dumbbells').click();
+  // Уровень на месте: сама группа «грудь» закрыта упражнением без инвентаря.
+  assert.deepEqual(checkedLevels(root), ['Начальный']);
+  assert.deepEqual(pressedZones(root), ['Спина'], 'Грудь снята, Спина осталась');
+  assert.equal(zoneChip(root, 'Грудь').getAttribute('aria-disabled'), 'true');
+  assert.equal(zoneChip(root, 'Грудь').getAttribute('aria-pressed'), 'false');
+  assert.deepEqual(zoneNotes(root), ['Для упора на зону «Грудь» на начальном уровне с отмеченным инвентарём не хватает упражнений: нужно второе упражнение на ту же группу. Есть с инвентарём: гантели.']);
+
+  // Зона снова доступна, но сама не выбирается.
+  gearChip(root, 'dumbbells').click();
+  assert.deepEqual(zoneNotes(root), []);
+  assert.equal(zoneChip(root, 'Грудь').getAttribute('aria-disabled'), null);
+  assert.deepEqual(pressedZones(root), ['Спина']);
+});
+
+test('после смены инвентаря фокус на той же кнопке нового экрана, страница не прыгает наверх', t => {
+  const { window, document, root } = mountScreen(t, { library: TEST_LIBRARY });
+  const scrolls = [];
+  startGenerator(root);
+  window.scrollTo = (...args) => scrolls.push(args);
+
+  const before = gearChip(root, 'dumbbells');
+  before.click();
+  const after = gearChip(root, 'dumbbells');
+  assert.notEqual(after, before, 'экран перерисован целиком');
+  assert.equal(before.isConnected, false);
+  assert.equal(document.activeElement, after);
+  assert.equal(after.getAttribute('aria-pressed'), 'true');
+  assert.deepEqual(scrolls, [], 'перерисовка из-за нажатия на этом же экране не прокручивает страницу');
+
+  // Работает и во второй раз, и на другой кнопке.
+  after.click();
+  assert.equal(document.activeElement, gearChip(root, 'dumbbells'));
+  assert.equal(gearChip(root, 'dumbbells').getAttribute('aria-pressed'), 'false');
+  gearChip(root, 'kettlebell').click();
+  assert.equal(document.activeElement, gearChip(root, 'kettlebell'));
+  assert.deepEqual(pressedGear(root), ['band_long', 'loop_short', 'kettlebell']);
+});
+
+test('смена инвентаря не сбрасывает уровень и зоны, которые остались доступны', t => {
+  const { document, root } = mountScreen(t, { library: TEST_LIBRARY });
+  startGenerator(root);
+  levelOption(root, 'Продвинутый').click();
+  zoneChip(root, 'Ноги').click();
+  gearChip(root, 'kettlebell').click();
+  // Перерисовка берёт выбор из памяти экрана, а не из разметки.
+  assert.deepEqual(checkedLevels(root), ['Продвинутый']);
+  assert.deepEqual(pressedZones(root), ['Ноги']);
+  assert.notEqual(document.activeElement, root.querySelector('h2'), 'фокус на переключателе, а не на заголовке');
+});
+
+test('отмечено пусто: всё без инвентаря работает, переключатели сняты, а «без инвентаря» не отключить', t => {
+  const profile = profileOf();
+  const { root } = mountScreen(t, { library: TEST_LIBRARY, gearProfile: profile, seed: () => 1 });
+  startGenerator(root);
+
+  assert.deepEqual(pressedGear(root), []);
+  assert.equal(root.querySelectorAll('.gear-chip').length, 5);
+  assert.equal(root.querySelector('[data-gear="none"]'), null);
+  assert.deepEqual(checkedLevels(root), ['Начальный']);
+  assert.deepEqual(levelNotes(root), []);
+  generateNow(root);
+
+  const expected = generate({ level: 'beginner', zones: [], seed: 1, library: TEST_LIBRARY }).compact;
+  assert.equal(root.querySelector('h2').textContent, 'Всё тело');
+  assert.deepEqual(rows(root).sort(),
+    [...expected.warmup, ...expected.circuit, ...expected.strength, ...expected.cooldown].map(key => nameOf(key, TEST_LIBRARY)).sort());
+});
+
+test('отмечено пусто, а упражнениям на группу нужны гантели: все уровни недоступны и называют их; отметка открывает', t => {
+  const library = needing(['dumbbells'], BICEPS);
+  const profile = profileOf();
+  const { root } = mountScreen(t, { library, gearProfile: profile });
+  startGenerator(root);
+
+  assert.deepEqual(levelNotes(root), [
+    'Для начального уровня с отмеченным инвентарём нет базовых упражнений на: бицепс. Есть с инвентарём: гантели.',
+    'Для среднего уровня с отмеченным инвентарём нет базовых и средних упражнений на: бицепс. Есть с инвентарём: гантели.',
+    'Для продвинутого уровня с отмеченным инвентарём нет упражнений на: бицепс. Есть с инвентарём: гантели.',
+  ]);
+  assert.deepEqual(checkedLevels(root), []);
+  assert.equal(root.querySelector('.builder-generate').disabled, true);
+  assert.ok(zoneChips(root).every(chip => chip.getAttribute('aria-disabled') === 'true'));
+
+  gearChip(root, 'dumbbells').click();
+  assert.deepEqual(levelNotes(root), []);
+  assert.deepEqual(checkedLevels(root), ['Начальный'], 'уровней не было, инвентарь их открыл — выбран первый доступный');
+  assert.equal(root.querySelector('.builder-generate').disabled, false);
+});
+
+test('уровень недоступен и из-за инвентаря, и из-за пустоты библиотеки: причина делит группы, отметка гантелей открывает не всё', async t => {
+  // Бицепс есть только с гантелями, трицепса нет вовсе: отметка гантелей группу
+  // трицепса не закроет, и текст не должен обещать обратного.
+  const library = needing(['dumbbells'], BICEPS, withoutTargets(['triceps']));
+  const profile = profileOf();
+  const { root } = mountScreen(t, { library, gearProfile: profile });
+  startGenerator(root);
+
+  assert.deepEqual(levelNotes(root), [
+    'Для начального уровня с отмеченным инвентарём нет базовых упражнений на: бицепс. Есть с инвентарём: гантели. В библиотеке пока нет базовых упражнений на: трицепс.',
+    'Для среднего уровня с отмеченным инвентарём нет базовых и средних упражнений на: бицепс. Есть с инвентарём: гантели. В библиотеке пока нет базовых и средних упражнений на: трицепс.',
+    'Для продвинутого уровня с отмеченным инвентарём нет упражнений на: бицепс. Есть с инвентарём: гантели. В библиотеке пока нет упражнений на: трицепс.',
+  ]);
+
+  // Отметили гантели: бицепс закрыт, остался только трицепс, и текст про него прежний.
+  gearChip(root, 'dumbbells').click();
+  assert.deepEqual(levelNotes(root), [
+    'Для начального уровня в библиотеке пока нет базовых упражнений на: трицепс.',
+    'Для среднего уровня в библиотеке пока нет базовых и средних упражнений на: трицепс.',
+    'Для продвинутого уровня в библиотеке пока нет упражнений на: трицепс.',
+  ]);
+  assert.deepEqual(checkedLevels(root), []);
+});
+
+test('«Другой вариант»: отказ уровня делит группы так же, как причина под уровнем', async t => {
+  const generated = generate({ level: 'beginner', zones: [], seed: 3, library: TEST_LIBRARY, now: () => OWN.t }).compact;
+  // Упражнения на трицепс остаются в библиотеке, но целью он у них уже не является.
+  const library = needing(['dumbbells'], BICEPS).map(entry => (entry.load.triceps === 1 ? variant(entry, { load: { forearms: 1 } }) : entry));
+  const { root, view } = mountScreen(t, { library, gearProfile: profileOf() });
+  await view.edit('my-gear0010', generated);
+
+  otherVariant(root);
+  assert.equal(refusalOf(root).textContent,
+    'Для начального уровня с отмеченным инвентарём нет базовых упражнений на: бицепс. Есть с инвентарём: гантели. В библиотеке пока нет базовых упражнений на: трицепс.');
+});
+
+test('«Другой вариант» у тренировки, чей уровень при нынешнем инвентаре недоступен: отказ называет инвентарь, прежняя остаётся', async t => {
+  const generated = generate({ level: 'beginner', zones: [], seed: 3, library: TEST_LIBRARY, now: () => OWN.t }).compact;
+  const library = needing(['dumbbells'], BICEPS);
+  const { root, view } = mountScreen(t, { library, gearProfile: profileOf() });
+  await view.edit('my-gear0001', generated);
+  const before = rows(root);
+
+  otherVariant(root);
+  assert.equal(refusalOf(root).hidden, false);
+  assert.equal(refusalOf(root).textContent,
+    'Для начального уровня с отмеченным инвентарём нет базовых упражнений на: бицепс. Есть с инвентарём: гантели.');
+  assert.deepEqual(rows(root), before, 'прежняя тренировка осталась на экране');
+
+  // С результата назад: уровня на генераторе уже нет, а экран цел.
+  back(root);
+  assert.equal(root.querySelector('h2').textContent, 'Генератор');
+  assert.deepEqual(checkedLevels(root), []);
+  assert.equal(root.querySelector('.builder-generate').disabled, true);
+});
+
+test('«Другой вариант» у тренировки с упором, которого инвентарь не позволяет: отказ по зоне называет инвентарь', async t => {
+  const generated = generate({ level: 'beginner', zones: ['chest'], seed: 1, library: TEST_LIBRARY, now: () => OWN.t }).compact;
+  const library = needing(['dumbbells'], CHEST_EXCEPT_ONE);
+  const { root, view } = mountScreen(t, { library, gearProfile: profileOf() });
+  await view.edit('my-gear0002', generated);
+
+  otherVariant(root);
+  assert.equal(refusalOf(root).textContent,
+    'Для упора на зону «Грудь» на начальном уровне с отмеченным инвентарём не хватает упражнений: нужно второе упражнение на ту же группу. Есть с инвентарём: гантели.');
+
+  // С гантелями «Другой вариант» работает.
+  const withDumbbells = mountScreen(t, { library, gearProfile: profileOf('dumbbells'), seed: () => 2 });
+  await withDumbbells.view.edit('my-gear0002', generated);
+  otherVariant(withDumbbells.root);
+  assert.equal(refusalOf(withDumbbells.root).hidden, true);
+});
+
+test('отказ, когда нужных упражнений нет и с другим инвентарём, остаётся прежним: про библиотеку, без «Есть с инвентарём»', async t => {
+  // Упражнения на бицепс остались, но целью бицепс у них уже не является: ни с
+  // каким инвентарём группу не закрыть.
+  const library = TEST_LIBRARY.map(entry => (BICEPS.includes(entry.key) ? variant(entry, { load: { forearms: 1 } }) : entry));
+  const generated = generate({ level: 'beginner', zones: [], seed: 3, library: TEST_LIBRARY, now: () => OWN.t }).compact;
+  const { root, view } = mountScreen(t, { library, gearProfile: profileOf() });
+  await view.edit('my-gear0003', generated);
+
+  otherVariant(root);
+  assert.equal(refusalOf(root).textContent, 'Для начального уровня в библиотеке пока нет базовых упражнений на: бицепс.');
+});
+
+test('замена в сохранённой ручной тренировке с неотмеченным инвентарём не падает, и тренировка ничего не теряет', async t => {
+  // warm-1 нужны гантели, у человека их нет; warm-3 подходит и свободна.
+  const library = needing(['dumbbells'], ['warm-1']);
+  const { root, view } = mountScreen(t, { library });
+  await view.edit('my-gear0004', MANUAL);
+  const before = rows(root);
+  assert.ok(before.includes(nameOf('warm-1', TEST_LIBRARY)), 'упражнение с неотмеченным инвентарём в тренировке на месте');
+  assert.deepEqual(before.sort(),
+    [...MANUAL.warmup, ...MANUAL.circuit, ...MANUAL.strength, ...MANUAL.cooldown].map(key => nameOf(key, TEST_LIBRARY)).sort());
+
+  rowOf(root, nameOf('warm-1', TEST_LIBRARY)).querySelector('.builder-replace').click();
+  const sheet = root.querySelector('.replace-sheet');
+  assert.ok(sheet, 'шторка открылась');
+  assert.equal(sheet.querySelector('.replace-current').textContent, nameOf('warm-1', TEST_LIBRARY));
+  assert.deepEqual(candidateNames(sheet), [nameOf('warm-3', TEST_LIBRARY)]);
+  sheet.querySelector('.replace-pick').click();
+
+  const after = rows(root);
+  assert.ok(!after.includes(nameOf('warm-1', TEST_LIBRARY)));
+  assert.deepEqual(after.sort(), before.map(name => (name === nameOf('warm-1', TEST_LIBRARY) ? nameOf('warm-3', TEST_LIBRARY) : name)).sort());
+});
+
+test('покрытие и экран сохранения считают и упражнения с неотмеченным инвентарём: выбор человека тренировку не урезает', async t => {
+  const generated = generate({ level: 'beginner', zones: [], seed: 1, library: TEST_LIBRARY, now: () => OWN.t }).compact;
+  const count = exerciseCount(generated);
+  // Всем силовым нужны гантели, которых человек не отметил. Если бы покрытие
+  // считалось по подходящим, силовых в тренировке «не осталось» бы.
+  const library = needing(['dumbbells'], generated.strength);
+  const { root, view } = mountScreen(t, { library });
+  await view.edit('my-gear0009', generated);
+
+  assert.deepEqual(coverage(root), ['Все основные группы получают нагрузку']);
+  assert.equal(root.querySelector('.builder-subtitle').textContent,
+    `Начальный уровень · ${count} ${plural(count, ['упражнение', 'упражнения', 'упражнений'])}`);
+  assert.deepEqual(rows(root).sort(),
+    [...generated.warmup, ...generated.circuit, ...generated.strength, ...generated.cooldown].map(key => nameOf(key, TEST_LIBRARY)).sort());
+
+  toSave(root);
+  assert.deepEqual(coverage(root), ['Все основные группы не ниже границы уровня.']);
+  assert.equal(root.querySelector('.builder-summary').textContent,
+    `Что сохранится: ${count} ${plural(count, ['упражнение', 'упражнения', 'упражнений'])}, начальный уровень`);
+
+  // И у ручной: предупреждение «Без нагрузки» не должно называть группы,
+  // которые закрывают упражнения с неотмеченным инвентарём.
+  const manual = mountScreen(t, { library: needing(['dumbbells'], MANUAL.strength) });
+  const plain = mountScreen(t, { library: TEST_LIBRARY });
+  await manual.view.edit('my-gear0009', MANUAL);
+  await plain.view.edit('my-gear0009', MANUAL);
+  assert.deepEqual(coverage(manual.root), coverage(plain.root));
+  assert.match(coverage(manual.root)[0], /^Тренировка пока не на всё тело$/);
+});
+
+test('шторка замены не предлагает упражнение с неотмеченным инвентарём; пусто из-за него — текст называет инвентарь', async t => {
+  // Свободные разминки: warm-1 с гантелями и warm-3 с гирей. Первую заменяем на
+  // вторую нельзя: гири нет. Вторая и первая в обратном порядке словаря.
+  const library = needing(['kettlebell'], ['warm-3'], needing(['dumbbells'], ['warm-1']));
+  const compact = { ...MANUAL, warmup: ['warm-2', 'circ-5'] };
+  const { root, view } = mountScreen(t, { library });
+  await view.edit('my-gear0005', { ...compact, warmup: ['warm-2'] });
+
+  rowOf(root, nameOf('warm-2', TEST_LIBRARY)).querySelector('.builder-replace').click();
+  const sheet = root.querySelector('.replace-sheet');
+  assert.equal(sheet.querySelectorAll('.replace-candidate').length, 0);
+  assert.equal(sheet.querySelector('.replace-empty').textContent,
+    'Похожих упражнений с отмеченным инвентарём больше нет. Есть с инвентарём: гантели, гиря.');
+  assert.equal(sheet.querySelectorAll('.replace-pick').length, 0);
+
+  // Часть инвентаря отмечена — называется только остальное.
+  sheet.querySelector('.replace-close').click();
+  const dumbbells = mountScreen(t, { library, gearProfile: profileOf('dumbbells') });
+  await dumbbells.view.edit('my-gear0005', { ...compact, warmup: ['warm-2'] });
+  rowOf(dumbbells.root, nameOf('warm-2', TEST_LIBRARY)).querySelector('.builder-replace').click();
+  const partial = dumbbells.root.querySelector('.replace-sheet');
+  assert.deepEqual(candidateNames(partial), [nameOf('warm-1', TEST_LIBRARY)]);
+});
+
+test('шторка замены: кандидатов нет вовсе — прежний текст, инвентарь не упоминается', async t => {
+  // Разминок две, обе в тренировке, одной нужны гантели: других нет и по
+  // полной библиотеке.
+  const library = needing(['dumbbells'], ['warm-1'], TEST_LIBRARY.filter(e => e.slot !== 'warmup' || ['warm-1', 'warm-2'].includes(e.key)));
+  const { root, view } = mountScreen(t, { library });
+  await view.edit('my-gear0006', MANUAL);
+
+  rowOf(root, nameOf('warm-2', TEST_LIBRARY)).querySelector('.builder-replace').click();
+  assert.equal(root.querySelector('.replace-empty').textContent, 'Похожих упражнений больше нет: все подходящие уже в тренировке.');
+});
+
+test('замена силового в подобранной тренировке с неотмеченным инвентарём: не падает, чужие гантели не предлагаются', async t => {
+  const generated = generate({ level: 'beginner', zones: [], seed: 1, library: TEST_LIBRARY, now: () => OWN.t }).compact;
+  const key = generated.strength[0];
+  // Двойник: упражнение, которым key заменялось бы, если бы не гантели.
+  const twin = replaceCandidates({ compact: generated, slot: 'strength', key, library: TEST_LIBRARY })[0].key;
+  const library = needing(['dumbbells'], [key, twin]);
+  const { root, view } = mountScreen(t, { library });
+  await view.edit('my-gear0007', generated);
+  const status = coverage(root);
+  const before = rows(root);
+  assert.ok(before.includes(nameOf(key, TEST_LIBRARY)));
+
+  rowOf(root, nameOf(key, TEST_LIBRARY)).querySelector('.builder-replace').click();
+  const sheet = root.querySelector('.replace-sheet');
+  assert.ok(sheet);
+  assert.equal(sheet.querySelector('.replace-current').textContent, nameOf(key, TEST_LIBRARY));
+  const expected = replaceCandidates({ compact: generated, slot: 'strength', key, library: TEST_LIBRARY })
+    .filter(entry => entry.key !== twin).map(entry => entry.name);
+  assert.ok(expected.length > 0, 'условие теста: кроме двойника кандидаты есть');
+  assert.deepEqual(candidateNames(sheet), expected);
+
+  sheet.querySelector('.replace-close').click();
+  assert.deepEqual(rows(root), before, 'закрыли шторку — тренировка та же');
+  assert.deepEqual(coverage(root), status);
+});
+
+test('ручная сборка: разминка, разогрев и завершение берутся только из подходящего по инвентарю', t => {
+  // Из трёх разминок одна с гантелями, из пяти разогревов две, из трёх растяжек
+  // одна: скелет берёт две, четыре и три, и без неподходящих их набирается ровно.
+  const library = needing(['dumbbells'], ['warm-1', 'circ-1', 'circ-2', 'stretch-1']);
+  const { root } = mountScreen(t, { library, seed: counter() });
+  for (let round = 0; round < 10; round += 1) {
+    startManual(root);
+    assert.deepEqual(namesIn(blockOf(root, 'Стартовая разминка')).sort(), ['Разминка 2', 'Разминка 3'], `заход ${round}`);
+    const circuit = namesIn(blockOf(root, 'Круговой разогрев'));
+    assert.ok(!circuit.includes('Разогрев 1') && !circuit.includes('Разогрев 2'), `заход ${round}: ${circuit}`);
+    assert.ok(!namesIn(blockOf(root, 'Завершение')).includes('Растяжка 1'), `заход ${round}`);
+    back(root);
+  }
+
+  // С гантелями неподходящих нет: «Разминка 1» попадает в скелет.
+  const own = mountScreen(t, { library, seed: counter(), gearProfile: profileOf('dumbbells') });
+  const seen = new Set();
+  for (let round = 0; round < 10; round += 1) {
+    startManual(own.root);
+    for (const name of namesIn(blockOf(own.root, 'Стартовая разминка'))) seen.add(name);
+    back(own.root);
+  }
+  assert.ok(seen.has('Разминка 1'));
+});
+
+test('библиотека в конструкторе: скрывает неподходящее, считает «ещё M», выбор идёт в профиль и виден на генераторе', t => {
+  const library = needing(['dumbbells'], BICEPS);
+  const profile = profileOf('band_long');
+  const { root } = mountScreen(t, { library, gearProfile: profile });
+  const strength = library.filter(entry => entry.slot === 'strength').length;
+  startManual(root);
+  openLibrary(root);
+
+  const found = () => root.querySelector('.library-found').textContent;
+  assert.equal(found(), `Найдено: ${strength - BICEPS.length} · ещё ${BICEPS.length} с другим инвентарём`);
+  assert.deepEqual(pressedGear(root), ['band_long']);
+  assert.equal(root.querySelector('.gear-picker h3').id, 'library-gear-title');
+
+  gearChip(root, 'dumbbells').click();
+  assert.equal(found(), `Найдено: ${strength}`);
+  assert.deepEqual(profile.get(), ['band_long', 'dumbbells'], 'выбор в библиотеке записан в профиль');
+
+  // Обратно на сборку, на вход и на генератор: там тот же выбор.
+  root.querySelector('.library-foot .builder-back').click();
+  back(root);
+  startGenerator(root);
+  assert.deepEqual(pressedGear(root), ['band_long', 'dumbbells']);
+});
+
+test('приложение отдаёт конструктору профиль на localStorage: выбор читается оттуда и туда же пишется', t => {
+  const { window, document, root } = mount(t, { preload: { [GEAR_KEY]: '["dumbbells"]' } });
+  openBuilder(document);
+  startGenerator(root);
+  assert.deepEqual(pressedGear(root), ['dumbbells']);
+
+  gearChip(root, 'dumbbells').click();
+  gearChip(root, 'kettlebell').click();
+  assert.equal(window.localStorage.getItem(GEAR_KEY), '["kettlebell"]');
+
+  // Выбор переживает уход с экрана и из раздела.
+  back(root);
+  openWorkouts(document);
+  openBuilder(document);
+  startGenerator(root);
+  assert.deepEqual(pressedGear(root), ['kettlebell']);
+});
+
+test('приложение без доступа к localStorage: выбор инвентаря живёт в памяти до закрытия', t => {
+  const { document, root } = mount(t, { denyStorage: true });
+  openBuilder(document);
+  startGenerator(root);
+  assert.deepEqual(pressedGear(root), ['band_long', 'loop_short'], 'по умолчанию');
+
+  gearChip(root, 'band_long').click();
+  assert.deepEqual(pressedGear(root), ['loop_short']);
+  back(root);
+  startGenerator(root);
+  assert.deepEqual(pressedGear(root), ['loop_short']);
+});
+
+test('своя тренировка с неотмеченным инвентарём открывается в «Сегодня» целиком: выбор человека её не фильтрует', async t => {
+  const library = needing(['dumbbells'], ['warm-1']);
+  const id = 'my-gear0008';
+  const { document } = mount(t, { library, preload: { ...onDevice(id, MANUAL), [CURRENT_KEY]: id } });
+  await settle(0);
+
+  assert.deepEqual(shown(document), ['screen-today']);
+  const today = document.getElementById('screen-today');
+  for (const key of [...MANUAL.warmup, ...MANUAL.strength]) {
+    assert.ok(today.textContent.includes(nameOf(key, TEST_LIBRARY)), `в «Сегодня» нет «${nameOf(key, TEST_LIBRARY)}»`);
+  }
 });

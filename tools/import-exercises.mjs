@@ -17,6 +17,7 @@ import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 import { MUSCLES } from '../muscles.js';
+import { GEAR, NO_GEAR, NO_GEAR_LABEL, gearLabel } from '../gear.js';
 import { itemProblems, NO_LOAD_PATTERN, KEY_PATTERN, YOUTUBE_ID } from '../workouts/schema.js';
 
 // Шаблон ключа живёт в схеме, а отсюда по-прежнему отдаётся (на него ссылаются тесты).
@@ -34,7 +35,9 @@ const SLOTS = new Map([['разминка', 'warmup'], ['разогрев', 'cir
 const PATTERN_NAMES = new Map([['наклон от таза', 'hinge'], ['присед', 'squat'], ['выпад', 'lunge'], ['жим', 'push'],
   ['тяга', 'pull'], ['кор', 'core'], ['изолирующее', 'isolation'], ['подвижность', 'mobility'], ['растяжка', 'stretch'],
   ['восстановление', 'recovery']]);
-const GEAR_NAMES = new Map([['длинная резинка', 'band_long'], ['мини-петля', 'loop_short'], ['без инвентаря', 'none']]);
+// Подписи и порядок — из словаря gear.js, «без инвентаря» последним: так их и
+// перечисляет сообщение об ошибке.
+const GEAR_BY_LABEL = new Map([...GEAR.map(([id, label]) => [label, id]), [NO_GEAR_LABEL, NO_GEAR]]);
 const DIFFICULTIES = new Map([['базовое', 'basic'], ['среднее', 'medium'], ['сложное', 'hard']]);
 const YES_NO = new Map([['да', true], ['нет', false]]);
 
@@ -203,10 +206,22 @@ function readRow(record, n, columnAt, errors, keyRows) {
   });
 
   const gearCell = get('Инвентарь');
-  let gear = gearCell.split(',').map(part => GEAR_NAMES.get(part.trim().toLowerCase()));
+  let gear = gearCell.split(',').map(part => GEAR_BY_LABEL.get(part.trim().toLowerCase()));
   if (gear.includes(undefined)) {
-    fail('Инвентарь', `через запятую из ${quoted(GEAR_NAMES.keys())} — получено «${gearCell}»`);
-    gear = ['none'];
+    fail('Инвентарь', `через запятую из ${quoted(GEAR_BY_LABEL.keys())} — получено «${gearCell}»`);
+    gear = [NO_GEAR];
+  } else if (gear.includes(NO_GEAR) && gear.some(id => id !== NO_GEAR)) {
+    // «Без инвентаря» не вид инвентаря, а его отсутствие: рядом с другим видом
+    // оно противоречит само себе, и на карточке вышло бы «без инвентаря, гантели».
+    fail('Инвентарь', `«${NO_GEAR_LABEL}» не сочетается с другим инвентарём — получено «${gearCell}»`);
+    gear = [NO_GEAR];
+  } else if (new Set(gear).size < gear.length) {
+    // Повтор — почти наверняка опечатка («гантели, гантели» вместо «гантели,
+    // гиря»): тихо схлопнутый, он потерял бы второй вид, а оставленный как есть
+    // дал бы на карточке «гантели, гантели».
+    const repeated = gear.find((id, i) => gear.indexOf(id) !== i);
+    fail('Инвентарь', `инвентарь повторяется: «${gearLabel(repeated)}» — получено «${gearCell}»`);
+    gear = [NO_GEAR];
   }
 
   const unilateral = yesNo('Одностороннее', false);

@@ -1,10 +1,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildLibraryReport } from '../tools/library-report.js';
+import { buildLibraryReport, buildGearReport } from '../tools/library-report.js';
+import { fitLibrary, GEAR, DEFAULT_OWNED } from '../gear.js';
 import { availability } from '../builder/generator.js';
 import { ZONES } from '../builder/rules.js';
 import { LIBRARY } from '../exercises/index.js';
-import { TEST_LIBRARY, onlyOneFor, withoutTargets } from './fixtures/test-library.js';
+import { TEST_LIBRARY, onlyOneFor, withoutTargets, variant } from './fixtures/test-library.js';
 
 const ZONE_LABELS = Object.values(ZONES).map(zone => zone.label);
 const zoneLines = state => ZONE_LABELS.map(label => `  упор «${label}»: ${state}`);
@@ -78,4 +79,63 @@ test('строка уровня называет пул этого уровня'
   const lines = buildLibraryReport(withoutTargets(['chest']));
   assert.ok(lines.some(line => /^Средний: нет базовых и средних упражнений на: .*грудные/.test(line)));
   assert.ok(lines.some(line => /^Продвинутый: нет упражнений на: .*грудные/.test(line)));
+});
+
+// ── отчёт по трём профилям инвентаря ─────────────────────────────────────────
+
+// Разбивает отчёт на разделы по строкам «== … ==», сохраняя порядок.
+function sections(lines) {
+  const result = new Map();
+  let current;
+  for (const line of lines) {
+    if (line.startsWith('== ')) result.set(current = line, []);
+    else result.get(current).push(line);
+  }
+  return result;
+}
+
+// Условия задаёт сама фикстура: все бицепсовые упражнения требуют гантели, все
+// икроножные — длинную резинку, остальные без инвентаря. Тогда группа «бицепс»
+// закрыта только у того, у кого есть гантели, а «икроножные» — у тех, у кого есть
+// хотя бы резинка.
+const NEEDS = { biceps: 'dumbbells', calves: 'band_long' };
+const GEAR_LIBRARY = TEST_LIBRARY.map(entry => {
+  const group = Object.keys(NEEDS).find(g => entry.load[g] === 1);
+  return group ? variant(entry, { gear: [NEEDS[group]] }) : entry;
+});
+
+test('отчёт по инвентарю: три раздела с заголовками в порядке «весь», «резинки», «без»', () => {
+  assert.deepEqual([...sections(buildGearReport(GEAR_LIBRARY)).keys()], [
+    '== Весь инвентарь ==',
+    '== Только резинки: длинная резинка, мини-петля ==',
+    '== Без инвентаря ==',
+  ]);
+});
+
+test('отчёт по инвентарю: группа с гантелями закрыта только в профиле «весь инвентарь»', () => {
+  const report = sections(buildGearReport(GEAR_LIBRARY));
+  const first = title => report.get(title)[0];
+  assert.equal(first('== Весь инвентарь =='), 'Начальный: все основные группы закрыты.');
+  assert.equal(first('== Только резинки: длинная резинка, мини-петля =='), 'Начальный: нет базовых упражнений на: бицепс.');
+  assert.equal(first('== Без инвентаря =='), 'Начальный: нет базовых упражнений на: икроножные, бицепс.');
+});
+
+test('отчёт по инвентарю: каждый раздел — отчёт по тому, что подходит профилю', () => {
+  const report = sections(buildGearReport(GEAR_LIBRARY));
+  assert.deepEqual(report.get('== Весь инвентарь =='),
+    buildLibraryReport(fitLibrary(GEAR_LIBRARY, GEAR.map(([id]) => id))));
+  assert.deepEqual(report.get('== Только резинки: длинная резинка, мини-петля =='),
+    buildLibraryReport(fitLibrary(GEAR_LIBRARY, DEFAULT_OWNED)));
+  assert.deepEqual(report.get('== Без инвентаря =='), buildLibraryReport(fitLibrary(GEAR_LIBRARY, [])));
+  // Профиль «весь инвентарь» на библиотеке, где фильтровать нечего, — тот же
+  // отчёт, что и без фильтра.
+  assert.deepEqual(report.get('== Весь инвентарь =='), buildLibraryReport(GEAR_LIBRARY));
+});
+
+test('buildLibraryReport инвентарь не учитывает: по всей библиотеке группы закрыты', () => {
+  assert.equal(buildLibraryReport(GEAR_LIBRARY)[0], 'Начальный: все основные группы закрыты.');
+});
+
+test('без аргумента отчёт по инвентарю строится по настоящей библиотеке', () => {
+  assert.deepEqual(buildGearReport(), buildGearReport(LIBRARY));
 });

@@ -17,6 +17,7 @@ import { renderWeekly } from './weekly-view.js';
 import { createSections, savedSection } from './sections.js';
 import { renderWorkouts } from './workouts-view.js';
 import { renderBuilder } from './builder-view.js';
+import { createGearProfile } from './gear-profile.js';
 import { hasOwn } from './own.js';
 
 // Отсчёт сверяется с часами часто, чтобы экран не отставал от них больше чем
@@ -104,6 +105,11 @@ export function startApp(win = globalThis.window, { library = LIBRARY } = {}) {
   // свежее состояние тренировки от устаревшего ответа облака, у каждого
   // экземпляра свой, и второй экземпляр его бы не видел.
   const store = createMyWorkouts({ cloud, local });
+  // «Что есть дома»: один на всё время работы, как и store. Выбор лежит в
+  // памяти профиля, а не в разметке конструктора, поэтому переживает его
+  // перерисовку; в localStorage он идёт тем же local, что и остальное, и
+  // недоступное хранилище (local = null) оставляет выбор до закрытия.
+  const gearProfile = createGearProfile(local);
   // Старые отметки чистим при каждом запуске и не ждём: устройство очищается
   // тут же, облако — когда ответит, а сбой чистки на запуск не влияет.
   storage.prune();
@@ -165,6 +171,7 @@ export function startApp(win = globalThis.window, { library = LIBRARY } = {}) {
       confirm: question => tg.confirm(question),
       onSaved,
       openLink: url => tg.openLink(url),
+      gearProfile,
     });
     return builder;
   }

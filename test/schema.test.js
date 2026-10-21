@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { validateWorkout, countMarks, NO_LOAD_PATTERN } from '../workouts/schema.js';
+import { GEAR_IDS } from '../gear.js';
 
 function minimalWorkout(overrides = {}) {
   return {
@@ -69,8 +70,17 @@ test('неизвестный pattern попадает в отчёт', () => {
 
 test('неизвестный инвентарь попадает в отчёт', () => {
   const w = minimalWorkout();
-  w.blocks[0].items[0].gear = ['kettlebell'];
-  assert.match(validateWorkout(w).join('\n'), /kettlebell/);
+  w.blocks[0].items[0].gear = ['barbell'];
+  assert.match(validateWorkout(w).join('\n'), /barbell/);
+});
+
+// Допустимые значения gear — словарь gear.js, а не второй список в схеме.
+test('каждое значение словаря инвентаря проходит схему', () => {
+  for (const id of GEAR_IDS) {
+    const w = minimalWorkout();
+    w.blocks[0].items[0].gear = [id];
+    assert.deepEqual(validateWorkout(w), [], id);
+  }
 });
 
 // Пустой load запрещён упражнению любого типа, а не только силовому: разметка —

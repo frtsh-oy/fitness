@@ -273,6 +273,16 @@
    .exercise-top, что у номера и мышц в «Сегодня». Подпись не переносится: на
    узкой строке сжиматься должен список мышц, а не слово «Среднее». */
 .library-level{white-space:nowrap;font-size:12px;letter-spacing:.1em;font-weight:650;color:#61748b}
+/* Инвентарь — третий в шапке карточки, между сложностью и мышцами. Три подписи
+   в одну строку на 375px не помещаются, поэтому строка переносится: сложность и
+   инвентарь стоят слева (margin-right:auto у инвентаря: space-between разводил
+   бы их по краям), а мышцы прижаты вправо (margin-left:auto) и, если места не
+   хватило, уходят на вторую строку. Иначе все три сжимались бы, и «мини-петля»
+   ломалась бы по дефису. Только в библиотеке: в «Сегодня» шапка из двух частей и
+   остаётся как есть. */
+.library-card .exercise-top{flex-wrap:wrap;row-gap:2px}
+.library-gear{margin-right:auto;font-size:12px;color:#657289}
+.library-card .muscles{margin-left:auto}
 .library-add,.builder-add,.builder-save,.builder-generate{display:block;width:100%;min-height:44px;margin:14px 0 0;padding:0 14px;border:1px solid #152d4a;border-radius:8px;background:#152d4a;font:inherit;font-size:14px;font-weight:650;color:#fff}
 .library-add:disabled,.builder-add:disabled,.builder-save:disabled,.builder-generate:disabled{border-color:#d8e1eb;background:#eef3fa;color:#657289;cursor:default}
 .library-foot{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:18px 0 0}
@@ -375,9 +385,13 @@
 .level-option[aria-disabled=true] .level-who{color:#657289}
 .level-line{font-size:13px;color:#526278}
 .level-missing,.zone-missing p{margin:6px 0 0;padding:10px 14px;border-radius:10px;background:#e8edf4;color:#53637a;font-size:13px;line-height:1.5}
-.zone-hint{margin:0 0 10px;font-size:13px;line-height:1.5;color:#526278}
+.zone-hint,.gear-hint{margin:0 0 10px;font-size:13px;line-height:1.5;color:#526278}
 .zone-chips{display:flex;flex-wrap:wrap;gap:6px}
 .zone-chip{display:inline-flex;align-items:center;min-height:44px;padding:9px 14px;border:1px solid #d4dde8;border-radius:30px;background:#fff;font:inherit;font-size:14px;font-weight:600;color:inherit}
 .zone-chip[aria-pressed=true]{background:#152d4a;border-color:#152d4a;color:#fff}
 .zone-chip[aria-disabled=true]{opacity:.5}
+/* «Что есть дома» (gear-picker.js): один блок на генератор и библиотеку. Чипы —
+   те же .zone-chip, поэтому свой у блока только отступ и подсказка (.gear-hint,
+   общий с .zone-hint выше). */
+.gear-picker{margin:0 0 6px}
 .builder-variant{display:block;width:100%;min-height:44px;margin:14px 0 0;padding:0 14px;border:1px solid #cad6e4;border-radius:8px;background:#f3f7fc;font:inherit;font-size:14px;font-weight:650;color:#193d6a}

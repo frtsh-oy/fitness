@@ -16,13 +16,16 @@ import { LIBRARY, SLOT_LABELS, DIFFICULTY_LABELS } from './exercises/index.js';
 import { renderLibrary } from './library-view.js';
 import { expandWorkout, exerciseCount, NAME_MAX } from './builder/compact.js';
 import {
-  pickSkeleton, makeRandom, generate, availability, missingGroupsMessage, missingZoneMessage,
+  pickSkeleton, makeRandom, generate, availability, missingGroupsMessage, missingZoneMessage, missingGear, closableGroups,
 } from './builder/generator.js';
 import { replaceCandidates, replaceExercise } from './builder/replace.js';
 import { zeroGroups, belowFloor } from './builder/coverage.js';
 import { groupsPhrase } from './muscles.js';
 import { LEVELS, ZONES, MAX_STRENGTH, MAX_ZONES, DEFAULT_DAYS, PLAN_DAYS } from './builder/rules.js';
-import { plural, defaultName, GEAR_NAMES } from './builder/texts.js';
+import { plural, defaultName } from './builder/texts.js';
+import { gearText, gearNames, fitsGear, fitLibrary, unownedGear } from './gear.js';
+import { renderGearPicker } from './gear-picker.js';
+import { createGearProfile } from './gear-profile.js';
 import { newWorkoutId, OWN_LIMIT } from './my-workouts.js';
 
 const ENTRY_LEAD = 'Тренировка всегда на всё тело. Собери её сам из библиотеки или получи готовую по правилам, а потом сохрани.';
@@ -70,9 +73,6 @@ const HINT_OTHER = 'Того же типа';
 // Дни недели по ISO (1 — понедельник), как в compact.days.
 const DAYS = [[1, 'пн'], [2, 'вт'], [3, 'ср'], [4, 'чт'], [5, 'пт'], [6, 'сб'], [7, 'вс']];
 
-const GEAR = new Map([['none', 'без инвентаря'], ...GEAR_NAMES]);
-const gearText = entry => entry.gear.map(id => GEAR.get(id)).join(', ');
-
 const SLOTS = Object.keys(SLOT_LABELS);
 
 const el = (document, tag, className, text) => {
@@ -108,7 +108,16 @@ const poolText = pool => (pool.length === Object.keys(DIFFICULTY_LABELS).length
 // Возвращает { edit(id, compact) }: открыть свою тренировку на правку, подобранную
 // на результате, собранную руками на сборке. Обещание, а не void: если начатый
 // черновик жалко бросать, edit сперва спрашивает и отвечает, открыл ли он правку.
-export function renderBuilder({ host, win, library = LIBRARY, store, confirm, onSaved, seed = () => Date.now(), openLink }) {
+//
+// library — вся библиотека. Что из неё подходит человеку, решает gearProfile
+// («Что есть дома»): подбор, скелет ручной сборки и кандидаты на замену идут по
+// fitLibrary, а всё, что показывает уже выбранное (expandWorkout, блоки,
+// покрытие), — по полной: упражнение не должно пропадать из тренировки оттого,
+// что человек снял галочку с инвентаря.
+export function renderBuilder({
+  host, win, library = LIBRARY, store, confirm, onSaved, seed = () => Date.now(), openLink,
+  gearProfile = createGearProfile(null),
+}) {
   const document = host.ownerDocument;
   const make = (tag, className, text) => el(document, tag, className, text);
 
@@ -134,11 +143,13 @@ export function renderBuilder({ host, win, library = LIBRARY, store, confirm, on
 
   // Смена экрана. Экраны делят один раздел и одну полосу прокрутки, поэтому новый
   // открывается сверху, а фокус переходит на его заголовок: иначе после нажатия
-  // на кнопку, которой уже нет в разметке, он оставался бы нигде.
-  function show(root, focus = root.querySelector('h2')) {
+  // на кнопку, которой уже нет в разметке, он оставался бы нигде. Экран, который
+  // перерисовывается из-за нажатия на нём же (переключатели инвентаря), остаётся
+  // там, где был: scroll: false не уводит страницу наверх.
+  function show(root, focus = root.querySelector('h2'), { scroll = true } = {}) {
     host.replaceChildren(root);
-    win.scrollTo({ top: 0, behavior: 'instant' });
-    focus?.focus();
+    if (scroll) win.scrollTo({ top: 0, behavior: 'instant' });
+    focus?.focus({ preventScroll: !scroll });
   }
 
   function heading(text) {
@@ -224,7 +235,7 @@ export function renderBuilder({ host, win, library = LIBRARY, store, confirm, on
   function startManual() {
     draft = {
       v: 1, name: defaultName([]), days: [...DEFAULT_DAYS], level: null, zones: [],
-      ...pickSkeleton(library, makeRandom(seed())),
+      ...pickSkeleton(fitLibrary(library, gearProfile.get()), makeRandom(seed())),
       strength: [], focus: [], t: 0,
     };
     draftId = newWorkoutId();
@@ -325,6 +336,15 @@ export function renderBuilder({ host, win, library = LIBRARY, store, confirm, on
   const rowButton = (blocks, key) => [...blocks.querySelectorAll('.builder-item')]
     .find(node => node.dataset.key === key)?.querySelector('button');
 
+  // Почему список пуст. Если по полной библиотеке кандидаты есть, дело в
+  // инвентаре, и текст называет, какой нужен; иначе их нет вовсе, и текст прежний.
+  function noCandidatesText(slot, key, owned) {
+    const gear = unownedGear(replaceCandidates({ compact: draft, slot, key, library }), owned);
+    return gear.length === 0
+      ? NO_CANDIDATES
+      : `Похожих упражнений с отмеченным инвентарём больше нет. Есть с инвентарём: ${gearNames(gear)}.`;
+  }
+
   // Шторка замены. Ставится рядом с корнем экрана, а не внутрь него: сборка и
   // результат перерисовываются при каждом изменении, а шторке нельзя пропадать
   // вместе с ними. Что сделать с экраном после выбора, знает onPick(newKey): он
@@ -351,7 +371,13 @@ export function renderBuilder({ host, win, library = LIBRARY, store, confirm, on
       if (focus?.isConnected) focus.focus();
     }
 
-    const candidates = replaceCandidates({ compact: draft, slot, key, library });
+    // Подходящие по инвентарю и само заменяемое: replaceCandidates бросает на
+    // ключе, которого нет в переданной библиотеке, а в сохранённой тренировке
+    // упражнение с неотмеченным инвентарём вполне может стоять. Само оно в
+    // кандидаты не попадёт: оно уже в тренировке.
+    const owned = gearProfile.get();
+    const reachable = library.filter(entry => entry.key === key || fitsGear(entry, owned));
+    const candidates = replaceCandidates({ compact: draft, slot, key, library: reachable });
     for (const entry of candidates) {
       const item = make('li', 'replace-candidate');
       const text = make('div', 'replace-text');
@@ -375,7 +401,7 @@ export function renderBuilder({ host, win, library = LIBRARY, store, confirm, on
 
     sheet.append(title, make('p', 'replace-current', current.name),
       make('p', 'replace-hint', slot === 'strength' ? HINT_STRENGTH : HINT_OTHER));
-    if (candidates.length === 0) sheet.append(make('p', 'replace-empty', NO_CANDIDATES));
+    if (candidates.length === 0) sheet.append(make('p', 'replace-empty', noCandidatesText(slot, key, owned)));
     else sheet.append(list);
     sheet.append(closeButton);
 
@@ -454,7 +480,9 @@ export function renderBuilder({ host, win, library = LIBRARY, store, confirm, on
   function showLibrary() {
     renderLibrary({
       host,
+      // Вся библиотека: счётчик «ещё M с другим инвентарём» считает скрытое сам.
       entries: library,
+      gear: { owned: gearProfile.get(), onChange: owned => gearProfile.set(owned) },
       isAdded: key => draft.strength.includes(key),
       addBlocked,
       onAdd(key) { draft = { ...draft, strength: [...draft.strength, key] }; },
@@ -475,14 +503,32 @@ export function renderBuilder({ host, win, library = LIBRARY, store, confirm, on
   // диктор читает, почему его нельзя выбрать.
   const setUnavailable = (node, off) => (off ? node.setAttribute('aria-disabled', 'true') : node.removeAttribute('aria-disabled'));
 
-  function drawGenerator() {
-    // Что есть в библиотеке на каждом уровне. Уровень, которому не хватает
-    // групп, и зона без опоры для упора не выбираются, а причина стоит на экране.
-    const info = Object.fromEntries(Object.keys(LEVELS).map(level => [level, availability(library, level)]));
+  // Отказ уровня с подсказкой про инвентарь: generate и availability видят
+  // только подходящие упражнения, а какой инвентарь и для каких групп помог бы,
+  // знает тот, у кого есть полная библиотека.
+  const levelMessage = (level, groups, owned) => missingGroupsMessage(level, groups,
+    missingGear(library, owned, level, groups), closableGroups(library, owned, level, groups));
+
+  // focusGear — вид инвентаря, чей переключатель только что нажали: экран
+  // перерисован целиком, и фокус надо вернуть на ту же кнопку нового экрана.
+  function drawGenerator(focusGear = null) {
+    // Что есть на каждом уровне среди упражнений, подходящих человеку по
+    // инвентарю. Уровень, которому не хватает групп, и зона без опоры для упора
+    // не выбираются, а причина стоит на экране.
+    const owned = gearProfile.get();
+    const info = Object.fromEntries(Object.keys(LEVELS).map(level => [level, availability(fitLibrary(library, owned), level)]));
     const usable = level => info[level].missing.length === 0;
     // Без доступного уровня не выбран ни один: выбирать нечего, а причины видны
-    // под каждым уровнем.
-    choice ??= { level: Object.keys(LEVELS).find(usable) ?? null, zones: [] };
+    // под каждым уровнем. Выбор приводится к тому, что доступно сейчас: после
+    // смены инвентаря уровень или зона могли стать невыполнимыми, и оставить их
+    // нажатыми значило бы дать человеку кнопку, которая только откажет. Тот же
+    // путь выбирает первый доступный, когда уровней не было, а инвентарь их открыл.
+    const first = Object.keys(LEVELS).find(usable) ?? null;
+    const selected = choice !== null && choice.level !== null && usable(choice.level) ? choice.level : first;
+    choice = {
+      level: selected,
+      zones: selected === null ? [] : (choice?.zones ?? []).filter(zone => info[selected].zones[zone]),
+    };
 
     const root = make('div', 'builder builder-generator');
     const refusal = alertNote('builder-refusal');
@@ -510,7 +556,7 @@ export function renderBuilder({ host, win, library = LIBRARY, store, confirm, on
       item.append(option);
       if (!usable(id)) {
         setUnavailable(option, true);
-        const note = make('p', 'level-missing', missingGroupsMessage(id, info[id].missing));
+        const note = make('p', 'level-missing', levelMessage(id, info[id].missing, owned));
         note.id = `level-missing-${id}`;
         option.setAttribute('aria-describedby', note.id);
         item.append(note);
@@ -552,7 +598,9 @@ export function renderBuilder({ host, win, library = LIBRARY, store, confirm, on
         setUnavailable(chip, zoneOff(id));
         const absent = zoneMissing(id);
         note.hidden = !absent;
-        note.textContent = absent ? missingZoneMessage(choice.level, id) : '';
+        note.textContent = absent
+          ? missingZoneMessage(choice.level, id, missingGear(library, owned, choice.level, ZONES[id].groups))
+          : '';
         if (absent) chip.setAttribute('aria-describedby', note.id);
         else chip.removeAttribute('aria-describedby');
       }
@@ -576,18 +624,42 @@ export function renderBuilder({ host, win, library = LIBRARY, store, confirm, on
       change({ ...choice, zones: choice.zones.includes(id) ? choice.zones.filter(zone => zone !== id) : [...choice.zones, id] });
     }
 
+    // Смена инвентаря пересчитывает всё на экране, поэтому он рисуется заново.
+    const picker = renderGearPicker(document, {
+      owned,
+      idPrefix: 'generator-gear',
+      onChange(next, id) {
+        gearProfile.set(next);
+        drawGenerator(id);
+      },
+    });
+
     root.append(backButton('Назад', abandon), heading('Генератор'), make('p', 'builder-subtitle', GENERATOR_LEAD),
-      levelsTitle, levels, zonesTitle, make('p', 'zone-hint', ZONE_HINT), zones, missing, generateButton, refusal);
+      picker, levelsTitle, levels, zonesTitle, make('p', 'zone-hint', ZONE_HINT), zones, missing, generateButton, refusal);
     paint();
-    show(root);
+    if (focusGear === null) show(root);
+    else show(root, root.querySelector(`[data-gear="${focusGear}"]`), { scroll: false });
+  }
+
+  // Отказ генератора с подсказкой про инвентарь. generate видит только
+  // подходящие упражнения и говорит про «библиотеку»; называет, какого инвентаря
+  // не хватает, тот, у кого есть полная. Отказ по потолку — как есть: он не про
+  // инвентарь.
+  function refusalText(result, level, owned) {
+    if (result.reason !== 'missing') return result.message;
+    if (result.zone !== undefined) {
+      return missingZoneMessage(level, result.zone, missingGear(library, owned, level, ZONES[result.zone].groups));
+    }
+    return levelMessage(level, result.groups, owned);
   }
 
   // Новая тренировка по уровню и зонам: с экрана генератора и по «Другому
   // варианту». Отказ показывается там, откуда просили, а прежнее остаётся как было.
   function runGenerator(level, zones, refusal) {
-    const result = generate({ level, zones, seed: seed(), library });
+    const owned = gearProfile.get();
+    const result = generate({ level, zones, seed: seed(), library: fitLibrary(library, owned) });
     if (!result.ok) {
-      setNote(refusal, result.message);
+      setNote(refusal, refusalText(result, level, owned));
       return;
     }
     // «Другой вариант» меняет подбор, а не то, что человек уже мог назвать и
