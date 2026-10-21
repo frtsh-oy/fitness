@@ -22,7 +22,8 @@ import { replaceCandidates, replaceExercise } from './builder/replace.js';
 import { zeroGroups, belowFloor } from './builder/coverage.js';
 import { groupsPhrase } from './muscles.js';
 import { LEVELS, ZONES, MAX_STRENGTH, MAX_ZONES, DEFAULT_DAYS, PLAN_DAYS } from './builder/rules.js';
-import { plural, defaultName, GEAR_NAMES } from './builder/texts.js';
+import { plural, defaultName } from './builder/texts.js';
+import { gearText } from './gear.js';
 import { newWorkoutId, OWN_LIMIT } from './my-workouts.js';
 
 const ENTRY_LEAD = 'Тренировка всегда на всё тело. Собери её сам из библиотеки или получи готовую по правилам, а потом сохрани.';
@@ -69,9 +70,6 @@ const HINT_OTHER = 'Того же типа';
 
 // Дни недели по ISO (1 — понедельник), как в compact.days.
 const DAYS = [[1, 'пн'], [2, 'вт'], [3, 'ср'], [4, 'чт'], [5, 'пт'], [6, 'сб'], [7, 'вс']];
-
-const GEAR = new Map([['none', 'без инвентаря'], ...GEAR_NAMES]);
-const gearText = entry => entry.gear.map(id => GEAR.get(id)).join(', ');
 
 const SLOTS = Object.keys(SLOT_LABELS);
 

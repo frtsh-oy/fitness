@@ -1,4 +1,5 @@
 import { isMuscleId } from '../muscles.js';
+import { GEAR_IDS } from '../gear.js';
 
 export const PATTERNS = ['hinge', 'squat', 'lunge', 'push', 'pull', 'core', 'isolation', 'mobility', 'stretch', 'recovery'];
 
@@ -7,7 +8,6 @@ export const PATTERNS = ['hinge', 'squat', 'lunge', 'push', 'pull', 'core', 'iso
 // утверждение о нём, а не пропуск в разметке: пометка нужна ровно затем, чтобы
 // одно от другого отличалось.
 export const NO_LOAD_PATTERN = 'recovery';
-export const GEAR = ['band_long', 'loop_short', 'none'];
 export const KINDS = ['warmup', 'strength', 'cooldown'];
 export const LOAD_VALUES = [0.5, 1];
 
@@ -129,7 +129,7 @@ function itemValueProblems(item, at) {
     problems.push(`${at}: gear должен быть массивом`);
   } else {
     for (const g of item.gear) {
-      if (!GEAR.includes(g)) problems.push(`${at}: неизвестный инвентарь ${g}`);
+      if (!GEAR_IDS.includes(g)) problems.push(`${at}: неизвестный инвентарь ${g}`);
     }
   }
 

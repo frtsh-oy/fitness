@@ -108,3 +108,14 @@ test('equipmentFor: коврик и подписи инвентаря в пос�
   // Упражнение с двумя видами инвентаря (если появится) называет оба.
   assert.equal(equipmentFor([{ ...entry('rdl'), gear: ['loop_short', 'band_long'] }]), 'Нужно: коврик, длинная резинка, мини-петля.');
 });
+
+// Порядок строки «Нужно» — порядок словаря gear.js, а не порядок упражнений или
+// записи у упражнения. Записи свои: нужен только gear.
+test('equipmentFor: новые виды инвентаря идут в порядке словаря и не повторяются', () => {
+  const needs = (...gear) => ({ gear });
+  assert.equal(equipmentFor([needs('kettlebell'), needs('dumbbells'), needs('band_handles')]),
+    'Нужно: коврик, резинка с ручками, гантели, гиря.');
+  assert.equal(equipmentFor([needs('kettlebell', 'loop_short'), needs('dumbbells', 'band_long'), needs('none')]),
+    'Нужно: коврик, длинная резинка, мини-петля, гантели, гиря.');
+  assert.equal(equipmentFor([needs('dumbbells'), needs('dumbbells', 'none')]), 'Нужно: коврик, гантели.');
+});
