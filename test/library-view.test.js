@@ -542,6 +542,87 @@ test('«Сбросить фильтры» инвентарь не трогает
   assert.deepEqual(calls, [], 'сброс наружу про инвентарь не сообщает');
 });
 
+const emptyHint = host => host.querySelector('.library-empty-hint')?.textContent;
+const BY_GEAR = 'С отмеченным инвентарём ничего не нашлось. Отметь инвентарь в «Что есть дома»';
+
+test('пусто из-за инвентаря, фильтров нет: подсказка про «Что есть дома», кнопки сброса нет', () => {
+  const { host } = mount({
+    entries: gearEntries().filter(entry => entry.gear[0] !== 'none'),
+    gear: { owned: [], onChange: () => {} },
+  });
+
+  assert.deepEqual(names(host), []);
+  assert.equal(foundText(host), 'Найдено: 0 · ещё 4 с другим инвентарём');
+  assert.equal(host.querySelector('.library-empty-title').textContent, 'Ничего не найдено');
+  assert.equal(emptyHint(host), `${BY_GEAR}.`);
+  assert.equal(chip(host, 'Сбросить фильтры'), undefined, 'сбрасывать нечего: сброс не поменял бы ничего');
+
+  // Отметили нужное: подсказка уходит вместе с пустотой.
+  gearChip(host, 'dumbbells').click();
+  assert.deepEqual(names(host), ['Мост с гантелями', 'Присед с гантелями']);
+  assert.equal(host.querySelector('.library-empty-hint'), null);
+});
+
+test('запрос из одних пробелов фильтром не считается: сброс не предлагается', () => {
+  const { host } = mount({
+    entries: gearEntries().filter(entry => entry.gear[0] !== 'none'),
+    gear: { owned: [], onChange: () => {} },
+  });
+  type(host, '   ');
+  assert.equal(emptyHint(host), `${BY_GEAR}.`);
+  assert.equal(chip(host, 'Сбросить фильтры'), undefined);
+});
+
+test('пусто из-за инвентаря при поиске, зоне или сложности: подсказка называет и фильтры, сброс есть и инвентарь не трогает', () => {
+  const entries = [
+    strength('a', 'Мост', { gear: ['none'], difficulty: 'basic', load: { glutes: 1 } }),
+    strength('b', 'Присед с гантелями', { gear: ['dumbbells'], difficulty: 'hard', load: { quads: 1 } }),
+  ];
+  const cases = [
+    ['поиск', host => type(host, 'присед')],
+    ['зона', host => chip(host, 'Ноги').click()],
+    ['сложность', host => chip(host, 'Сложное').click()],
+  ];
+  for (const [what, setFilter] of cases) {
+    const calls = [];
+    const { host } = mount({ entries, gear: { owned: [], onChange: owned => calls.push(owned) } });
+    setFilter(host);
+
+    assert.deepEqual(names(host), [], what);
+    assert.equal(foundText(host), 'Найдено: 0 · ещё 1 с другим инвентарём', what);
+    assert.equal(emptyHint(host), `${BY_GEAR} или сбрось фильтры.`, what);
+    const reset = chip(host, 'Сбросить фильтры');
+    assert.equal(reset.type, 'button', what);
+
+    // После сброса инвентарь тот же (пустой): «Мост» без инвентаря найден, пустоты нет.
+    reset.click();
+    assert.deepEqual(names(host), ['Мост'], what);
+    assert.equal(host.querySelector('.library-empty-hint'), null, what);
+    assert.deepEqual(calls, [], `${what}: сброс про инвентарь наружу не сообщает`);
+  }
+});
+
+test('пусто, но инвентарь ничего не скрыл: подсказка прежняя, про инвентарь ни слова', () => {
+  const { host } = mount({
+    entries: gearEntries(),
+    gear: { owned: ['dumbbells', 'kettlebell', 'band_long'], onChange: () => {} },
+  });
+  type(host, 'нет такого');
+
+  assert.equal(foundText(host), 'Найдено: 0');
+  assert.equal(emptyHint(host), 'Измени запрос или сбрось фильтры.');
+  assert.equal(chip(host, 'Сбросить фильтры').type, 'button');
+  assert.doesNotMatch(host.querySelector('.library-empty').textContent, /инвентар/);
+});
+
+test('без gear пустой экран прежний: подсказка про фильтры и сброс, про инвентарь ни слова', () => {
+  const { host } = mount({ entries: gearEntries() });
+  type(host, 'нет такого');
+  assert.equal(emptyHint(host), 'Измени запрос или сбрось фильтры.');
+  assert.ok(chip(host, 'Сбросить фильтры'));
+  assert.doesNotMatch(host.textContent, /инвентар/);
+});
+
 test('смена инвентаря не пересобирает переключатели и поле поиска: фокус остаётся на нажатой кнопке', () => {
   const { document, host } = mount({
     entries: gearEntries(),

@@ -186,15 +186,25 @@ export function renderLibrary({ host, entries, isAdded, addBlocked, onAdd, onBac
     return article;
   }
 
-  function emptyContent() {
+  // Поиск, зона или сложность: то, что «Сбросить фильтры» умеет снять. Инвентарь
+  // сюда не входит, он сбросом не трогается.
+  const hasFilters = () => normalizeQuery(state.query) !== '' || state.zone !== null || state.difficulty !== null;
+
+  // byGear — сколько упражнений скрыл инвентарь при тех же поиске, зоне и
+  // сложности. Если они есть, пусто из-за инвентаря, а не запроса, и подсказка
+  // говорит об этом; «Сбросить фильтры» предлагается, только когда есть что
+  // сбрасывать: без фильтров сброс ничего бы не изменил.
+  function emptyContent(byGear) {
     const reset = el(document, 'button', 'library-chip', 'Сбросить фильтры');
     reset.type = 'button';
     reset.addEventListener('click', resetFilters);
-    return [
-      el(document, 'p', 'library-empty-title', 'Ничего не найдено'),
-      el(document, 'p', 'library-empty-hint', 'Измени запрос или сбрось фильтры.'),
-      reset,
-    ];
+    const title = el(document, 'p', 'library-empty-title', 'Ничего не найдено');
+    if (byGear === 0) {
+      return [title, el(document, 'p', 'library-empty-hint', 'Измени запрос или сбрось фильтры.'), reset];
+    }
+    const filtered = hasFilters();
+    const hint = `С отмеченным инвентарём ничего не нашлось. Отметь инвентарь в «Что есть дома»${filtered ? ' или сбрось фильтры' : ''}.`;
+    return [title, el(document, 'p', 'library-empty-hint', hint), ...(filtered ? [reset] : [])];
   }
 
   // Перерисовывается только список: поле поиска и чипы остаются теми же узлами,
@@ -209,7 +219,7 @@ export function renderLibrary({ host, entries, isAdded, addBlocked, onAdd, onBac
     addButtons.clear();
     list.replaceChildren(...shown.map(card));
     emptyBox.className = shown.length === 0 ? 'library-empty' : '';
-    emptyBox.replaceChildren(...(shown.length === 0 ? emptyContent() : []));
+    emptyBox.replaceChildren(...(shown.length === 0 ? emptyContent(hidden) : []));
     closeVideo = setupPlayers(list, openLink, { idPrefix: VIDEO_ID_PREFIX });
     refresh();
   }

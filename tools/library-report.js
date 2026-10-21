@@ -15,7 +15,7 @@ import { LIBRARY } from '../exercises/index.js';
 import { groupsPhrase } from '../muscles.js';
 import { LEVELS, ZONES } from '../builder/rules.js';
 import { availability } from '../builder/generator.js';
-import { GEAR, DEFAULT_OWNED, fitLibrary, gearLabel } from '../gear.js';
+import { GEAR, DEFAULT_OWNED, fitLibrary, gearNames } from '../gear.js';
 
 // Строка про зону. Причины идут по тяжести: нет ни одного упражнения на группу
 // зоны (это и есть отказ уровня, второе упражнение тут ещё рано), нет второго
@@ -49,7 +49,7 @@ export function buildLibraryReport(library = LIBRARY) {
 export function buildGearReport(library = LIBRARY) {
   const profiles = [
     ['Весь инвентарь', GEAR.map(([id]) => id)],
-    [`Только резинки: ${DEFAULT_OWNED.map(gearLabel).join(', ')}`, DEFAULT_OWNED],
+    [`Только резинки: ${gearNames(DEFAULT_OWNED)}`, DEFAULT_OWNED],
     ['Без инвентаря', []],
   ];
   return profiles.flatMap(([title, owned]) => [`== ${title} ==`, ...buildLibraryReport(fitLibrary(library, owned))]);

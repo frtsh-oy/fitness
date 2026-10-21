@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  GEAR, GEAR_IDS, NO_GEAR, NO_GEAR_LABEL, DEFAULT_OWNED, gearLabel, gearText, fitsGear, fitLibrary, unownedGear,
+  GEAR, GEAR_IDS, NO_GEAR, NO_GEAR_LABEL, DEFAULT_OWNED, gearLabel, gearNames, gearText, fitsGear, fitLibrary, unownedGear,
 } from '../gear.js';
 
 // Записи свои и крохотные: fitsGear читает только gear, а состав настоящей
@@ -97,6 +97,16 @@ test('fitLibrary оставляет подходящие, порядок сох�
   assert.deepEqual(keys(['band_long', 'dumbbells']), ['rows', 'curl', 'plank', 'thruster']);
   assert.deepEqual(keys([]), ['plank']);
   assert.deepEqual(library, before);
+});
+
+test('gearNames: подписи через запятую в порядке списка, без перестановок', () => {
+  assert.equal(gearNames([]), '');
+  assert.equal(gearNames(['kettlebell']), 'гиря');
+  assert.equal(gearNames(['kettlebell', 'band_long']), 'гиря, длинная резинка');
+  assert.equal(gearNames(['band_long', 'loop_short', NO_GEAR]), 'длинная резинка, мини-петля, без инвентаря');
+  assert.throws(() => gearNames(['barbell']), /Неизвестный инвентарь: barbell/);
+  // gearText — тот же способ, поверх записи упражнения.
+  assert.equal(gearText(needing('a', 'kettlebell', 'band_long')), gearNames(['kettlebell', 'band_long']));
 });
 
 test('unownedGear: нужное и не отмеченное, в порядке словаря, без повторов и без «без инвентаря»', () => {

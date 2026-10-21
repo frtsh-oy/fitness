@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  makeRandom, pickSkeleton, focusCandidates, availability, generate, missingGear,
+  makeRandom, pickSkeleton, focusCandidates, availability, generate, missingGear, closableGroups,
   missingGroupsMessage, missingZoneMessage, ceilingMessage,
 } from '../builder/generator.js';
 import { fitLibrary } from '../gear.js';
@@ -335,6 +335,41 @@ test('сообщения отказов с подсказкой про инве�
   assert.equal(missingZoneMessage('beginner', 'chest', []), missingZoneMessage('beginner', 'chest'));
   assert.equal(missingZoneMessage('beginner', 'chest', []),
     'Для упора на зону «Грудь» на начальном уровне в библиотеке пока не хватает упражнений: нужно второе упражнение на ту же группу.');
+});
+
+test('closableGroups: группы, на которые есть упражнение пула с неотмеченным инвентарём, в порядке groups', () => {
+  // Бицепс есть только с гантелями, трицепса нет вовсе.
+  const library = needing(['dumbbells'], BICEPS, withoutTargets(['triceps']));
+  assert.deepEqual(closableGroups(library, [], 'beginner', ['biceps', 'triceps']), ['biceps']);
+  assert.deepEqual(closableGroups(library, [], 'beginner', ['triceps', 'biceps']), ['biceps']);
+  assert.deepEqual(closableGroups(library, ['dumbbells'], 'beginner', ['biceps', 'triceps']), [], 'отмеченное закрывать нечем');
+  assert.deepEqual(closableGroups(library, [], 'beginner', ['triceps']), []);
+  // Пул уровня: средний бицепс с гантелями начальному не поможет.
+  const medium = needing(['dumbbells'], ['biceps-3'], withoutTargets(['biceps']).concat(TEST_LIBRARY.filter(e => e.key === 'biceps-3')));
+  assert.deepEqual(closableGroups(medium, [], 'beginner', ['biceps']), []);
+  assert.deepEqual(closableGroups(medium, [], 'intermediate', ['biceps']), ['biceps']);
+});
+
+test('отказ уровня: закрывается инвентарём только часть групп — текст делит их, чтобы отметка не обманывала', () => {
+  const library = needing(['dumbbells'], BICEPS, withoutTargets(['triceps']));
+  const missing = availability(fitLibrary(library, []), 'beginner').missing;
+  assert.deepEqual(missing, ['biceps', 'triceps']);
+  const gear = missingGear(library, [], 'beginner', missing);
+  const closable = closableGroups(library, [], 'beginner', missing);
+  assert.equal(missingGroupsMessage('beginner', missing, gear, closable),
+    'Для начального уровня с отмеченным инвентарём нет базовых упражнений на: бицепс. Есть с инвентарём: гантели. В библиотеке пока нет базовых упражнений на: трицепс.');
+  assert.equal(missingGroupsMessage('intermediate', missing, gear, closable),
+    'Для среднего уровня с отмеченным инвентарём нет базовых и средних упражнений на: бицепс. Есть с инвентарём: гантели. В библиотеке пока нет базовых и средних упражнений на: трицепс.');
+  assert.equal(missingGroupsMessage('advanced', ['delts_rear', 'biceps', 'calves'], ['kettlebell'], ['delts_rear', 'biceps']),
+    'Для продвинутого уровня с отмеченным инвентарём нет упражнений на: задняя дельта, бицепс. Есть с инвентарём: гиря. В библиотеке пока нет упражнений на: икроножные.');
+
+  // Закрываются все группы — нынешний текст без хвоста; ни одной — прежний.
+  assert.equal(missingGroupsMessage('beginner', ['biceps'], ['dumbbells'], ['biceps']),
+    'Для начального уровня с отмеченным инвентарём нет базовых упражнений на: бицепс. Есть с инвентарём: гантели.');
+  assert.equal(missingGroupsMessage('beginner', ['biceps'], ['dumbbells']),
+    'Для начального уровня с отмеченным инвентарём нет базовых упражнений на: бицепс. Есть с инвентарём: гантели.', 'closable по умолчанию — все группы');
+  assert.equal(missingGroupsMessage('beginner', ['biceps', 'triceps'], [], []),
+    'Для начального уровня в библиотеке пока нет базовых упражнений на: бицепс, трицепс.');
 });
 
 test('неизвестный инвентарь в подсказке — ошибка вызова, а не «undefined» на экране', () => {

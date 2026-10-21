@@ -1529,6 +1529,42 @@ test('отмечено пусто, а упражнениям на группу �
   assert.equal(root.querySelector('.builder-generate').disabled, false);
 });
 
+test('уровень недоступен и из-за инвентаря, и из-за пустоты библиотеки: причина делит группы, отметка гантелей открывает не всё', async t => {
+  // Бицепс есть только с гантелями, трицепса нет вовсе: отметка гантелей группу
+  // трицепса не закроет, и текст не должен обещать обратного.
+  const library = needing(['dumbbells'], BICEPS, withoutTargets(['triceps']));
+  const profile = profileOf();
+  const { root } = mountScreen(t, { library, gearProfile: profile });
+  startGenerator(root);
+
+  assert.deepEqual(levelNotes(root), [
+    'Для начального уровня с отмеченным инвентарём нет базовых упражнений на: бицепс. Есть с инвентарём: гантели. В библиотеке пока нет базовых упражнений на: трицепс.',
+    'Для среднего уровня с отмеченным инвентарём нет базовых и средних упражнений на: бицепс. Есть с инвентарём: гантели. В библиотеке пока нет базовых и средних упражнений на: трицепс.',
+    'Для продвинутого уровня с отмеченным инвентарём нет упражнений на: бицепс. Есть с инвентарём: гантели. В библиотеке пока нет упражнений на: трицепс.',
+  ]);
+
+  // Отметили гантели: бицепс закрыт, остался только трицепс, и текст про него прежний.
+  gearChip(root, 'dumbbells').click();
+  assert.deepEqual(levelNotes(root), [
+    'Для начального уровня в библиотеке пока нет базовых упражнений на: трицепс.',
+    'Для среднего уровня в библиотеке пока нет базовых и средних упражнений на: трицепс.',
+    'Для продвинутого уровня в библиотеке пока нет упражнений на: трицепс.',
+  ]);
+  assert.deepEqual(checkedLevels(root), []);
+});
+
+test('«Другой вариант»: отказ уровня делит группы так же, как причина под уровнем', async t => {
+  const generated = generate({ level: 'beginner', zones: [], seed: 3, library: TEST_LIBRARY, now: () => OWN.t }).compact;
+  // Упражнения на трицепс остаются в библиотеке, но целью он у них уже не является.
+  const library = needing(['dumbbells'], BICEPS).map(entry => (entry.load.triceps === 1 ? variant(entry, { load: { forearms: 1 } }) : entry));
+  const { root, view } = mountScreen(t, { library, gearProfile: profileOf() });
+  await view.edit('my-gear0010', generated);
+
+  otherVariant(root);
+  assert.equal(refusalOf(root).textContent,
+    'Для начального уровня с отмеченным инвентарём нет базовых упражнений на: бицепс. Есть с инвентарём: гантели. В библиотеке пока нет базовых упражнений на: трицепс.');
+});
+
 test('«Другой вариант» у тренировки, чей уровень при нынешнем инвентаре недоступен: отказ называет инвентарь, прежняя остаётся', async t => {
   const generated = generate({ level: 'beginner', zones: [], seed: 3, library: TEST_LIBRARY, now: () => OWN.t }).compact;
   const library = needing(['dumbbells'], BICEPS);

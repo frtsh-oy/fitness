@@ -17,7 +17,7 @@ import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 import { MUSCLES } from '../muscles.js';
-import { GEAR, NO_GEAR, NO_GEAR_LABEL } from '../gear.js';
+import { GEAR, NO_GEAR, NO_GEAR_LABEL, gearLabel } from '../gear.js';
 import { itemProblems, NO_LOAD_PATTERN, KEY_PATTERN, YOUTUBE_ID } from '../workouts/schema.js';
 
 // Шаблон ключа живёт в схеме, а отсюда по-прежнему отдаётся (на него ссылаются тесты).
@@ -214,6 +214,13 @@ function readRow(record, n, columnAt, errors, keyRows) {
     // «Без инвентаря» не вид инвентаря, а его отсутствие: рядом с другим видом
     // оно противоречит само себе, и на карточке вышло бы «без инвентаря, гантели».
     fail('Инвентарь', `«${NO_GEAR_LABEL}» не сочетается с другим инвентарём — получено «${gearCell}»`);
+    gear = [NO_GEAR];
+  } else if (new Set(gear).size < gear.length) {
+    // Повтор — почти наверняка опечатка («гантели, гантели» вместо «гантели,
+    // гиря»): тихо схлопнутый, он потерял бы второй вид, а оставленный как есть
+    // дал бы на карточке «гантели, гантели».
+    const repeated = gear.find((id, i) => gear.indexOf(id) !== i);
+    fail('Инвентарь', `инвентарь повторяется: «${gearLabel(repeated)}» — получено «${gearCell}»`);
     gear = [NO_GEAR];
   }
 

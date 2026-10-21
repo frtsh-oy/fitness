@@ -16,14 +16,14 @@ import { LIBRARY, SLOT_LABELS, DIFFICULTY_LABELS } from './exercises/index.js';
 import { renderLibrary } from './library-view.js';
 import { expandWorkout, exerciseCount, NAME_MAX } from './builder/compact.js';
 import {
-  pickSkeleton, makeRandom, generate, availability, missingGroupsMessage, missingZoneMessage, missingGear,
+  pickSkeleton, makeRandom, generate, availability, missingGroupsMessage, missingZoneMessage, missingGear, closableGroups,
 } from './builder/generator.js';
 import { replaceCandidates, replaceExercise } from './builder/replace.js';
 import { zeroGroups, belowFloor } from './builder/coverage.js';
 import { groupsPhrase } from './muscles.js';
 import { LEVELS, ZONES, MAX_STRENGTH, MAX_ZONES, DEFAULT_DAYS, PLAN_DAYS } from './builder/rules.js';
 import { plural, defaultName } from './builder/texts.js';
-import { gearText, gearLabel, fitsGear, fitLibrary, unownedGear } from './gear.js';
+import { gearText, gearNames, fitsGear, fitLibrary, unownedGear } from './gear.js';
 import { renderGearPicker } from './gear-picker.js';
 import { createGearProfile } from './gear-profile.js';
 import { newWorkoutId, OWN_LIMIT } from './my-workouts.js';
@@ -104,9 +104,6 @@ const copyCompact = compact => ({
 const poolText = pool => (pool.length === Object.keys(DIFFICULTY_LABELS).length
   ? 'все'
   : pool.map(difficulty => DIFFICULTY_WORDS[difficulty]).join(' и '));
-
-// Подписи инвентаря для «Есть с инвентарём: …».
-const gearList = gear => gear.map(gearLabel).join(', ');
 
 // Возвращает { edit(id, compact) }: открыть свою тренировку на правку, подобранную
 // на результате, собранную руками на сборке. Обещание, а не void: если начатый
@@ -345,7 +342,7 @@ export function renderBuilder({
     const gear = unownedGear(replaceCandidates({ compact: draft, slot, key, library }), owned);
     return gear.length === 0
       ? NO_CANDIDATES
-      : `Похожих упражнений с отмеченным инвентарём больше нет. Есть с инвентарём: ${gearList(gear)}.`;
+      : `Похожих упражнений с отмеченным инвентарём больше нет. Есть с инвентарём: ${gearNames(gear)}.`;
   }
 
   // Шторка замены. Ставится рядом с корнем экрана, а не внутрь него: сборка и
@@ -506,6 +503,12 @@ export function renderBuilder({
   // диктор читает, почему его нельзя выбрать.
   const setUnavailable = (node, off) => (off ? node.setAttribute('aria-disabled', 'true') : node.removeAttribute('aria-disabled'));
 
+  // Отказ уровня с подсказкой про инвентарь: generate и availability видят
+  // только подходящие упражнения, а какой инвентарь и для каких групп помог бы,
+  // знает тот, у кого есть полная библиотека.
+  const levelMessage = (level, groups, owned) => missingGroupsMessage(level, groups,
+    missingGear(library, owned, level, groups), closableGroups(library, owned, level, groups));
+
   // focusGear — вид инвентаря, чей переключатель только что нажали: экран
   // перерисован целиком, и фокус надо вернуть на ту же кнопку нового экрана.
   function drawGenerator(focusGear = null) {
@@ -553,8 +556,7 @@ export function renderBuilder({
       item.append(option);
       if (!usable(id)) {
         setUnavailable(option, true);
-        const note = make('p', 'level-missing',
-          missingGroupsMessage(id, info[id].missing, missingGear(library, owned, id, info[id].missing)));
+        const note = make('p', 'level-missing', levelMessage(id, info[id].missing, owned));
         note.id = `level-missing-${id}`;
         option.setAttribute('aria-describedby', note.id);
         item.append(note);
@@ -648,7 +650,7 @@ export function renderBuilder({
     if (result.zone !== undefined) {
       return missingZoneMessage(level, result.zone, missingGear(library, owned, level, ZONES[result.zone].groups));
     }
-    return missingGroupsMessage(level, result.groups, missingGear(library, owned, level, result.groups));
+    return levelMessage(level, result.groups, owned);
   }
 
   // Новая тренировка по уровню и зонам: с экрана генератора и по «Другому
