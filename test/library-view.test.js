@@ -42,10 +42,11 @@ function mount({
   onAdd = () => {},
   onBack = () => {},
   openLink = () => {},
+  gear,
   document = makeDom('<!doctype html><html><body><div id="host"></div></body></html>').document,
 } = {}) {
   const host = document.getElementById('host');
-  const view = renderLibrary({ host, entries, isAdded, addBlocked, onAdd, onBack, openLink });
+  const view = renderLibrary({ host, entries, isAdded, addBlocked, onAdd, onBack, openLink, gear });
   return { document, host, view };
 }
 
@@ -388,4 +389,232 @@ test('смена фильтра убирает открытое видео вм�
   assert.deepEqual(names(host), ['Жим']);
   assert.equal(host.querySelectorAll('iframe').length, 0);
   assert.equal(host.querySelector('button.video').getAttribute('aria-expanded'), 'false');
+});
+
+// — «Что есть дома» ————————————————————————————————————————————————————
+
+const gearChip = (host, id) => host.querySelector(`.gear-picker [data-gear="${id}"]`);
+const ownedChips = host => [...host.querySelectorAll('.gear-chip[aria-pressed="true"]')].map(b => b.dataset.gear);
+const foundText = host => host.querySelector('.library-found').textContent;
+
+// Записи с инвентарём. Ягодицы — три упражнения с разным инвентарём, приседы —
+// одно с гантелями: так видно и «ещё M» в зоне, и вне её.
+const gearEntries = () => [
+  strength('bridge', 'Мост', { gear: ['none'], load: { glutes: 1 } }),
+  strength('bridge-band', 'Мост с резинкой', { gear: ['band_long'], load: { glutes: 1 } }),
+  strength('bridge-db', 'Мост с гантелями', { gear: ['dumbbells'], load: { glutes: 1 } }),
+  strength('bridge-both', 'Мост с гирей и гантелями', { gear: ['dumbbells', 'kettlebell'], load: { glutes: 1 } }),
+  strength('squat-db', 'Присед с гантелями', { gear: ['dumbbells'], load: { quads: 1 } }),
+];
+
+test('filterEntries: owned оставляет только подходящее по инвентарю, owned null не фильтрует', () => {
+  const lib = gearEntries();
+  assert.deepEqual(keys(filterEntries(lib, { owned: ['band_long'] })), ['bridge', 'bridge-band']);
+  assert.deepEqual(keys(filterEntries(lib, { owned: ['dumbbells'] })), ['bridge', 'bridge-db', 'squat-db']);
+  // Нужно всё перечисленное: одних гантелей для «гири и гантелей» мало.
+  assert.deepEqual(keys(filterEntries(lib, { owned: ['dumbbells', 'kettlebell'] })),
+    ['bridge', 'bridge-db', 'bridge-both', 'squat-db']);
+  assert.deepEqual(keys(filterEntries(lib, { owned: [] })), ['bridge'], 'пусто — остаётся «без инвентаря»');
+  assert.equal(filterEntries(lib, { owned: null }).length, 5);
+  assert.equal(filterEntries(lib, {}).length, 5);
+  assert.equal(filterEntries(lib, { owned: undefined }).length, 5);
+});
+
+test('filterEntries: инвентарь действует вместе с поиском, зоной и сложностью', () => {
+  const lib = [
+    ...gearEntries(),
+    strength('bridge-hard', 'Мост на одной ноге', { gear: ['none'], difficulty: 'hard', load: { glutes: 1 } }),
+    strength('warm', 'Мост лёжа', { slot: 'warmup', gear: ['none'], load: { glutes: 1 } }),
+  ];
+  assert.deepEqual(keys(filterEntries(lib, { owned: ['dumbbells'], zone: 'glutes' })), ['bridge', 'bridge-db', 'bridge-hard']);
+  assert.deepEqual(keys(filterEntries(lib, { owned: ['dumbbells'], query: 'гантел' })), ['bridge-db', 'squat-db']);
+  assert.deepEqual(keys(filterEntries(lib, { owned: ['dumbbells'], difficulty: 'hard' })), ['bridge-hard']);
+  assert.deepEqual(keys(filterEntries(lib, { owned: [], zone: 'legs' })), []);
+});
+
+test('с gear: упражнения с неотмеченным инвентарём скрыты, отметка в переключателе возвращает их', () => {
+  const calls = [];
+  const { host } = mount({
+    entries: gearEntries(),
+    gear: { owned: ['band_long'], onChange: owned => calls.push(owned) },
+  });
+  assert.deepEqual(names(host), ['Мост', 'Мост с резинкой']);
+
+  gearChip(host, 'dumbbells').click();
+  assert.deepEqual(names(host), ['Мост', 'Мост с резинкой', 'Мост с гантелями', 'Присед с гантелями']);
+  assert.deepEqual(calls, [['band_long', 'dumbbells']]);
+
+  gearChip(host, 'kettlebell').click();
+  assert.deepEqual(names(host), ['Мост', 'Мост с резинкой', 'Мост с гантелями', 'Мост с гирей и гантелями', 'Присед с гантелями']);
+  assert.deepEqual(calls.at(-1), ['band_long', 'dumbbells', 'kettlebell']);
+
+  // Снять всё: остаётся только «без инвентаря».
+  for (const id of ['band_long', 'dumbbells', 'kettlebell']) gearChip(host, id).click();
+  assert.deepEqual(names(host), ['Мост']);
+  assert.deepEqual(calls.at(-1), []);
+  assert.equal(calls.length, 5, 'по одному вызову на нажатие');
+});
+
+test('с gear: переключатели стоят после чипов сложности и перед строкой «Найдено», со своим id', () => {
+  const { host } = mount({ gear: { owned: ['band_long', 'loop_short'], onChange: () => {} } });
+  const root = host.querySelector('.library');
+  const groups = [...root.querySelectorAll('.library-filters')];
+  const picker = root.querySelector('.gear-picker');
+
+  assert.equal(groups.length, 2, 'зона и сложность на месте');
+  assert.equal(picker.previousElementSibling, groups[1], 'сразу после сложности');
+  assert.equal(picker.nextElementSibling, root.querySelector('.library-found'), 'сразу перед «Найдено»');
+  assert.equal(picker.querySelector('h3').id, 'library-gear-title');
+  assert.deepEqual(ownedChips(host), ['band_long', 'loop_short']);
+  // Чипы фильтров библиотеки остались своими: переключатели в их выборку не попали.
+  assert.equal(root.querySelectorAll('.library-chip').length, 8 + 4);
+  assert.equal(pressed(host).length, 2);
+});
+
+test('с gear: сколько скрыто, считается по тем же поиску, зоне и сложности', () => {
+  const { host } = mount({
+    entries: gearEntries(),
+    gear: { owned: [], onChange: () => {} },
+  });
+  // Из пяти силовых без инвентаря подходит одно, четыре скрыты.
+  assert.equal(foundText(host), 'Найдено: 1 · ещё 4 с другим инвентарём');
+
+  // Зона «Ягодицы»: подходит «Мост», скрыты три моста; присед в зону не входит и
+  // в «ещё» не попадает.
+  chip(host, 'Ягодицы').click();
+  assert.equal(foundText(host), 'Найдено: 1 · ещё 3 с другим инвентарём');
+
+  // Поиск вместе с зоной: «гантел» находит два моста с гантелями, оба скрыты.
+  type(host, 'гантел');
+  assert.deepEqual(names(host), []);
+  assert.equal(foundText(host), 'Найдено: 0 · ещё 2 с другим инвентарём');
+  assert.match(host.textContent, /Ничего не найдено/);
+
+  // Отметили гантели: «Мост с гантелями» вернулся, скрытым остаётся «с гирей и гантелями».
+  gearChip(host, 'dumbbells').click();
+  assert.deepEqual(names(host), ['Мост с гантелями']);
+  assert.equal(foundText(host), 'Найдено: 1 · ещё 1 с другим инвентарём');
+
+  // Отмечено всё нужное: скрытого нет, остаётся одно «Найдено: N».
+  gearChip(host, 'kettlebell').click();
+  assert.equal(foundText(host), 'Найдено: 2');
+});
+
+test('с gear: «ещё M» учитывает сложность и не считает разминку', () => {
+  const { host } = mount({
+    entries: [
+      strength('a', 'Мост', { gear: ['none'], difficulty: 'basic' }),
+      strength('b', 'Мост с гантелями', { gear: ['dumbbells'], difficulty: 'hard' }),
+      strength('c', 'Мост с гирей', { gear: ['kettlebell'], difficulty: 'basic' }),
+      strength('w', 'Мост лёжа с гантелями', { slot: 'warmup', gear: ['dumbbells'], difficulty: 'basic' }),
+    ],
+    gear: { owned: [], onChange: () => {} },
+  });
+  assert.equal(foundText(host), 'Найдено: 1 · ещё 2 с другим инвентарём', 'разминка не в счёте');
+  chip(host, 'Сложное').click();
+  assert.equal(foundText(host), 'Найдено: 0 · ещё 1 с другим инвентарём');
+  chip(host, 'Базовое').click();
+  assert.equal(foundText(host), 'Найдено: 1 · ещё 1 с другим инвентарём');
+});
+
+test('с gear: если скрывать нечего, строка «Найдено» прежняя', () => {
+  const { host } = mount({
+    entries: [strength('a', 'Тяга', { gear: ['none'] }), strength('b', 'Жим', { gear: ['band_long'] })],
+    gear: { owned: ['band_long'], onChange: () => {} },
+  });
+  assert.equal(foundText(host), 'Найдено: 2');
+});
+
+test('«Сбросить фильтры» инвентарь не трогает', () => {
+  const calls = [];
+  const { host } = mount({
+    entries: gearEntries(),
+    gear: { owned: ['dumbbells'], onChange: owned => calls.push(owned) },
+  });
+  chip(host, 'Ноги').click();
+  type(host, 'нет такого');
+  assert.deepEqual(names(host), []);
+  chip(host, 'Сбросить фильтры').click();
+
+  assert.deepEqual(ownedChips(host), ['dumbbells'], 'переключатель остался отмеченным');
+  assert.deepEqual(names(host), ['Мост', 'Мост с гантелями', 'Присед с гантелями'], 'и список всё ещё по инвентарю');
+  assert.equal(foundText(host), 'Найдено: 3 · ещё 2 с другим инвентарём');
+  assert.deepEqual(calls, [], 'сброс наружу про инвентарь не сообщает');
+});
+
+test('смена инвентаря не пересобирает переключатели и поле поиска: фокус остаётся на нажатой кнопке', () => {
+  const { document, host } = mount({
+    entries: gearEntries(),
+    gear: { owned: [], onChange: () => {} },
+  });
+  const picker = host.querySelector('.gear-picker');
+  const button = gearChip(host, 'dumbbells');
+  const input = host.querySelector('input.library-search');
+
+  button.focus();
+  button.click();
+  assert.equal(host.querySelector('.gear-picker'), picker);
+  assert.equal(gearChip(host, 'dumbbells'), button);
+  assert.equal(document.activeElement, button);
+  assert.equal(host.querySelector('input.library-search'), input);
+});
+
+test('с gear: «В тренировке» считает добавленное, даже когда его скрыл инвентарь', () => {
+  const { host } = mount({
+    entries: gearEntries(),
+    isAdded: key => key === 'bridge-db',
+    gear: { owned: [], onChange: () => {} },
+  });
+  assert.deepEqual(names(host), ['Мост'], 'упражнения с гантелями не видно');
+  assert.equal(host.querySelector('.library-total').textContent, 'В тренировке: 1');
+});
+
+test('без gear: переключателей нет, ничего не фильтруется, «Найдено» без «ещё»', () => {
+  const lib = gearEntries();
+  const { host } = mount({ entries: lib });
+  assert.equal(host.querySelector('.gear-picker'), null);
+  assert.equal(host.querySelector('[data-gear]'), null);
+  assert.equal(names(host).length, lib.length);
+  assert.equal(foundText(host), 'Найдено: 5');
+
+  // gear: null — то же, что не передать совсем.
+  const nulled = mount({ entries: lib, gear: null });
+  assert.equal(nulled.host.querySelector('.gear-picker'), null);
+  assert.equal(foundText(nulled.host), 'Найдено: 5');
+});
+
+test('повторная отрисовка на том же узле оставляет одни переключатели', () => {
+  const { document, host } = mount({ gear: { owned: [], onChange: () => {} } });
+  mount({ document, gear: { owned: ['dumbbells'], onChange: () => {} } });
+  assert.equal(host.querySelectorAll('.gear-picker').length, 1);
+  assert.deepEqual(ownedChips(host), ['dumbbells'], 'новый экран — со своим выбором');
+});
+
+test('инвентарь на карточке: той же подписью, что в шторке замены, в верхней строке', () => {
+  const { host } = mount({
+    entries: [
+      strength('a', 'Тяга', { gear: ['band_handles', 'dumbbells'], muscles: 'Спина' }),
+      strength('b', 'Мост', { gear: ['none'] }),
+      strength('c', 'Присед', { gear: ['kettlebell'] }),
+    ],
+  });
+  const cards = [...host.querySelectorAll('.library-card')];
+  assert.deepEqual(cards.map(c => c.querySelector('.library-gear').textContent),
+    ['резинка с ручками, гантели', 'без инвентаря', 'гиря']);
+
+  const top = cards[0].querySelector('.exercise-top');
+  assert.deepEqual([...top.children].map(c => c.className), ['library-level', 'library-gear', 'muscles'],
+    'сложность, инвентарь и мышцы в одной верхней строке');
+  assert.equal(top.querySelector('.muscles').textContent, 'Спина');
+});
+
+test('инвентарь на карточке есть и при переключателях, и после смены выбора', () => {
+  const { host } = mount({
+    entries: gearEntries(),
+    gear: { owned: ['dumbbells'], onChange: () => {} },
+  });
+  const gearOf = () => [...host.querySelectorAll('.library-card .library-gear')].map(s => s.textContent);
+  assert.deepEqual(gearOf(), ['без инвентаря', 'гантели', 'гантели']);
+  gearChip(host, 'kettlebell').click();
+  assert.deepEqual(gearOf(), ['без инвентаря', 'гантели', 'гантели, гиря', 'гантели']);
 });

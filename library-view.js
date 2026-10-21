@@ -7,6 +7,8 @@ import { DIFFICULTY_LABELS, toItem } from './exercises/index.js';
 import { ZONES } from './builder/rules.js';
 import { renderHowto, bindHowto } from './render.js';
 import { setupPlayers } from './player.js';
+import { fitsGear, gearText } from './gear.js';
+import { renderGearPicker } from './gear-picker.js';
 
 // Начало id панелей плеера библиотеки. Свой, а не общий с «Сегодня»: панель
 // получает id при открытии ролика, и без различия обе назвали бы первую
@@ -39,23 +41,30 @@ export function normalizeQuery(text) {
 // правилами и в ручную сборку не добавляются. Зона — по целевым группам
 // (доля 1, как в генераторе): упражнение, где ягодичные лишь вспомогательные
 // (0.5), на «Ягодицы» не годится, и среди найденных по зоне его быть не должно.
-export function filterEntries(entries, { query = '', zone = null, difficulty = null } = {}) {
+// owned — что отмечено в «Что есть дома»: null — не фильтровать по инвентарю
+// вовсе (экран без переключателей), а пустой массив — «ничего нет», тогда
+// остаются только упражнения без инвентаря.
+export function filterEntries(entries, { query = '', zone = null, difficulty = null, owned = null } = {}) {
   const needle = normalizeQuery(query);
   const groups = zone === null ? null : ZONES[zone].groups;
   return entries.filter(entry => entry.slot === 'strength'
     && normalizeQuery(entry.name).includes(needle)
     && (groups === null || groups.some(group => entry.load[group] === 1))
-    && (difficulty === null || entry.difficulty === difficulty));
+    && (difficulty === null || entry.difficulty === difficulty)
+    && (owned === null || fitsGear(entry, owned)));
 }
 
 // Возвращает { refresh }: вызывающий зовёт его, когда состав тренировки или
 // причина «добавлять нельзя» изменились где-то вне экрана. Сам экран после
 // onAdd обновляется без напоминания: нажатая кнопка должна сразу показать, чем
 // кончилось, а правду о том, добавилось ли упражнение, говорит isAdded.
-export function renderLibrary({ host, entries, isAdded, addBlocked, onAdd, onBack, openLink }) {
+// gear — { owned, onChange(owned) } или null. При null инвентарь не фильтрует
+// ничего и переключателей нет; иначе entries — вся библиотека (счётчик «ещё M с
+// другим инвентарём» считает скрытое сам), а выбор человека хранит вызывающий.
+export function renderLibrary({ host, entries, isAdded, addBlocked, onAdd, onBack, openLink, gear = null }) {
   const document = host.ownerDocument;
   const strengthEntries = entries.filter(entry => entry.slot === 'strength');
-  const state = { query: '', zone: null, difficulty: null };
+  const state = { query: '', zone: null, difficulty: null, owned: gear === null ? null : [...gear.owned] };
 
   // Весь экран — в своём узле, а не прямо в host. Обработчик раскрытия «Как
   // выполнять» вешается на корень (bindHowto) и живёт ровно столько же, сколько
@@ -124,6 +133,8 @@ export function renderLibrary({ host, entries, isAdded, addBlocked, onAdd, onBac
     for (const { button, key, value } of chips) button.setAttribute('aria-pressed', String(state[key] === value));
   };
 
+  // Инвентарь не сбрасывается: это не фильтр поиска, а то, что есть у человека
+  // дома, и «Сбросить» не должно возвращать ему упражнения, которых он не сделает.
   function resetFilters() {
     state.query = '';
     state.zone = null;
@@ -150,6 +161,9 @@ export function renderLibrary({ host, entries, isAdded, addBlocked, onAdd, onBac
     const top = el(document, 'div', 'exercise-top');
     top.append(
       el(document, 'span', 'library-level', DIFFICULTY_LABELS[entry.difficulty]),
+      // Инвентарь называется на карточке всегда, и с переключателями, и без них:
+      // той же подписью, что в шторке замены.
+      el(document, 'span', 'library-gear', gearText(entry)),
       el(document, 'span', 'muscles', entry.muscles),
     );
     article.append(top, el(document, 'h3', null, entry.name));
@@ -188,7 +202,10 @@ export function renderLibrary({ host, entries, isAdded, addBlocked, onAdd, onBac
   // вместе со своей карточкой, а плеер нового списка ставится заново.
   function drawList() {
     const shown = filterEntries(entries, state);
-    found.textContent = `Найдено: ${shown.length}`;
+    // «Ещё M» — сколько прошло бы по тем же поиску, зоне и сложности без
+    // фильтра инвентаря: человек видит, что дело в инвентаре, а не в запросе.
+    const hidden = state.owned === null ? 0 : filterEntries(entries, { ...state, owned: null }).length - shown.length;
+    found.textContent = `Найдено: ${shown.length}${hidden > 0 ? ` · ещё ${hidden} с другим инвентарём` : ''}`;
     addButtons.clear();
     list.replaceChildren(...shown.map(card));
     emptyBox.className = shown.length === 0 ? 'library-empty' : '';
@@ -228,11 +245,24 @@ export function renderLibrary({ host, entries, isAdded, addBlocked, onAdd, onBac
   const foot = el(document, 'div', 'library-foot');
   foot.append(total, backButton(false));
 
+  // Переключатели — один и тот же узел на всё время экрана: перерисовывается
+  // только список, и нажатая кнопка остаётся в фокусе.
+  const picker = gear && renderGearPicker(document, {
+    owned: state.owned,
+    idPrefix: 'library-gear',
+    onChange(owned) {
+      state.owned = owned;
+      gear.onChange(owned);
+      drawList();
+    },
+  });
+
   root.append(
     backButton(true),
     search,
     chipGroup('Зона', 'zone', ZONE_CHIPS),
     chipGroup('Сложность', 'difficulty', DIFFICULTY_CHIPS),
+    ...(picker ? [picker] : []),
     found,
     emptyBox,
     list,
