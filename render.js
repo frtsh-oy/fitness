@@ -1,3 +1,7 @@
+// Склонение — одно на всё приложение: свой plural здесь разошёлся бы с текстами
+// своей тренировки (builder/texts.js).
+import { plural } from './builder/texts.js';
+
 // Идентификатор отметки строится из устойчивых частей данных: id блока и key
 // упражнения. Индекса здесь нет намеренно — по индексу отметки «переезжали» бы
 // на соседей при любой вставке упражнения в середину блока. key обязателен
@@ -204,6 +208,17 @@ export function bindHowto(root) {
   });
 }
 
+// Метка блока с числом повторов: «1 круг», «2 круга», «5 кругов» или, если блок
+// считает подходы (unit: 'sets'), «2 подхода». Склоняется по числу: у готовых
+// тренировок кругов не больше трёх, но своя может дойти и до пяти. Вынесена из
+// renderWorkout, потому что та же метка нужна экрану сборки (builder-view.js)
+// у силовых блоков своей тренировки.
+export function roundsTag(block) {
+  const n = block.rounds;
+  const forms = block.unit === 'sets' ? ['подход', 'подхода', 'подходов'] : ['круг', 'круга', 'кругов'];
+  return `${n} ${plural(n, forms)}`;
+}
+
 function renderItem(document, block, item, itemIndex, expandDescriptions) {
   const article = el(document, 'article', 'exercise');
 
@@ -225,14 +240,17 @@ function renderItem(document, block, item, itemIndex, expandDescriptions) {
   });
   article.append(refs, body, ...links);
 
+  // Повторы блока называются кругами или подходами (поле unit). Блок с одним
+  // повтором слова не требует: «Готово».
+  const word = block.unit === 'sets' ? 'Подход' : 'Круг';
   const checks = el(document, 'div', 'checks');
   for (let round = 1; round <= block.rounds; round += 1) {
     const label = el(document, 'label', 'check');
     const input = document.createElement('input');
     input.type = 'checkbox';
     input.dataset.mark = markId(block.id, item.key, round);
-    input.setAttribute('aria-label', `${item.name}: ${block.rounds === 1 ? 'выполнено' : `круг ${round}`}`);
-    label.append(input, el(document, 'span', null, block.rounds === 1 ? 'Готово' : `Круг ${round}`));
+    input.setAttribute('aria-label', `${item.name}: ${block.rounds === 1 ? 'выполнено' : `${word.toLowerCase()} ${round}`}`);
+    label.append(input, el(document, 'span', null, block.rounds === 1 ? 'Готово' : `${word} ${round}`));
     checks.append(label);
   }
   article.append(checks);
@@ -275,7 +293,7 @@ export function renderWorkout(workout, document, { expandDescriptions = false } 
     titleBox.append(el(document, 'h2', null, block.title));
     titleBox.append(el(document, 'p', null, block.sub));
     heading.append(titleBox);
-    heading.append(el(document, 'span', 'round-tag', block.rounds === 1 ? '1 круг' : `${block.rounds} круга`));
+    heading.append(el(document, 'span', 'round-tag', roundsTag(block)));
     section.append(heading);
 
     if (block.note) section.append(el(document, 'p', 'block-note', block.note));

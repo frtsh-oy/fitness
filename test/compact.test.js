@@ -2,12 +2,18 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { LIBRARY, entry } from '../exercises/index.js';
 import { validateWorkout } from '../workouts/schema.js';
-import { MAX_STRENGTH } from '../builder/rules.js';
+import { MAX_STRENGTH, SKELETON } from '../builder/rules.js';
+import { arrangeStrength } from '../builder/arrange.js';
+import { FORMATS } from '../builder/format.js';
+import { weeklySets } from '../weekly.js';
+import { setsByGroup } from '../volume.js';
 import { KEY_PATTERN } from '../workouts/schema.js';
 import { TEST_LIBRARY } from './fixtures/test-library.js';
-import { PAIR_PREAMBLE, BLOCK_TEXTS, progressionFor, CAUTION } from '../builder/texts.js';
 import {
-  NAME_MAX, VALUE_MAX, serializeCompact, parseCompact, roundsOf, exerciseCount, expandWorkout,
+  PAIR_PREAMBLE, LOOP_PREAMBLE, SETS_PREAMBLE, BLOCK_TEXTS, progressionFor, CAUTION,
+} from '../builder/texts.js';
+import {
+  NAME_MAX, VALUE_MAX, SKELETON_BLOCK_IDS, serializeCompact, parseCompact, roundsOf, exerciseCount, expandWorkout,
 } from '../builder/compact.js';
 
 // Образцы общие для всех тестов файла, поэтому заморожены: развёртка, которая
@@ -27,14 +33,14 @@ const COOLDOWN = ['hip-flexor', 'knees-to-chest', 'breathing'];
 
 // Ручная сборка: уровня нет, упора нет, силовых три — последняя без пары.
 const MANUAL = deepFreeze({
-  v: 1, name: 'Моя тренировка', days: [1, 3, 5], level: null, zones: [],
+  v: 1, name: 'Моя тренировка', days: [1, 3, 5], level: null, zones: [], format: 'pairs',
   warmup: [...WARMUP], circuit: [...CIRCUIT], strength: ['rdl', 'adduction', 'glute-bridge'], focus: [],
   cooldown: [...COOLDOWN], t: 1760000000000,
 });
 
 // Подобранная по правилам: уровень, зона упора и упражнение упора.
 const GENERATED = deepFreeze({
-  v: 1, name: 'Всё тело. Упор: ягодицы', days: [1, 3, 5], level: 'beginner', zones: ['glutes'],
+  v: 1, name: 'Всё тело. Упор: ягодицы', days: [1, 3, 5], level: 'beginner', zones: ['glutes'], format: 'pairs',
   warmup: [...WARMUP], circuit: [...CIRCUIT],
   strength: ['rdl', 'adduction', 'glute-bridge', 'leg-press', 'side-leg-raise', 'bird-dog', 'seated-row', 'chest-press'],
   focus: [['glute-bridge', 'glutes']], cooldown: [...COOLDOWN], t: 1760000000000,
@@ -192,7 +198,7 @@ test('развёртка не меняет ни сжатую запись, ни 
 
 test('самая большая тренировка укладывается в 4096 символов', () => {
   const key = i => `${'k'.repeat(37)}-${String(i).padStart(2, '0')}`; // 40 символов
-  const huge = { v: 1, name: 'Ж'.repeat(NAME_MAX), days: [1, 2, 3, 4, 5, 6, 7], level: 'intermediate', zones: ['shoulders', 'core'],
+  const huge = { v: 1, name: 'Ж'.repeat(NAME_MAX), days: [1, 2, 3, 4, 5, 6, 7], level: 'intermediate', zones: ['shoulders', 'core'], format: 'pairs',
     warmup: [key(1), key(2)], circuit: [key(3), key(4), key(5), key(6)], strength: Array.from({ length: MAX_STRENGTH }, (_, i) => key(10 + i)),
     focus: [[key(10), 'shoulders'], [key(11), 'core']], cooldown: [key(7), key(8), key(9)], t: 9_999_999_999_999 };
   assert.ok(serializeCompact(huge).length <= VALUE_MAX);
@@ -247,7 +253,7 @@ test('parseCompact принимает запись, где всё пустое, 
   // Пустые слоты, нет уровня, зон и упора — допустимая запись: «слот не может
   // быть пустым» из неё сделало бы нечитаемую тренировку, например после замены
   // в библиотеке всех её упражнений.
-  const empty = { v: 1, name: 'Пустая', days: [1], level: null, zones: [], warmup: [], circuit: [], strength: [], focus: [], cooldown: [], t: 0 };
+  const empty = { v: 1, name: 'Пустая', days: [1], level: null, zones: [], format: 'pairs', warmup: [], circuit: [], strength: [], focus: [], cooldown: [], t: 0 };
   assert.deepEqual(parseCompact(serializeCompact(empty)), empty);
   const { workout, removed } = expandWorkout('my-empty', empty);
   assert.deepEqual(workout.blocks, []);
@@ -266,4 +272,240 @@ test('parseCompact принимает ровно те ключи, которые
 test('название с кавычками и эмодзи переживает запись и чтение', () => {
   const c = { ...MANUAL, name: 'Мой «день» "Б" 💪' };
   assert.deepEqual(parseCompact(serializeCompact(c)), c);
+});
+
+// Запись до появления формата. Новые записи формат несут всегда, а эту читаем
+// как «Пары» и не отбрасываем: у тех, кто уже собирал тренировки, она лежит в
+// облаке и на устройстве.
+const withoutFormat = compact => {
+  const { format, ...rest } = compact;
+  return rest;
+};
+
+test('parseCompact: запись без format читается как «Пары» и не отбрасывается', () => {
+  const old = withoutFormat(MANUAL);
+  assert.ok(!('format' in old));
+  assert.deepEqual(parseCompact(serializeCompact(old)), { ...old, format: 'pairs' });
+});
+
+test('parseCompact: формат переживает запись и чтение, у любой записи он есть', () => {
+  for (const format of Object.keys(FORMATS)) {
+    assert.equal(parseCompact(serializeCompact({ ...MANUAL, format })).format, format, format);
+  }
+  for (const c of [MANUAL, GENERATED, withoutFormat(MANUAL)]) assert.ok('format' in parseCompact(serializeCompact(c)));
+});
+
+test('parseCompact: незнакомый format — «Пары», а не отказ', () => {
+  for (const format of ['zzz', 'toString', 'circuit', 42, null, ['sets'], {}]) {
+    const parsed = parseCompact(serializeCompact({ ...MANUAL, format }));
+    assert.notEqual(parsed, null, JSON.stringify(format));
+    assert.equal(parsed.format, 'pairs', JSON.stringify(format));
+  }
+});
+
+test('«Пары» без format и с format: pairs разворачиваются в одну и ту же тренировку', () => {
+  const library = TEST_LIBRARY;
+  const compact = { ...MANUAL, warmup: [], circuit: [], strength: ['squat-a', 'hinge-a', 'row-a'], cooldown: [] };
+  assert.deepEqual(expandWorkout('my-x', withoutFormat(compact), library), expandWorkout('my-x', compact, library));
+});
+
+// Четыре силовых из тестовой библиотеки и полный скелет: все три формата
+// раскладывают одно и то же. Нагрузка упражнений здесь закреплена разметкой
+// фикстуры, поэтому состав блоков можно называть точно.
+const FULL = deepFreeze({
+  v: 1, name: 'Формат', days: [1, 3, 5], level: null, zones: [], format: 'pairs',
+  warmup: ['warm-1', 'warm-2'], circuit: ['circ-1', 'circ-2', 'circ-3', 'circ-4'],
+  strength: ['squat-a', 'hinge-a', 'row-a', 'press-a'], focus: [],
+  cooldown: ['stretch-1', 'stretch-2', 'breathing'], t: 1760000000000,
+});
+const FORMAT_IDS = Object.keys(FORMATS);
+const expandAs = (format, changes = {}) => expandWorkout('my-fmt', { ...FULL, ...changes, format }, TEST_LIBRARY);
+const strengthBlocks = workout => workout.blocks.filter(b => !SKELETON_BLOCK_IDS.includes(b.id));
+const keysOf = blocks => blocks.flatMap(b => b.items.map(i => i.key));
+
+test('все форматы дают тренировку, которая проходит схему', () => {
+  for (const format of FORMAT_IDS) {
+    const { workout, removed } = expandAs(format);
+    assert.deepEqual(validateWorkout(workout), [], format);
+    assert.deepEqual(removed, [], format);
+    assert.deepEqual(workout.blocks.map(b => b.n), workout.blocks.map((_, i) => String(i + 1).padStart(2, '0')), format);
+  }
+});
+
+test('«Пары»: пары по номеру, вступление у первой, кругов по уровню', () => {
+  const { workout } = expandAs('pairs');
+  const blocks = strengthBlocks(workout);
+  assert.deepEqual(blocks.map(b => [b.id, b.nav, b.title, b.rounds, b.items.map(i => i.key)]), [
+    ['pair1', 'Пара 1', 'Пара 1', 2, ['hinge-a', 'press-a']],
+    ['pair2', 'Пара 2', 'Пара 2', 2, ['row-a', 'squat-a']],
+  ]);
+  assert.deepEqual(blocks[0].preamble, PAIR_PREAMBLE);
+  assert.ok(!('preamble' in blocks[1]));
+  for (const b of blocks) assert.ok(!('unit' in b), b.id);
+});
+
+test('«Круг»: один блок «Силовой круг» со всеми силовыми, вступление и подзаголовок по счёту', () => {
+  const { workout } = expandAs('loop');
+  assert.deepEqual(workout.blocks.map(b => b.id), ['start', 'circuit', 'loop', 'finish']);
+  const [loop] = strengthBlocks(workout);
+  assert.deepEqual(
+    { id: loop.id, nav: loop.nav, title: loop.title, sub: loop.sub, rounds: loop.rounds, n: loop.n },
+    { id: 'loop', nav: 'Силовые', title: 'Силовой круг', sub: '4 упражнения подряд', rounds: 2, n: '03' },
+  );
+  assert.deepEqual(loop.preamble, LOOP_PREAMBLE);
+  assert.ok(!('unit' in loop));
+  assert.deepEqual(loop.items.map(i => i.key), ['hinge-a', 'press-a', 'row-a', 'squat-a']);
+  assert.equal(workout.blocks[0].n, '01');
+  assert.equal(workout.blocks.at(-1).n, '04');
+});
+
+test('«Круг»: подзаголовок склоняет число упражнений', () => {
+  const sub = strength => strengthBlocks(expandAs('loop', { strength }).workout)[0].sub;
+  assert.equal(sub(['squat-a']), '1 упражнение подряд');
+  assert.equal(sub(['squat-a', 'hinge-a']), '2 упражнения подряд');
+  assert.equal(sub(['squat-a', 'hinge-a', 'row-a']), '3 упражнения подряд');
+  assert.equal(sub(['squat-a', 'hinge-a', 'row-a', 'press-a', 'overhead-a']), '5 упражнений подряд');
+  // Пропущенный ключ в счёт не идёт: на экране его нет.
+  assert.equal(sub(['squat-a', 'gone-key']), '1 упражнение подряд');
+});
+
+test('«Подходы»: блок на каждое упражнение, подходы по кругам уровня, вступление у первого', () => {
+  const { workout } = expandAs('sets');
+  assert.deepEqual(workout.blocks.map(b => b.id), ['start', 'circuit', 'ex1', 'ex2', 'ex3', 'ex4', 'finish']);
+  const blocks = strengthBlocks(workout);
+  assert.deepEqual(blocks.map(b => [b.id, b.n, b.nav, b.title, b.sub, b.rounds, b.unit, b.items.map(i => i.key)]), [
+    ['ex1', '03', 'Упр. 1', 'Упражнение 1', 'Задняя поверхность бедра, ягодичные, разгибатели поясницы', 2, 'sets', ['hinge-a']],
+    ['ex2', '04', 'Упр. 2', 'Упражнение 2', 'Грудные, трицепс, передняя дельта', 2, 'sets', ['press-a']],
+    ['ex3', '05', 'Упр. 3', 'Упражнение 3', 'Широчайшие, верх спины, задняя дельта', 2, 'sets', ['row-a']],
+    ['ex4', '06', 'Упр. 4', 'Упражнение 4', 'Квадрицепсы, ягодичные', 2, 'sets', ['squat-a']],
+  ]);
+  assert.deepEqual(blocks[0].preamble, SETS_PREAMBLE);
+  for (const b of blocks.slice(1)) assert.ok(!('preamble' in b), b.id);
+});
+
+test('подходов на упражнение столько же, сколько кругов пары: у продвинутого три', () => {
+  for (const format of FORMAT_IDS) {
+    const { workout } = expandAs(format, { level: 'advanced' });
+    assert.deepEqual(strengthBlocks(workout).map(b => b.rounds), strengthBlocks(workout).map(() => 3), format);
+  }
+});
+
+test('порядок упражнений силовой части одинаков во всех форматах и идёт по парам arrangeStrength', () => {
+  const byKey = new Map(TEST_LIBRARY.map(e => [e.key, e]));
+  const expected = arrangeStrength(FULL.strength.map(key => byKey.get(key))).flat().map(e => e.key);
+  assert.deepEqual(expected, ['hinge-a', 'press-a', 'row-a', 'squat-a']);
+  for (const format of FORMAT_IDS) {
+    assert.deepEqual(keysOf(strengthBlocks(expandAs(format).workout)), expected, format);
+  }
+});
+
+// Ради этого подходов и столько же, сколько кругов: пороги уровней, проверка
+// покрытия и экран нагрузки от формата не должны зависеть.
+test('недельная нагрузка по группам одинакова во всех трёх форматах', () => {
+  const weeklyOf = format => weeklySets([expandAs(format).workout]);
+  const strengthOf = format => setsByGroup(expandAs(format).workout, 'strength');
+  for (const format of ['loop', 'sets']) {
+    assert.deepEqual(weeklyOf(format), weeklyOf('pairs'), format);
+    assert.deepEqual(strengthOf(format), strengthOf('pairs'), format);
+  }
+  // Не пустое равенство: нагрузка у фикстуры есть.
+  assert.ok(weeklyOf('pairs').get('glutes').comparable > 0);
+});
+
+test('шапка: вторая строка по формату, с разогревом и без него', () => {
+  const stat = (format, changes) => expandAs(format, changes).workout.stats[1];
+  // С разогревом: «3 + кругов силовой части», подпись по формату.
+  assert.deepEqual(stat('pairs'), { v: `${SKELETON.circuit.rounds} + 2`, l: 'круга разминки + каждой пары' });
+  assert.deepEqual(stat('loop'), { v: '3 + 2', l: 'круга разминки + силового круга' });
+  assert.deepEqual(stat('sets'), { v: '3 + 2', l: 'круга разминки + подхода на упражнение' });
+  assert.deepEqual(stat('sets', { level: 'advanced' }), { v: '3 + 3', l: 'круга разминки + подхода на упражнение' });
+  // Без разогрева «3 +» уходит, а число называет только силовую часть.
+  assert.deepEqual(stat('pairs', { circuit: [] }), { v: '2', l: 'круга каждой пары' });
+  assert.deepEqual(stat('loop', { circuit: [] }), { v: '2', l: 'силовых круга' });
+  assert.deepEqual(stat('sets', { circuit: [] }), { v: '2', l: 'подхода на упражнение' });
+  assert.deepEqual(stat('pairs', { circuit: [], level: 'advanced' }), { v: '3', l: 'круга каждой пары' });
+  assert.deepEqual(stat('loop', { circuit: [], level: 'advanced' }), { v: '3', l: 'силовых круга' });
+  assert.deepEqual(stat('sets', { circuit: [], level: 'advanced' }), { v: '3', l: 'подхода на упражнение' });
+});
+
+test('разогрев выключен: блока circuit нет, номера подряд, остальное на месте', () => {
+  for (const format of FORMAT_IDS) {
+    const { workout } = expandAs(format, { circuit: [] });
+    assert.ok(!workout.blocks.some(b => b.id === 'circuit'), format);
+    assert.deepEqual(workout.blocks.map(b => b.n), workout.blocks.map((_, i) => String(i + 1).padStart(2, '0')), format);
+    assert.deepEqual(workout.blocks.filter(b => SKELETON_BLOCK_IDS.includes(b.id)).map(b => b.id), ['start', 'finish'], format);
+    assert.deepEqual(validateWorkout(workout), [], format);
+  }
+});
+
+test('разминка и завершение выключены: от скелета остаётся один разогрев', () => {
+  const { workout } = expandAs('loop', { warmup: [], cooldown: [] });
+  assert.deepEqual(workout.blocks.map(b => b.id), ['circuit', 'loop']);
+  assert.equal(workout.stats[1].v, '3 + 2');
+});
+
+test('все три блока скелета пусты: остаются только силовые блоки, шапка без «3 +»', () => {
+  const empty = { warmup: [], circuit: [], cooldown: [] };
+  const ids = format => expandAs(format, empty).workout.blocks.map(b => b.id);
+  assert.deepEqual(ids('pairs'), ['pair1', 'pair2']);
+  assert.deepEqual(ids('loop'), ['loop']);
+  assert.deepEqual(ids('sets'), ['ex1', 'ex2', 'ex3', 'ex4']);
+  for (const format of FORMAT_IDS) {
+    const { workout } = expandAs(format, empty);
+    assert.deepEqual(validateWorkout(workout), [], format);
+    assert.equal(workout.blocks[0].n, '01', format);
+    assert.equal(workout.stats[1].v, '2', format);
+    assert.equal(workout.stats[0].v, '4', format);
+  }
+});
+
+test('нет силовых: силовых блоков нет ни в одном формате', () => {
+  for (const format of FORMAT_IDS) {
+    const { workout } = expandAs(format, { strength: [] });
+    assert.deepEqual(workout.blocks.map(b => b.id), ['start', 'circuit', 'finish'], format);
+    assert.deepEqual(validateWorkout(workout), [], format);
+  }
+});
+
+test('id блоков скелета — start, circuit и finish; силовые блоки называются иначе', () => {
+  assert.deepEqual(SKELETON_BLOCK_IDS, ['start', 'circuit', 'finish']);
+  for (const format of FORMAT_IDS) {
+    const { workout } = expandAs(format);
+    assert.deepEqual(workout.blocks.filter(b => SKELETON_BLOCK_IDS.includes(b.id)).map(b => b.id), SKELETON_BLOCK_IDS, format);
+    const strength = strengthBlocks(workout);
+    assert.ok(strength.length > 0, format);
+    for (const b of strength) assert.match(b.id, /^(pair\d+|loop|ex\d+)$/, format);
+    // Силовые блоки — все упражнения kind strength и только они.
+    assert.ok(keysOf(strength).every(key => TEST_LIBRARY.find(e => e.key === key).kind === 'strength'), format);
+  }
+});
+
+test('прогрессия берёт формат записи', () => {
+  for (const format of FORMAT_IDS) {
+    assert.deepEqual(expandAs(format).workout.progression, progressionFor(null, format), format);
+    assert.deepEqual(expandAs(format, { level: 'beginner' }).workout.progression, progressionFor('beginner', format), format);
+  }
+});
+
+test('незнакомый формат в записи разворачивается как «Пары»', () => {
+  assert.deepEqual(expandAs('zzz'), expandAs('pairs'));
+  assert.deepEqual(expandAs('toString'), expandAs('pairs'));
+});
+
+test('формат не меняет, что вошло в тренировку: те же упражнения, счётчик и инвентарь', () => {
+  const base = expandAs('pairs').workout;
+  for (const format of ['loop', 'sets']) {
+    const { workout } = expandAs(format);
+    assert.deepEqual(workout.stats[0], base.stats[0], format);
+    assert.equal(workout.equipment, base.equipment, format);
+    assert.deepEqual(keysOf(workout.blocks).toSorted(), keysOf(base.blocks).toSorted(), format);
+  }
+});
+
+test('развёртка в любом формате не меняет сжатую запись', () => {
+  for (const format of FORMAT_IDS) {
+    const compact = structuredClone({ ...FULL, format });
+    expandWorkout('my-x', compact, TEST_LIBRARY);
+    assert.deepEqual(compact, { ...FULL, format }, format);
+  }
 });

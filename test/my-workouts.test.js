@@ -87,7 +87,7 @@ const T0 = 1760000000000;
 // Запись достаточна для parseCompact; ключей библиотеки он не сверяет, так что
 // упражнения здесь — просто допустимые по шаблону ключи.
 const compactAt = (t, name = 'Моя тренировка') => ({
-  v: 1, name, days: [1, 3, 5], level: null, zones: [],
+  v: 1, name, days: [1, 3, 5], level: null, zones: [], format: 'pairs',
   warmup: ['pelvic-tilt'], circuit: ['chinese-squat'], strength: ['rdl'], focus: [],
   cooldown: ['breathing'], t,
 });

@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import legsMwf from '../workouts/legs-mwf.js';
 import { LIBRARY, entry } from '../exercises/index.js';
 import {
-  plural, PAIR_PREAMBLE, BLOCK_TEXTS, CAUTION, progressionFor, kickerFor, leadFor, equipmentFor, defaultName,
+  plural, PAIR_PREAMBLE, LOOP_PREAMBLE, SETS_PREAMBLE, BLOCK_TEXTS, CAUTION, progressionFor, kickerFor, leadFor,
+  equipmentFor, defaultName,
 } from '../builder/texts.js';
 
 const FORMS = ['упражнение', 'упражнения', 'упражнений'];
@@ -24,6 +25,36 @@ test('plural выбирает форму по русским правилам, �
 test('вступление пары дословно совпадает с блоком legs1 готовой тренировки', () => {
   const legs1 = legsMwf.blocks.find(b => b.id === 'legs1');
   assert.deepEqual(PAIR_PREAMBLE, legs1.preamble);
+});
+
+// Про односторонние упражнения — один абзац на три вступления: отметка у них
+// значит одно и то же в любом формате.
+const ONE_SIDED = 'В односторонних упражнениях сначала выполни обе стороны. Между ними — 15–20 с. Одна отметка означает, что обе стороны выполнены.';
+
+test('вступление к силовому кругу дословно', () => {
+  assert.deepEqual(LOOP_PREAMBLE, {
+    title: 'Как выполнять силовой круг',
+    paragraphs: [
+      ['Выполни упражнения подряд, по порядку: ', { b: '15–30 с' }, ' между упражнениями, ', { b: '90–120 с' }, ' после круга. Затем начинай следующий круг.'],
+      [ONE_SIDED],
+    ],
+  });
+});
+
+test('вступление к подходам дословно', () => {
+  assert.deepEqual(SETS_PREAMBLE, {
+    title: 'Как выполнять подходы',
+    paragraphs: [
+      ['Подход → ', { b: '60–90 с отдыха' }, ' → следующий подход того же упражнения. Сделала все подходы — переходи к следующему упражнению.'],
+      [ONE_SIDED],
+    ],
+  });
+});
+
+test('абзац про односторонние упражнения одинаков у пар, круга и подходов', () => {
+  for (const preamble of [PAIR_PREAMBLE, LOOP_PREAMBLE, SETS_PREAMBLE]) {
+    assert.deepEqual(preamble.paragraphs[1], [ONE_SIDED], preamble.title);
+  }
 });
 
 test('тексты блоков старта и завершения совпадают с готовой тренировкой', () => {
@@ -64,6 +95,40 @@ test('прогрессия других уровней и ручной сбор�
   for (const level of ['intermediate', 'advanced', null]) {
     assert.deepEqual(progressionFor(level).slice(1), [REPS_UP, FORM_KEEP], String(level));
   }
+});
+
+// Меняется только начало первого пункта: что сохранять. Хвост про запас повторов
+// и остальные пункты у всех форматов общие.
+test('прогрессия по формату: «Пары» — прежний текст, «Круг» и «Подходы» называют своё', () => {
+  const first = (level, format) => progressionFor(level, format)[0];
+  const tail = reserve => `Заканчивай подход с запасом ${reserve} повторов до отказа.`;
+  assert.equal(first('beginner', 'pairs'), `Сохраняй 2 круга каждой силовой пары. ${tail('3–4')}`);
+  assert.equal(first('beginner', 'loop'), `Сохраняй 2 силовых круга. ${tail('3–4')}`);
+  assert.equal(first('beginner', 'sets'), `Сохраняй 2 подхода каждого упражнения. ${tail('3–4')}`);
+  assert.equal(first('advanced', 'pairs'), `Сохраняй 3 круга каждой силовой пары. ${tail('1–2')}`);
+  assert.equal(first('advanced', 'loop'), `Сохраняй 3 силовых круга. ${tail('1–2')}`);
+  assert.equal(first('advanced', 'sets'), `Сохраняй 3 подхода каждого упражнения. ${tail('1–2')}`);
+  assert.equal(first(null, 'loop'), `Сохраняй 2 силовых круга. ${tail('2–3')}`);
+});
+
+test('прогрессия по формату: остальные пункты те же, четвёртый — только у новичка', () => {
+  for (const format of ['pairs', 'loop', 'sets']) {
+    assert.deepEqual(progressionFor('beginner', format).slice(1), progressionFor('beginner').slice(1), format);
+    assert.deepEqual(progressionFor('advanced', format).slice(1), [REPS_UP, FORM_KEEP], format);
+    assert.equal(progressionFor('beginner', format).length, 4, format);
+    assert.equal(progressionFor('advanced', format).length, 3, format);
+  }
+});
+
+test('прогрессия без формата — «Пары», как до появления формата', () => {
+  for (const level of ['beginner', 'intermediate', 'advanced', null]) {
+    assert.deepEqual(progressionFor(level), progressionFor(level, 'pairs'), String(level));
+  }
+});
+
+test('прогрессия с незнакомым форматом — ошибка, а не молчаливая подмена', () => {
+  assert.throws(() => progressionFor('beginner', 'zzz'), /Неизвестный формат: zzz/);
+  assert.throws(() => progressionFor('beginner', 'toString'), /Неизвестный формат/);
 });
 
 test('название: без зон «Всё тело», с зонами — упор строчными; две зоны через «и», а при «и» в названии зоны — через запятую', () => {

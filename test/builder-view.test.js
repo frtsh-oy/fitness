@@ -136,9 +136,10 @@ const generateNow = root => root.querySelector('.builder-generate').click();
 const otherVariant = root => root.querySelector('.builder-variant').click();
 const levelOption = (root, label) => [...root.querySelectorAll('.level-option')]
   .find(option => option.querySelector('.level-title').textContent === label);
-// Чипы зон. У переключателей инвентаря тот же класс .zone-chip (внешний вид у них
-// общий), поэтому зоны отличаются отсутствием .gear-chip.
-const zoneChips = root => [...root.querySelectorAll('.zone-chip:not(.gear-chip)')];
+// Чипы зон. У переключателей инвентаря, блоков и формата тот же класс .zone-chip
+// (внешний вид у них общий), поэтому зоны отличаются отсутствием .gear-chip,
+// .block-chip и .format-chip.
+const zoneChips = root => [...root.querySelectorAll('.zone-chip:not(.gear-chip):not(.block-chip):not(.format-chip)')];
 const zoneChip = (root, label) => zoneChips(root).find(chip => chip.textContent === label);
 const pressedZones = root => zoneChips(root).filter(chip => chip.getAttribute('aria-pressed') === 'true').map(chip => chip.textContent);
 const checkedLevels = root => [...root.querySelectorAll('.level-option[aria-checked="true"]')]
@@ -172,13 +173,13 @@ test('вход: «Собрать самому» и устройство трен
   assert.equal(manual.querySelector('.builder-path-note').textContent,
     'Листай библиотеку упражнений, добавляй нужные и сохрани тренировку.');
 
-  assert.equal(root.querySelector('.builder-steps-title').textContent, 'Любая тренировка устроена одинаково');
+  assert.equal(root.querySelector('.builder-steps-title').textContent, 'Из чего обычно состоит тренировка');
   const steps = [...root.querySelectorAll('.builder-steps li')]
     .map(li => [li.querySelector('strong').textContent, li.querySelector('span').textContent]);
   assert.deepEqual(steps, [
     ['Разминка', 'Плавно, без длительных остановок'],
     ['Круговой разогрев', 'Повышает пульс, резинки лёгкие'],
-    ['Силовые пары', 'Два упражнения подряд, потом отдых'],
+    ['Силовая часть', 'Парами, кругом или подходами — на выбор'],
     ['Завершение', '2–3 минуты в спокойном темпе, дыхание'],
   ]);
 
@@ -650,7 +651,8 @@ test('«Изменить» открывает копию: сохранённая
   await settle(0);
 
   const [, result] = saved[0];
-  assert.deepEqual(result, { ...before, t: result.t }, 'содержимое то же');
+  // У записи, переданной без format, формат читается как «Пары» и сохраняется.
+  assert.deepEqual(result, { ...before, format: 'pairs', t: result.t }, 'содержимое то же, формат дописан');
   assert.deepEqual(given, before, 'переданная запись не изменилась');
   for (const field of ['zones', 'warmup', 'circuit', 'strength', 'cooldown']) {
     assert.notEqual(result[field], given[field], `${field}: свой массив`);
@@ -752,13 +754,13 @@ test('сохранение правки текущей тренировки пе
   assert.equal(document.querySelectorAll('#workout .exercise').length, exerciseCount(OWN) - 1);
 });
 
-test('силовых не больше девяти пар: «Добавить» недоступна и причина названа, убрать — снова можно', t => {
+test('силовых не больше восемнадцати: «Добавить» недоступна и причина названа, убрать — снова можно', t => {
   const { document, root } = mount(t, { library: TEST_LIBRARY });
   openBuilder(document);
   startManual(root);
   openLibrary(root);
   const strength = TEST_LIBRARY.filter(e => e.slot === 'strength').slice(0, MAX_STRENGTH);
-  const reason = 'Не больше 9 силовых пар — убери упражнение, чтобы добавить другое.';
+  const reason = 'Не больше 18 силовых упражнений — убери одно, чтобы добавить другое.';
 
   for (const entry of strength.slice(0, MAX_STRENGTH - 1)) addFromLibrary(root, entry.name);
   assert.equal(root.querySelector('.library-blocked'), null, 'на семнадцатом ещё можно');
@@ -1013,11 +1015,11 @@ test('генерация: тренировка на всё тело с метк�
   ]);
   assert.deepEqual(described, [
     ['Начальный', 'Занятий не было или перерыв в несколько лет',
-      'Кругов в паре: 2', 'Упражнения: базовые', 'Остановка: за 3–4 повтора до отказа'],
+      'Подходов на упражнение: 2', 'Упражнения: базовые', 'Остановка: за 3–4 повтора до отказа'],
     ['Средний', 'Около полугода регулярных занятий',
-      'Кругов в паре: 2', 'Упражнения: базовые и средние', 'Остановка: за 2–3 повтора до отказа'],
+      'Подходов на упражнение: 2', 'Упражнения: базовые и средние', 'Остановка: за 2–3 повтора до отказа'],
     ['Продвинутый', 'Годы регулярных занятий',
-      'Кругов в паре: 3', 'Упражнения: все', 'Остановка: за 1–2 повтора до отказа'],
+      'Подходов на упражнение: 3', 'Упражнения: все', 'Остановка: за 1–2 повтора до отказа'],
   ]);
   assert.deepEqual(checkedLevels(root), ['Начальный'], 'выбран первый из доступных');
   assert.equal(root.querySelector('.zone-hint').textContent,
@@ -1818,4 +1820,401 @@ test('своя тренировка с неотмеченным инвентар
   for (const key of [...MANUAL.warmup, ...MANUAL.strength]) {
     assert.ok(today.textContent.includes(nameOf(key, TEST_LIBRARY)), `в «Сегодня» нет «${nameOf(key, TEST_LIBRARY)}»`);
   }
+});
+
+// — Формат занятия ———————————————————————————————————————————————————————
+const blockChip = (root, slot) => root.querySelector(`.block-chip[data-block="${slot}"]`);
+const formatChip = (root, id) => root.querySelector(`.format-chip[data-format="${id}"]`);
+const pressedBlocks = root => [...root.querySelectorAll('.block-chip[aria-pressed="true"]')].map(chip => chip.dataset.block);
+const pressedFormat = root => [...root.querySelectorAll('.format-chip[aria-pressed="true"]')].map(chip => chip.dataset.format);
+const formatReason = root => root.querySelector('.format-reason');
+const blockTitles = root => [...root.querySelectorAll('.builder-block h3')].map(h => h.textContent);
+const roundsTags = root => [...root.querySelectorAll('.builder-block-rounds')].map(tag => tag.textContent);
+const okStore = { save: async () => ({ ok: true, localOnly: false }) };
+const ASK = 'Бросить тренировку? Несохранённые изменения пропадут.';
+
+// Сохраняет открытый черновик и отдаёт запись, ушедшую в store.
+async function saveDraft(root, saved) {
+  toSave(root);
+  root.querySelector('.builder-save').click();
+  await settle(0);
+  return saved.at(-1)[1];
+}
+
+test('сборка: все три блока нажаты, выбраны «Пары»; переключатели между причиной «Добавить» и списком блоков', t => {
+  const { root } = mountScreen(t, { library: TEST_LIBRARY });
+  startManual(root);
+
+  assert.deepEqual(pressedBlocks(root), ['warmup', 'circuit', 'cooldown']);
+  assert.deepEqual(pressedFormat(root), ['pairs']);
+  assert.equal(root.querySelectorAll('.format-picker').length, 1);
+  const picker = root.querySelector('.format-picker');
+  assert.equal(picker.querySelector('h3').textContent, 'Формат занятия');
+  assert.equal(picker.querySelector('h3').id, 'build-format-title');
+
+  const add = root.querySelector('.builder-add');
+  const addReason = add.nextElementSibling;
+  assert.ok(addReason.classList.contains('builder-reason'), 'причина «Добавить» стоит сразу за ней');
+  assert.equal(addReason.nextElementSibling, picker);
+  assert.equal(picker.nextElementSibling, root.querySelector('.builder-blocks'));
+  assert.equal(picker.querySelector('.format-hint').textContent, 'Два упражнения по очереди, отдых после пары.');
+  // Новые кнопки не принимаются за чипы зон и не появляются на генераторе.
+  assert.equal(zoneChips(root).length, 0);
+});
+
+test('на генераторе переключателей формата нет: формат не меняет, какие упражнения подобраны', t => {
+  const { root } = mountScreen(t, { library: TEST_LIBRARY });
+  startGenerator(root);
+  assert.equal(root.querySelector('.format-picker'), null);
+  assert.equal(zoneChips(root).length, 7);
+});
+
+test('«Разогрев» выкл: секции нет, «Назад» спрашивает; вкл: секция вернулась, до 4 упражнений и все подходят по «Что есть дома»', async t => {
+  // Из пяти разогревов два с гантелями: при отмеченных резинках подходят три.
+  const library = needing(['dumbbells'], ['circ-1', 'circ-2']);
+  const asked = [];
+  const { root } = mountScreen(t, { library, seed: counter(), confirm: async question => { asked.push(question); return false; } });
+  startManual(root);
+  assert.deepEqual(blockTitles(root), ['Стартовая разминка', 'Круговой разогрев', 'Завершение']);
+
+  blockChip(root, 'circuit').click();
+  assert.deepEqual(pressedBlocks(root), ['warmup', 'cooldown']);
+  assert.deepEqual(blockTitles(root), ['Стартовая разминка', 'Завершение'], 'секции «Круговой разогрев» нет');
+  assert.equal(formatReason(root).hidden, true);
+
+  back(root);
+  await settle(0);
+  assert.deepEqual(asked, [ASK], 'блок выключен — это правка');
+  assert.ok(root.querySelector('.format-picker'), 'отказ — сборка на месте');
+
+  blockChip(root, 'circuit').click();
+  assert.deepEqual(pressedBlocks(root), ['warmup', 'circuit', 'cooldown']);
+  assert.deepEqual(blockTitles(root), ['Стартовая разминка', 'Круговой разогрев', 'Завершение']);
+  const circuit = namesIn(blockOf(root, 'Круговой разогрев'));
+  assert.ok(circuit.length > 0 && circuit.length <= SKELETON.circuit.count, `упражнений в разогреве: ${circuit.length}`);
+  assert.deepEqual(circuit.toSorted(), ['Разогрев 3', 'Разогрев 4', 'Разогрев 5'], 'неподходящие по инвентарю не взяты');
+});
+
+test('все три блока выключаются и включаются, остальное в сборке не меняется', t => {
+  const { root } = mountScreen(t, { library: TEST_LIBRARY, seed: counter() });
+  assemble(root, [nameOf('squat-a', TEST_LIBRARY), nameOf('row-a', TEST_LIBRARY)]);
+  const strength = () => namesIn(blockOf(root, 'Пара 1')).sort();
+  const before = strength();
+
+  for (const slot of ['warmup', 'circuit', 'cooldown']) blockChip(root, slot).click();
+  assert.deepEqual(pressedBlocks(root), []);
+  assert.deepEqual(blockTitles(root), ['Пара 1']);
+  assert.deepEqual(strength(), before);
+
+  for (const slot of ['warmup', 'circuit', 'cooldown']) blockChip(root, slot).click();
+  assert.deepEqual(pressedBlocks(root), ['warmup', 'circuit', 'cooldown']);
+  assert.deepEqual(blockTitles(root), ['Стартовая разминка', 'Круговой разогрев', 'Пара 1', 'Завершение']);
+  assert.equal(namesIn(blockOf(root, 'Стартовая разминка')).length, SKELETON.warmup.count);
+  assert.equal(namesIn(blockOf(root, 'Завершение')).length, SKELETON.cooldown.count);
+});
+
+test('включить блок, для которого нет подходящих упражнений, нельзя: кнопка не нажата, причина названа, следующее нажатие её снимает', t => {
+  const library = needing(['dumbbells'], ['circ-1', 'circ-2', 'circ-3', 'circ-4', 'circ-5']);
+  const { root } = mountScreen(t, { library });
+  startManual(root);
+  // С отмеченными резинками разогрева нет с самого начала: блок выключен.
+  assert.deepEqual(pressedBlocks(root), ['warmup', 'cooldown']);
+  assert.deepEqual(blockTitles(root), ['Стартовая разминка', 'Завершение']);
+
+  blockChip(root, 'circuit').click();
+  assert.equal(blockChip(root, 'circuit').getAttribute('aria-pressed'), 'false');
+  assert.equal(formatReason(root).hidden, false);
+  assert.equal(formatReason(root).textContent, 'Для блока «Разогрев» нет подходящих упражнений.');
+  assert.deepEqual(blockTitles(root), ['Стартовая разминка', 'Завершение'], 'тренировка не изменилась');
+
+  formatChip(root, 'sets').click();
+  assert.equal(formatReason(root).hidden, true);
+  assert.equal(formatReason(root).textContent, '');
+});
+
+test('нет подходящих упражнений после того, как блок выключили: причина называет слот, а выбор человека остаётся', t => {
+  const library = needing(['dumbbells'], ['stretch-1', 'stretch-2', 'stretch-3', 'breathing']);
+  const profile = profileOf('band_long', 'dumbbells');
+  const { root } = mountScreen(t, { library, gearProfile: profile });
+  startManual(root);
+  assert.deepEqual(pressedBlocks(root), ['warmup', 'circuit', 'cooldown']);
+
+  blockChip(root, 'cooldown').click();
+  assert.deepEqual(pressedBlocks(root), ['warmup', 'circuit']);
+  profile.set(['band_long']);
+  blockChip(root, 'cooldown').click();
+  assert.equal(formatReason(root).textContent, 'Для блока «Завершение» нет подходящих упражнений.');
+  assert.deepEqual(pressedBlocks(root), ['warmup', 'circuit']);
+
+  profile.set(['band_long', 'dumbbells']);
+  blockChip(root, 'cooldown').click();
+  assert.equal(formatReason(root).hidden, true);
+  assert.deepEqual(pressedBlocks(root), ['warmup', 'circuit', 'cooldown']);
+});
+
+test('фокус остаётся на нажатой кнопке: переключатели не перерисовываются вместе с блоками', t => {
+  const { document, root } = mountScreen(t, { library: TEST_LIBRARY });
+  startManual(root);
+  const chip = blockChip(root, 'warmup');
+  chip.focus();
+  chip.click();
+  assert.equal(document.activeElement, chip);
+  assert.ok(chip.isConnected);
+  const sets = formatChip(root, 'sets');
+  sets.focus();
+  sets.click();
+  assert.equal(document.activeElement, sets);
+  assert.equal(formatChip(root, 'sets'), sets, 'тот же узел');
+});
+
+test('смена формата или блока — правка; тот же формат, а также смена и возврат — нет', async t => {
+  const asked = [];
+  const { root } = mountScreen(t, { library: TEST_LIBRARY, confirm: async question => { asked.push(question); return true; } });
+
+  startManual(root);
+  formatChip(root, 'pairs').click();
+  back(root);
+  assert.ok(root.querySelector('.builder-path'), 'то же «Пары» — не правка, ушли сразу');
+
+  startManual(root);
+  formatChip(root, 'loop').click();
+  formatChip(root, 'pairs').click();
+  back(root);
+  assert.ok(root.querySelector('.builder-path'), 'вернули «Пары» — как было');
+  assert.deepEqual(asked, []);
+
+  startManual(root);
+  formatChip(root, 'loop').click();
+  back(root);
+  await settle(0);
+  startManual(root);
+  blockChip(root, 'cooldown').click();
+  back(root);
+  await settle(0);
+  assert.deepEqual(asked, [ASK, ASK], 'смена формата и выключенный блок спрашивают');
+});
+
+test('сборка: формат меняет блоки силовой части, кругов у блоков на сборке нет', t => {
+  const { root } = mountScreen(t, { library: TEST_LIBRARY });
+  assemble(root, ['squat-a', 'hinge-a', 'row-a', 'press-a'].map(key => nameOf(key, TEST_LIBRARY)));
+  const strengthTitles = () => blockTitles(root).filter(title => !['Стартовая разминка', 'Круговой разогрев', 'Завершение'].includes(title));
+  assert.deepEqual(strengthTitles(), ['Пара 1', 'Пара 2']);
+
+  formatChip(root, 'loop').click();
+  assert.deepEqual(strengthTitles(), ['Силовой круг']);
+  assert.equal(namesIn(blockOf(root, 'Силовой круг')).length, 4);
+  assert.equal(blockOf(root, 'Силовой круг').querySelector('.builder-block-sub').textContent, '4 упражнения подряд');
+
+  formatChip(root, 'sets').click();
+  assert.deepEqual(strengthTitles(), ['Упражнение 1', 'Упражнение 2', 'Упражнение 3', 'Упражнение 4']);
+  assert.equal(root.querySelector('.format-hint').textContent, 'Все подходы одного упражнения, потом следующее.');
+  assert.deepEqual(roundsTags(root), [], 'круги и подходы показывает только результат');
+
+  // Все упражнения остались, как были.
+  assert.deepEqual(rows(root).filter(name => /^Многосуставное/.test(name)).sort(),
+    ['squat-a', 'hinge-a', 'row-a', 'press-a'].map(key => nameOf(key, TEST_LIBRARY)).sort());
+});
+
+test('результат: «Подходы» — блок на упражнение, метка «2 подхода»; сохранение пишет format, правка открывает с «Подходами»', async t => {
+  const { root, saved, view } = mountScreen(t, { library: TEST_LIBRARY, store: okStore, seed: () => 1 });
+  startGenerator(root);
+  generateNow(root);
+  const expected = generate({ level: 'beginner', zones: [], seed: 1, library: TEST_LIBRARY }).compact;
+
+  // Порядок на экране: «Другой вариант», отказ, переключатели, блоки.
+  const picker = root.querySelector('.format-picker');
+  assert.equal(picker.querySelector('h3').id, 'result-format-title');
+  assert.equal(root.querySelector('.builder-variant').nextElementSibling, root.querySelector('.builder-refusal'));
+  assert.equal(root.querySelector('.builder-refusal').nextElementSibling, picker);
+  assert.equal(picker.nextElementSibling, root.querySelector('.builder-blocks'));
+  assert.deepEqual(pressedBlocks(root), ['warmup', 'circuit', 'cooldown']);
+  assert.deepEqual(pressedFormat(root), ['pairs']);
+
+  formatChip(root, 'sets').click();
+  const titles = blockTitles(root);
+  const exercises = titles.filter(title => title.startsWith('Упражнение '));
+  assert.deepEqual(exercises, expected.strength.map((_, index) => `Упражнение ${index + 1}`));
+  assert.ok(!titles.some(title => title.startsWith('Пара ')));
+  assert.deepEqual(roundsTags(root), expected.strength.map(() => '2 подхода'));
+
+  const compact = await saveDraft(root, saved);
+  assert.equal(compact.format, 'sets');
+  assert.deepEqual(compact.strength, expected.strength, 'упражнения те же');
+
+  await view.edit(saved[0][0], compact);
+  assert.deepEqual(pressedFormat(root), ['sets']);
+  assert.ok(blockTitles(root).includes('Упражнение 1'));
+  assert.deepEqual(roundsTags(root), expected.strength.map(() => '2 подхода'));
+});
+
+test('результат: у «Круга» метка «2 круга», у продвинутого три — «3 круга» у пар и круга, «3 подхода» у подходов', t => {
+  const { root } = mountScreen(t, { library: TEST_LIBRARY, seed: () => 1 });
+  startGenerator(root);
+  levelOption(root, 'Продвинутый').click();
+  generateNow(root);
+  const strength = generate({ level: 'advanced', zones: [], seed: 1, library: TEST_LIBRARY }).compact.strength;
+
+  assert.ok(roundsTags(root).every(tag => tag === '3 круга'));
+  formatChip(root, 'loop').click();
+  assert.deepEqual(roundsTags(root), ['3 круга']);
+  assert.ok(blockTitles(root).includes('Силовой круг'));
+  formatChip(root, 'sets').click();
+  assert.deepEqual(roundsTags(root), strength.map(() => '3 подхода'));
+});
+
+test('результат: счёт упражнений в подзаголовке следует за блоками', t => {
+  const { root } = mountScreen(t, { library: TEST_LIBRARY, seed: () => 1 });
+  startGenerator(root);
+  generateNow(root);
+  const expected = generate({ level: 'beginner', zones: [], seed: 1, library: TEST_LIBRARY }).compact;
+  const subtitle = count => `Начальный уровень · ${count} ${plural(count, ['упражнение', 'упражнения', 'упражнений'])}`;
+  const total = exerciseCount(expected);
+  assert.equal(root.querySelector('.builder-subtitle').textContent, subtitle(total));
+
+  blockChip(root, 'circuit').click();
+  assert.equal(root.querySelector('.builder-subtitle').textContent, subtitle(total - expected.circuit.length));
+  blockChip(root, 'circuit').click();
+  assert.equal(root.querySelector('.builder-subtitle').textContent, subtitle(total));
+  assert.equal(root.querySelectorAll('.builder-subtitle').length, 1);
+});
+
+test('результат: смена формата и блока — правка, «Назад» спрашивает', async t => {
+  const asked = [];
+  const { root } = mountScreen(t, { library: TEST_LIBRARY, confirm: async question => { asked.push(question); return false; } });
+  startGenerator(root);
+  generateNow(root);
+  back(root);
+  assert.ok(root.querySelector('.builder-generate'), 'без правок — сразу на генератор');
+
+  generateNow(root);
+  formatChip(root, 'loop').click();
+  back(root);
+  await settle(0);
+  assert.deepEqual(asked, [ASK]);
+  assert.deepEqual(pressedFormat(root), ['loop'], 'отказ — результат на месте');
+
+  formatChip(root, 'pairs').click();
+  blockChip(root, 'warmup').click();
+  back(root);
+  await settle(0);
+  assert.equal(asked.length, 2);
+});
+
+test('«Другой вариант» при «Круге» и выключенном «Завершении» сохраняет оба, остальные блоки собирает заново', async t => {
+  const { root, saved } = mountScreen(t, { library: TEST_LIBRARY, store: okStore, seed: counter() });
+  startGenerator(root);
+  generateNow(root);
+  formatChip(root, 'loop').click();
+  blockChip(root, 'cooldown').click();
+
+  otherVariant(root);
+  assert.deepEqual(pressedFormat(root), ['loop']);
+  assert.deepEqual(pressedBlocks(root), ['warmup', 'circuit']);
+  const titles = blockTitles(root);
+  assert.ok(titles.includes('Силовой круг'));
+  assert.ok(!titles.includes('Завершение'));
+
+  const compact = await saveDraft(root, saved);
+  assert.equal(compact.format, 'loop');
+  assert.deepEqual(compact.cooldown, []);
+  assert.equal(compact.warmup.length, SKELETON.warmup.count);
+  assert.equal(compact.circuit.length, SKELETON.circuit.count);
+});
+
+test('«Другой вариант» при «Подходах» и всех выключенных блоках: формат и пустые блоки остаются, силовая часть другая', t => {
+  const { root } = mountScreen(t, { library: TEST_LIBRARY, seed: counter() });
+  startGenerator(root);
+  generateNow(root);
+  formatChip(root, 'sets').click();
+  for (const slot of ['warmup', 'circuit', 'cooldown']) blockChip(root, slot).click();
+  assert.deepEqual(pressedBlocks(root), []);
+
+  otherVariant(root);
+  assert.deepEqual(pressedFormat(root), ['sets']);
+  assert.deepEqual(pressedBlocks(root), []);
+  assert.ok(blockTitles(root).every(title => title.startsWith('Упражнение ')), blockTitles(root).join());
+});
+
+test('«Другой вариант» без правок формата оставляет «Пары» и все блоки', t => {
+  const { root } = mountScreen(t, { library: TEST_LIBRARY, seed: counter() });
+  startGenerator(root);
+  generateNow(root);
+  otherVariant(root);
+  assert.deepEqual(pressedFormat(root), ['pairs']);
+  assert.deepEqual(pressedBlocks(root), ['warmup', 'circuit', 'cooldown']);
+});
+
+test('«Изменить» у записи без format открывает «Пары»; без правок «Назад» не спрашивает, сохранение пишет format: pairs', async t => {
+  const asked = [];
+  const { root, saved, view } = mountScreen(t, { library: TEST_LIBRARY, store: okStore, confirm: async question => { asked.push(question); return true; } });
+  assert.ok(!('format' in MANUAL), 'запись сохранена до появления формата');
+
+  await view.edit('my-old00001', MANUAL);
+  assert.deepEqual(pressedFormat(root), ['pairs']);
+  assert.deepEqual(pressedBlocks(root), ['warmup', 'circuit', 'cooldown']);
+  formatChip(root, 'pairs').click();
+  back(root);
+  assert.ok(root.querySelector('.builder-path'));
+  assert.deepEqual(asked, []);
+
+  await view.edit('my-old00001', MANUAL);
+  const compact = await saveDraft(root, saved);
+  assert.equal(compact.format, 'pairs');
+  assert.deepEqual(compact.strength, MANUAL.strength);
+});
+
+test('«Изменить» открывает запись с её форматом и выключенными блоками', async t => {
+  const own = { ...MANUAL, format: 'sets', circuit: [], cooldown: [] };
+  const { root, saved, view } = mountScreen(t, { library: TEST_LIBRARY, store: okStore });
+  await view.edit('my-fmt00001', own);
+
+  assert.deepEqual(pressedFormat(root), ['sets']);
+  assert.deepEqual(pressedBlocks(root), ['warmup']);
+  assert.deepEqual(blockTitles(root), ['Стартовая разминка', 'Упражнение 1', 'Упражнение 2', 'Упражнение 3', 'Упражнение 4']);
+
+  const compact = await saveDraft(root, saved);
+  assert.deepEqual([compact.format, compact.circuit, compact.cooldown], ['sets', [], []]);
+});
+
+test('приложение: «Изменить» у записи без format на устройстве открывает «Пары»', async t => {
+  const { document, root } = mount(t, { library: TEST_LIBRARY, preload: onDevice('my-old00002', MANUAL) });
+  await settle(0);
+  openWorkouts(document);
+  document.querySelector('#screen-workouts .workout-edit').click();
+  await settle(0);
+
+  assert.deepEqual(shown(document), ['screen-builder']);
+  assert.deepEqual(pressedFormat(root), ['pairs']);
+  assert.deepEqual(pressedBlocks(root), ['warmup', 'circuit', 'cooldown']);
+});
+
+test('приложение: своя тренировка в «Подходах» в «Сегодня» — отметки «Подход N», метка «2 подхода», вступление к подходам', async t => {
+  const { window, document, app, root } = mount(t, { library: TEST_LIBRARY });
+  await settle(0);
+  openBuilder(document);
+  assemble(root, ['squat-a', 'row-a'].map(key => nameOf(key, TEST_LIBRARY)));
+  formatChip(root, 'sets').click();
+  toSave(root);
+  typeName(root, 'Подходами');
+  root.querySelector('.builder-save').click();
+  await settle(0);
+
+  const [{ id, compact }] = await app.store.list();
+  assert.equal(compact.format, 'sets');
+  [...document.querySelectorAll('#screen-workouts .workout-card')]
+    .find(card => card.querySelector('.workout-card-title').textContent === 'Подходами').click();
+  assert.deepEqual(shown(document), ['screen-today']);
+  assert.equal(window.localStorage.getItem(CURRENT_KEY), id);
+
+  const today = document.getElementById('screen-today');
+  const block = number => today.querySelector(`#ex${number}`);
+  assert.deepEqual([...block(1).querySelectorAll('label.check')].map(label => label.textContent), ['Подход 1', 'Подход 2']);
+  assert.match(block(1).querySelector('input[data-mark]').getAttribute('aria-label'), /: подход 1$/);
+  assert.equal(block(1).querySelector('.round-tag').textContent, '2 подхода');
+  assert.equal(block(2).querySelector('.round-tag').textContent, '2 подхода');
+  assert.equal(today.querySelector('#circuit .round-tag').textContent, '3 круга');
+  assert.deepEqual([...today.querySelectorAll('#circuit .exercise')[0].querySelectorAll('label.check')].map(label => label.textContent),
+    ['Круг 1', 'Круг 2', 'Круг 3']);
+  assert.deepEqual([...today.querySelectorAll('.pair-rules h2')].map(h => h.textContent), ['Как выполнять подходы']);
+  assert.equal(today.querySelector('.facts').textContent.includes('подхода на упражнение'), true);
 });

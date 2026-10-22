@@ -14,7 +14,8 @@
 // слова: ни одна граница и ни одно число правил в этом файле не заведено.
 import { LIBRARY, SLOT_LABELS, DIFFICULTY_LABELS } from './exercises/index.js';
 import { renderLibrary } from './library-view.js';
-import { expandWorkout, exerciseCount, NAME_MAX } from './builder/compact.js';
+import { expandWorkout, exerciseCount, NAME_MAX, SKELETON_BLOCK_IDS } from './builder/compact.js';
+import { DEFAULT_FORMAT, OPTIONAL_SLOTS, formatOf } from './builder/format.js';
 import {
   pickSkeleton, makeRandom, generate, availability, missingGroupsMessage, missingZoneMessage, missingGear, closableGroups,
 } from './builder/generator.js';
@@ -25,18 +26,22 @@ import { LEVELS, ZONES, MAX_STRENGTH, MAX_ZONES, DEFAULT_DAYS, PLAN_DAYS } from 
 import { plural, defaultName } from './builder/texts.js';
 import { gearText, gearNames, fitsGear, fitLibrary, unownedGear } from './gear.js';
 import { renderGearPicker } from './gear-picker.js';
+import { renderFormatPicker } from './format-picker.js';
+import { roundsTag } from './render.js';
 import { createGearProfile } from './gear-profile.js';
 import { newWorkoutId, OWN_LIMIT } from './my-workouts.js';
 
 const ENTRY_LEAD = 'Тренировка всегда на всё тело. Собери её сам из библиотеки или получи готовую по правилам, а потом сохрани.';
 const MANUAL_NOTE = 'Листай библиотеку упражнений, добавляй нужные и сохрани тренировку.';
 const GENERATE_NOTE = 'Выбери уровень и зоны упора — упражнения подберутся по правилам.';
-// Четыре шага из макета: то, из чего состоит любая тренировка конструктора, и
-// ручная, и подобранная по правилам.
+// Четыре шага из макета: из чего тренировка конструктора состоит по умолчанию, и
+// ручная, и подобранная по правилам. Разминку, разогрев и завершение можно
+// выключить, а силовые разложить кругом или подходами («Формат занятия»), поэтому
+// заголовок говорит «обычно», а не «всегда».
 const STEPS = [
   ['Разминка', 'Плавно, без длительных остановок'],
   ['Круговой разогрев', 'Повышает пульс, резинки лёгкие'],
-  ['Силовые пары', 'Два упражнения подряд, потом отдых'],
+  ['Силовая часть', 'Парами, кругом или подходами — на выбор'],
   ['Завершение', '2–3 минуты в спокойном темпе, дыхание'],
 ];
 
@@ -55,8 +60,8 @@ const TAG_FOCUS = 'упор';
 const TAG_REPLACED = 'заменено';
 const EXERCISES = ['упражнение', 'упражнения', 'упражнений'];
 
-// Пар, а не упражнений: человек считает пары, а потолок правил — 18 упражнений.
-const MAX_PAIRS = `Не больше ${MAX_STRENGTH / 2} силовых пар — убери упражнение, чтобы добавить другое.`;
+// Упражнений, а не пар: в «Круге» и «Подходах» пар нет, а потолок правил один.
+const STRENGTH_FULL = `Не больше ${MAX_STRENGTH} силовых упражнений — убери одно, чтобы добавить другое.`;
 const NO_STRENGTH = 'Добавь хотя бы одно силовое упражнение.';
 const NAME_EMPTY = 'Введи название, чтобы сохранить.';
 const NAME_LONG = `Название не длиннее ${NAME_MAX} знаков.`;
@@ -66,6 +71,7 @@ const LIMIT_REACHED = `Сохранить нельзя: уже ${OWN_LIMIT} св
 const DEVICE_FAILED = 'Не удалось сохранить: хранилище недоступно. Тренировка осталась здесь — попробуй ещё раз.';
 const DISCARD_QUESTION = 'Бросить тренировку? Несохранённые изменения пропадут.';
 
+const noFitText = slot => `Для блока «${SLOT_LABELS[slot]}» нет подходящих упражнений.`;
 const NO_CANDIDATES = 'Похожих упражнений больше нет: все подходящие уже в тренировке.';
 const HINT_STRENGTH = 'Те же целевые мышцы, похожая разметка';
 const HINT_OTHER = 'Того же типа';
@@ -88,8 +94,12 @@ const snapshot = compact => JSON.stringify({ ...compact, t: 0 });
 
 // Копия записи, у которой с исходной нет общих массивов. Запись плоская: массивы
 // и пары упора. structuredClone не годится: в старых WebView (iOS до 15.4) его нет.
+// Формат читается через formatOf: запись без него (сохранённая раньше или
+// переданная напрямую) открывается «Парами», и снимок черновика сразу несёт
+// поле — выбор тех же «Пар» не станет правкой.
 const copyCompact = compact => ({
   ...compact,
+  format: formatOf(compact),
   days: [...compact.days],
   zones: [...compact.zones],
   warmup: [...compact.warmup],
@@ -228,13 +238,13 @@ export function renderBuilder({
     }
     root.append(heading('Конструктор'), make('p', 'builder-lead', ENTRY_LEAD),
       path('Собрать самому', MANUAL_NOTE, startManual), path('Сгенерировать', GENERATE_NOTE, startGenerator),
-      make('h3', 'builder-steps-title', 'Любая тренировка устроена одинаково'), steps);
+      make('h3', 'builder-steps-title', 'Из чего обычно состоит тренировка'), steps);
     return root;
   }
 
   function startManual() {
     draft = {
-      v: 1, name: defaultName([]), days: [...DEFAULT_DAYS], level: null, zones: [],
+      v: 1, name: defaultName([]), days: [...DEFAULT_DAYS], level: null, zones: [], format: DEFAULT_FORMAT,
       ...pickSkeleton(fitLibrary(library, gearProfile.get()), makeRandom(seed())),
       strength: [], focus: [], t: 0,
     };
@@ -318,15 +328,16 @@ export function renderBuilder({
     return node;
   }
 
-  // Блоки тренировки: заголовок, подпись и строки. Круги у пар показывает только
-  // результат: у подобранной они зависят от уровня, у ручной сборки всегда два.
-  // Пара узнаётся по id блока, как его строит expandWorkout.
+  // Блоки тренировки: заголовок, подпись и строки. Круги (или подходы) у силовых
+  // блоков показывает только результат: у подобранной они зависят от уровня, у
+  // ручной сборки всегда два. Силовой блок — любой, чей id не из скелета: его
+  // имя зависит от формата (pair1, loop, ex1), и по началу id его не узнать.
   function blockSections(workout, rowOf, withRounds) {
     return workout.blocks.map(block => {
       const section = make('section', 'builder-block');
       const head = make('div', 'builder-block-head');
       head.append(make('h3', null, block.title));
-      if (withRounds && block.id.startsWith('pair')) head.append(make('span', 'builder-block-rounds', `${block.rounds} круга`));
+      if (withRounds && !SKELETON_BLOCK_IDS.includes(block.id)) head.append(make('span', 'builder-block-rounds', roundsTag(block)));
       section.append(head, make('p', 'builder-block-sub', block.sub), ...block.items.map(rowOf));
       return section;
     });
@@ -335,6 +346,38 @@ export function renderBuilder({
   // Кнопка в строке с этим ключом: после замены фокус возвращается на неё.
   const rowButton = (blocks, key) => [...blocks.querySelectorAll('.builder-item')]
     .find(node => node.dataset.key === key)?.querySelector('button');
+
+  // Переключатели «Формат занятия» для текущего экрана. Узел один на экран и
+  // живёт, пока он открыт: refresh() перерисовывает блоки и счётчики, но не его,
+  // поэтому фокус остаётся на нажатой кнопке. Блок включён, если в нём есть
+  // упражнения: выключенный — пустой список, отдельного поля нет.
+  function formatPicker(idPrefix, refresh) {
+    return renderFormatPicker(document, {
+      idPrefix,
+      state: () => ({
+        blocks: Object.fromEntries(OPTIONAL_SLOTS.map(slot => [slot, draft[slot].length > 0])),
+        format: formatOf(draft),
+      }),
+      onBlock(slot) {
+        if (draft[slot].length > 0) {
+          draft = { ...draft, [slot]: [] };
+        } else {
+          // Включённый блок собирается так же, как при старте сборки: те же
+          // числа, только из подходящего по «Что есть дома». Подбирается весь
+          // скелет, берётся один слот: так правило одно, а не две копии.
+          const keys = pickSkeleton(fitLibrary(library, gearProfile.get()), makeRandom(seed()))[slot];
+          if (keys.length === 0) return noFitText(slot);
+          draft = { ...draft, [slot]: keys };
+        }
+        refresh();
+        return null;
+      },
+      onFormat(id) {
+        draft = { ...draft, format: id };
+        refresh();
+      },
+    });
+  }
 
   // Почему список пуст. Если по полной библиотеке кандидаты есть, дело в
   // инвентаре, и текст называет, какой нужен; иначе их нет вовсе, и текст прежний.
@@ -412,7 +455,7 @@ export function renderBuilder({
 
   // — Сборка ————————————————————————————————————————————————————————
 
-  const addBlocked = () => (draft.strength.length >= MAX_STRENGTH ? MAX_PAIRS : null);
+  const addBlocked = () => (draft.strength.length >= MAX_STRENGTH ? STRENGTH_FULL : null);
 
   function drawBuild() {
     const root = make('div', 'builder builder-build');
@@ -421,6 +464,7 @@ export function renderBuilder({
     add.type = 'button';
     add.addEventListener('click', showLibrary);
     const addReason = reasonNote();
+    const picker = formatPicker('build-format', () => refresh());
     const blocks = make('div', 'builder-blocks');
     const save = make('button', 'builder-save', 'Сохранить');
     save.type = 'button';
@@ -472,7 +516,7 @@ export function renderBuilder({
       setNote(saveReason, empty ? NO_STRENGTH : null);
     }
 
-    root.append(backButton('Назад', () => leave(abandon)), heading('Своя тренировка'), coverage, add, addReason, blocks, save, saveReason);
+    root.append(backButton('Назад', () => leave(abandon)), heading('Своя тренировка'), coverage, add, addReason, picker, blocks, save, saveReason);
     refresh();
     show(root);
   }
@@ -549,7 +593,7 @@ export function renderBuilder({
       // Пробелы между строками — по той же причине, что на входе.
       option.append(make('span', 'level-title', level.label), ' ', make('span', 'level-who', level.who));
       for (const line of [
-        `Кругов в паре: ${level.rounds}`,
+        `Подходов на упражнение: ${level.rounds}`,
         `Упражнения: ${poolText(level.pool)}`,
         `Остановка: за ${level.reserve} повтора до отказа`,
       ]) option.append(' ', make('span', 'level-line', line));
@@ -653,6 +697,13 @@ export function renderBuilder({
     return levelMessage(level, result.groups, owned);
   }
 
+  // Новая запись, в которой остаётся то, что человек уже выбрал в старой: название,
+  // дни, формат и пустые блоки разминки, разогрева и завершения.
+  function keepChoices(next, previous) {
+    const off = Object.fromEntries(OPTIONAL_SLOTS.filter(slot => previous[slot].length === 0).map(slot => [slot, []]));
+    return { ...next, name: previous.name, days: [...previous.days], format: formatOf(previous), ...off };
+  }
+
   // Новая тренировка по уровню и зонам: с экрана генератора и по «Другому
   // варианту». Отказ показывается там, откуда просили, а прежнее остаётся как было.
   function runGenerator(level, zones, refusal) {
@@ -664,8 +715,10 @@ export function renderBuilder({
     }
     // «Другой вариант» меняет подбор, а не то, что человек уже мог назвать и
     // расписать по дням: название и дни остаются, как и id — сохранение
-    // перезапишет ту же тренировку, а не заведёт вторую.
-    draft = draft === null ? result.compact : { ...result.compact, name: draft.name, days: [...draft.days] };
+    // перезапишет ту же тренировку, а не заведёт вторую. Так же остаются формат
+    // и выключенные блоки: нажатие «Другой вариант» не должно включать то, что
+    // человек только что убрал.
+    draft = draft === null ? result.compact : keepChoices(result.compact, draft);
     draftId ??= newWorkoutId();
     startedAs = snapshot(draft);
     replaced.clear();
@@ -684,7 +737,7 @@ export function renderBuilder({
 
   function drawResult() {
     const root = make('div', 'builder builder-result');
-    const count = exerciseCount(draft);
+    const subtitle = make('p', 'builder-subtitle');
     const coverage = statusBox();
     const another = make('button', 'builder-variant', 'Другой вариант');
     another.type = 'button';
@@ -692,6 +745,7 @@ export function renderBuilder({
     // Зоны — из выбора, а не из записи: выбор уже приведён к тому, что принимает
     // генератор (см. edit), а запись могла принести лишнюю зону.
     another.addEventListener('click', () => runGenerator(choice.level, choice.zones, refusal));
+    const picker = formatPicker('result-format', () => refresh());
     const blocks = make('div', 'builder-blocks');
     const save = make('button', 'builder-save', 'Сохранить');
     save.type = 'button';
@@ -715,6 +769,9 @@ export function renderBuilder({
     }
 
     function refresh() {
+      // Число упражнений меняется, когда блок включают и выключают.
+      const count = exerciseCount(draft);
+      subtitle.textContent = `${LEVELS[draft.level].label} уровень · ${count} ${plural(count, EXERCISES)}`;
       // Граница уровня рассчитана на три дня (PLAN_DAYS). Дни человек выбирает
       // на сохранении, и там та же граница пересчитывается уже при них.
       const below = belowFloor(workoutOf(PLAN_DAYS), LEVELS[draft.level].floor);
@@ -723,8 +780,7 @@ export function renderBuilder({
     }
 
     root.append(backButton('Назад', () => leave(backToGenerator)), heading(defaultName(draft.zones)),
-      make('p', 'builder-subtitle', `${LEVELS[draft.level].label} уровень · ${count} ${plural(count, EXERCISES)}`),
-      coverage, another, refusal, blocks, save);
+      subtitle, coverage, another, refusal, picker, blocks, save);
     refresh();
     show(root);
   }

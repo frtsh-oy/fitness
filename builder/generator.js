@@ -31,6 +31,7 @@ import {
   CORE_GROUPS, LEVELS, ZONES, FOCUS_MIN, SOFT_CEILING, MAX_STRENGTH, MAX_ZONES, PLAN_DAYS, DEFAULT_DAYS, SKELETON,
 } from './rules.js';
 import { defaultName } from './texts.js';
+import { DEFAULT_FORMAT } from './format.js';
 import { hasOwn } from '../own.js';
 import { gearNames, fitsGear, unownedGear } from '../gear.js';
 
@@ -263,6 +264,7 @@ export function generate({ level, zones, seed, library = LIBRARY, now = Date.now
         days: [...DEFAULT_DAYS],
         level,
         zones: [...zones],
+        format: DEFAULT_FORMAT,
         warmup,
         circuit,
         strength: result.chosen.map(entry => entry.key),

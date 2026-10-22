@@ -28,7 +28,7 @@ const OTHER_ID = 'my-test0002';
 // Ручная сборка по вторникам и четвергам: дни и состав нарочно не такие, как у
 // готовой, чтобы недельная нагрузка и карта у двух тренировок различались.
 const OWN = {
-  v: 1, name: 'Мой тест', days: [2, 4], level: null, zones: [],
+  v: 1, name: 'Мой тест', days: [2, 4], level: null, zones: [], format: 'pairs',
   warmup: ['pelvic-tilt', 'thoracic-rotation'], circuit: ['chinese-squat', 'knee-raise'],
   strength: ['rdl', 'adduction', 'glute-bridge', 'leg-press'], focus: [],
   cooldown: ['hip-flexor', 'breathing'], t: 1760000000000,

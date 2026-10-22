@@ -404,7 +404,7 @@
 .builder-coverage p+p{margin-top:4px}
 .builder-coverage p:first-child{font-weight:650}
 .builder-save,.builder-generate{margin-top:20px}
-.builder-reason{margin:8px 0 0;font-size:13px;line-height:1.5;color:#526278}
+.builder-reason,.format-reason{margin:8px 0 0;font-size:13px;line-height:1.5;color:#526278}
 .builder-error,.builder-refusal{margin:12px 0 0;padding:10px 12px;border-radius:10px;background:#fbe4bd;color:#7a4a06;font-size:13px}
 .builder-block{margin:20px 0 0}
 .builder-block-head{display:flex;align-items:baseline;justify-content:space-between;gap:12px}
@@ -468,7 +468,7 @@
 .level-option[aria-disabled=true] .level-who{color:#657289}
 .level-line{font-size:12px;color:#526278}
 .level-missing,.zone-missing p{margin:6px 0 0;padding:8px 12px;border-radius:10px;background:#e8edf4;color:#53637a;font-size:13px;line-height:1.5}
-.zone-hint,.gear-hint{margin:0 0 10px;font-size:13px;line-height:1.5;color:#526278}
+.zone-hint,.gear-hint,.format-hint,.format-label{margin:0 0 10px;font-size:13px;line-height:1.5;color:#526278}
 .zone-chips{display:flex;flex-wrap:wrap;gap:6px}
 .zone-chip{display:inline-flex;align-items:center;min-height:32px;padding:0 12px;border:1px solid #d4dde8;border-radius:16px;background:#fff;font:inherit;font-size:13px;font-weight:600;color:inherit}
 .zone-chip[aria-pressed=true]{background:#152d4a;border-color:#152d4a;color:#fff}
@@ -477,4 +477,11 @@
    те же .zone-chip, поэтому свой у блока только отступ и подсказка (.gear-hint,
    общий с .zone-hint выше). */
 .gear-picker{margin:0 0 6px}
+/* «Формат занятия» (format-picker.js): на сборке и на результате, чипы — тоже
+   .zone-chip. Подпись группы и пояснение — вид подсказки выше; подпись второй
+   группы и пояснение идут после чипов, поэтому им нужен отступ сверху, а
+   причина (.format-reason) — вид .builder-reason, общий с ним выше. */
+.format-picker{margin:0 0 6px}
+.format-picker .zone-chips+.format-label{margin-top:12px}
+.format-picker .zone-chips+.format-hint{margin:10px 0 0}
 .builder-variant{display:block;width:100%;min-height:40px;margin:10px 0 0;padding:0 14px;border:1px solid #cad6e4;border-radius:10px;background:#f3f7fc;font:inherit;font-size:14px;font-weight:650;color:#193d6a}
