@@ -950,6 +950,7 @@ export default [
     ],
     "load": {
       "glutes": 1,
+      "glutes_med": 0.5,
       "quads": 1,
       "hamstrings": 0.5,
       "adductors": 0.5
@@ -1279,7 +1280,8 @@ export default [
     "load": {
       "glutes": 1,
       "glutes_med": 0.5,
-      "quads": 1
+      "quads": 1,
+      "adductors": 0.5
     },
     "pattern": "squat",
     "gear": [
@@ -1316,6 +1318,7 @@ export default [
       ]
     ],
     "load": {
+      "glutes": 0.5,
       "glutes_med": 1,
       "hip_flexors": 0.5
     },
@@ -1370,7 +1373,8 @@ export default [
     "load": {
       "lats": 1,
       "upper_back": 1,
-      "delts_rear": 0.5
+      "delts_rear": 0.5,
+      "forearms": 0.5
     },
     "pattern": "pull",
     "gear": [
@@ -1920,7 +1924,8 @@ export default [
     "load": {
       "glutes": 1,
       "hamstrings": 0.5,
-      "abs": 0.5
+      "abs": 0.5,
+      "delts_front": 0.5
     },
     "pattern": "isolation",
     "gear": [
@@ -2123,7 +2128,8 @@ export default [
     ],
     "load": {
       "glutes": 1,
-      "hamstrings": 0.5
+      "hamstrings": 0.5,
+      "forearms": 0.5
     },
     "pattern": "hinge",
     "gear": [
@@ -2150,7 +2156,7 @@ export default [
     ],
     "load": {
       "glutes": 1,
-      "quads": 0.5,
+      "quads": 1,
       "adductors": 1
     },
     "pattern": "lunge",
@@ -2215,7 +2221,8 @@ export default [
     "load": {
       "glutes": 1,
       "quads": 1,
-      "adductors": 1
+      "adductors": 1,
+      "forearms": 0.5
     },
     "pattern": "squat",
     "gear": [
@@ -2244,7 +2251,8 @@ export default [
       "glutes": 1,
       "glutes_med": 0.5,
       "quads": 1,
-      "adductors": 0.5
+      "adductors": 0.5,
+      "forearms": 0.5
     },
     "pattern": "lunge",
     "gear": [
@@ -2391,7 +2399,8 @@ export default [
       "2:02"
     ],
     "load": {
-      "abs": 1
+      "abs": 1,
+      "obliques": 0.5
     },
     "pattern": "core",
     "gear": [
@@ -2565,7 +2574,8 @@ export default [
     "load": {
       "glutes": 1,
       "glutes_med": 0.5,
-      "hamstrings": 0.5
+      "hamstrings": 0.5,
+      "hip_flexors": 0.5
     },
     "pattern": "hinge",
     "gear": [
@@ -2594,7 +2604,8 @@ export default [
       "glutes": 1,
       "glutes_med": 0.5,
       "hamstrings": 1,
-      "lower_back": 0.5
+      "lower_back": 0.5,
+      "forearms": 0.5
     },
     "pattern": "hinge",
     "gear": [
@@ -2648,6 +2659,7 @@ export default [
     ],
     "load": {
       "abs": 1,
+      "obliques": 0.5,
       "hip_flexors": 0.5
     },
     "pattern": "core",
@@ -2675,6 +2687,7 @@ export default [
     ],
     "load": {
       "abs": 1,
+      "obliques": 0.5,
       "hip_flexors": 0.5
     },
     "pattern": "core",
@@ -2728,6 +2741,7 @@ export default [
       "0:33"
     ],
     "load": {
+      "glutes_med": 0.5,
       "quads": 0.5,
       "abs": 1,
       "delts_front": 0.5
@@ -2811,7 +2825,8 @@ export default [
     ],
     "load": {
       "glutes": 0.5,
-      "abs": 0.5
+      "abs": 0.5,
+      "lower_back": 0.5
     },
     "pattern": "mobility",
     "gear": [
@@ -2936,7 +2951,8 @@ export default [
     ],
     "load": {
       "abs": 0.5,
-      "lower_back": 0.5
+      "lower_back": 0.5,
+      "lats": 0.5
     },
     "pattern": "mobility",
     "gear": [
@@ -2949,7 +2965,7 @@ export default [
     "key": "rib-breathing",
     "slot": "warmup",
     "name": "Дыхание в нижние рёбра",
-    "muscles": "Дыхание и мышцы корпуса",
+    "muscles": "Дыхание и подвижность рёбер",
     "reps": "5–10 вдохов",
     "text": "Встань прямо, ладони положи на нижние рёбра по бокам. На вдохе расширяй рёбра в стороны под ладонями, плечи не поднимай. На медленном выдохе опускай рёбра и мягко подтягивай живот.",
     "detail": "Плечи и шея расслаблены, грудь не задирается вверх. Дыши без усилия; если кружится голова, делай паузу между вдохами.",
