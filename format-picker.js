@@ -18,7 +18,7 @@ const el = (document, tag, className, text) => {
 // сейчас. onBlock(slot) → строка с причиной, если блок не включился, иначе null:
 // включить блок, для которого нет подходящих упражнений, нельзя, и сказать об
 // этом должен тот, кто знает почему. onFormat(id) ничего не возвращает.
-// idPrefix делает id заголовка уникальным на странице: сборка и результат не
+// idPrefix делает id заголовка и подписей уникальными на странице: сборка и результат не
 // видны одновременно, но блок от этого не должен зависеть.
 export function renderFormatPicker(document, { state, onBlock, onFormat, idPrefix }) {
   const root = el(document, 'div', 'format-picker');
@@ -27,10 +27,12 @@ export function renderFormatPicker(document, { state, onBlock, onFormat, idPrefi
 
   // Группы чипов — те же .zone-chips и .zone-chip, что у зон и инвентаря: свой
   // вид у переключателя был бы ещё одним чипом, который чинить вместе с первым.
-  const chips = (label, className, items) => {
+  // Имя группе даёт видимая подпись над ней (aria-labelledby), а не копия в
+  // aria-label: иначе диктор прочтёт её дважды.
+  const chips = (labelId, className, items) => {
     const group = el(document, 'div', 'zone-chips');
     group.setAttribute('role', 'group');
-    group.setAttribute('aria-label', label);
+    group.setAttribute('aria-labelledby', labelId);
     const buttons = items.map(([id, text]) => {
       const button = el(document, 'button', `zone-chip ${className}`, text);
       button.type = 'button';
@@ -40,8 +42,15 @@ export function renderFormatPicker(document, { state, onBlock, onFormat, idPrefi
     return { group, buttons };
   };
 
-  const blocks = chips('Блоки', 'block-chip', OPTIONAL_SLOTS.map(slot => [slot, SLOT_LABELS[slot]]));
-  const formats = chips('Силовая часть', 'format-chip', Object.entries(FORMATS).map(([id, format]) => [id, format.label]));
+  const label = (id, text) => {
+    const node = el(document, 'p', 'format-label', text);
+    node.id = `${idPrefix}-${id}`;
+    return node;
+  };
+  const blocksLabel = label('blocks', 'Блоки');
+  const formatsLabel = label('strength', 'Силовая часть');
+  const blocks = chips(blocksLabel.id, 'block-chip', OPTIONAL_SLOTS.map(slot => [slot, SLOT_LABELS[slot]]));
+  const formats = chips(formatsLabel.id, 'format-chip', Object.entries(FORMATS).map(([id, format]) => [id, format.label]));
   for (const [slot, button] of blocks.buttons) button.dataset.block = slot;
   for (const [id, button] of formats.buttons) button.dataset.format = id;
 
@@ -76,8 +85,7 @@ export function renderFormatPicker(document, { state, onBlock, onFormat, idPrefi
     });
   }
 
-  const label = text => el(document, 'p', 'format-label', text);
-  root.append(title, label('Блоки'), blocks.group, label('Силовая часть'), formats.group, hint, reason);
+  root.append(title, blocksLabel, blocks.group, formatsLabel, formats.group, hint, reason);
   paint(null);
   return root;
 }

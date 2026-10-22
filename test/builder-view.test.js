@@ -754,13 +754,13 @@ test('сохранение правки текущей тренировки пе
   assert.equal(document.querySelectorAll('#workout .exercise').length, exerciseCount(OWN) - 1);
 });
 
-test('силовых не больше девяти пар: «Добавить» недоступна и причина названа, убрать — снова можно', t => {
+test('силовых не больше восемнадцати: «Добавить» недоступна и причина названа, убрать — снова можно', t => {
   const { document, root } = mount(t, { library: TEST_LIBRARY });
   openBuilder(document);
   startManual(root);
   openLibrary(root);
   const strength = TEST_LIBRARY.filter(e => e.slot === 'strength').slice(0, MAX_STRENGTH);
-  const reason = 'Не больше 9 силовых пар — убери упражнение, чтобы добавить другое.';
+  const reason = 'Не больше 18 силовых упражнений — убери одно, чтобы добавить другое.';
 
   for (const entry of strength.slice(0, MAX_STRENGTH - 1)) addFromLibrary(root, entry.name);
   assert.equal(root.querySelector('.library-blocked'), null, 'на семнадцатом ещё можно');

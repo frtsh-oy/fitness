@@ -60,8 +60,8 @@ const TAG_FOCUS = 'упор';
 const TAG_REPLACED = 'заменено';
 const EXERCISES = ['упражнение', 'упражнения', 'упражнений'];
 
-// Пар, а не упражнений: человек считает пары, а потолок правил — 18 упражнений.
-const MAX_PAIRS = `Не больше ${MAX_STRENGTH / 2} силовых пар — убери упражнение, чтобы добавить другое.`;
+// Упражнений, а не пар: в «Круге» и «Подходах» пар нет, а потолок правил один.
+const STRENGTH_FULL = `Не больше ${MAX_STRENGTH} силовых упражнений — убери одно, чтобы добавить другое.`;
 const NO_STRENGTH = 'Добавь хотя бы одно силовое упражнение.';
 const NAME_EMPTY = 'Введи название, чтобы сохранить.';
 const NAME_LONG = `Название не длиннее ${NAME_MAX} знаков.`;
@@ -455,7 +455,7 @@ export function renderBuilder({
 
   // — Сборка ————————————————————————————————————————————————————————
 
-  const addBlocked = () => (draft.strength.length >= MAX_STRENGTH ? MAX_PAIRS : null);
+  const addBlocked = () => (draft.strength.length >= MAX_STRENGTH ? STRENGTH_FULL : null);
 
   function drawBuild() {
     const root = make('div', 'builder builder-build');

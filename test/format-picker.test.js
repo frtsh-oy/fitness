@@ -43,6 +43,9 @@ const pressedBlocks = picker => blockButtons(picker).filter(b => b.getAttribute(
 const pressedFormats = picker => formatButtons(picker).filter(b => b.getAttribute('aria-pressed') === 'true').map(b => b.dataset.format);
 const reasonOf = picker => picker.querySelector('.format-reason');
 
+// Имя группы для диктора: текст узла, на который указывает aria-labelledby.
+const nameOf = group => group.closest('.format-picker').querySelector(`#${group.getAttribute('aria-labelledby')}`)?.textContent;
+
 test('разметка: заголовок, две подписанные группы кнопок, пояснение и причина по порядку', () => {
   const { picker } = mount({ idPrefix: 'build-format' });
   assert.equal(picker.tagName, 'DIV');
@@ -55,11 +58,14 @@ test('разметка: заголовок, две подписанные гру
   const [blocksLabel, formatLabel] = picker.querySelectorAll('p.format-label');
   assert.equal(blocksLabel.textContent, 'Блоки');
   assert.equal(formatLabel.textContent, 'Силовая часть');
+  assert.equal(blocksLabel.id, 'build-format-blocks');
+  assert.equal(formatLabel.id, 'build-format-strength');
 
   const [blocksGroup, formatGroup] = picker.querySelectorAll('div.zone-chips');
   for (const [group, label] of [[blocksGroup, 'Блоки'], [formatGroup, 'Силовая часть']]) {
     assert.equal(group.getAttribute('role'), 'group', label);
-    assert.equal(group.getAttribute('aria-label'), label);
+    assert.equal(nameOf(group), label);
+    assert.equal(group.getAttribute('aria-label'), null, 'имя одно — от видимой подписи, без копии');
   }
 
   const hint = picker.querySelector('p.format-hint');
@@ -77,7 +83,7 @@ test('кнопки блоков — по слоту из OPTIONAL_SLOTS с по�
   for (const chip of chips) {
     assert.equal(chip.type, 'button', chip.textContent);
     assert.ok(chip.classList.contains('zone-chip'), 'вид чипа даёт .zone-chip');
-    assert.equal(chip.parentElement.getAttribute('aria-label'), 'Блоки');
+    assert.equal(nameOf(chip.parentElement), 'Блоки');
   }
 });
 
@@ -90,7 +96,7 @@ test('кнопки формата — по одной на формат из FOR
     assert.equal(chip.type, 'button', chip.textContent);
     assert.ok(chip.classList.contains('zone-chip'));
     assert.ok(!chip.classList.contains('block-chip'));
-    assert.equal(chip.parentElement.getAttribute('aria-label'), 'Силовая часть');
+    assert.equal(nameOf(chip.parentElement), 'Силовая часть');
   }
 });
 
@@ -230,7 +236,7 @@ test('два блока с разными idPrefix не дают одинако�
   const second = renderFormatPicker(document, { state: () => ({ blocks: {}, format: 'pairs' }), onBlock: () => null, onFormat() {}, idPrefix: 'result-format' });
   document.body.replaceChildren(first, second);
   const ids = [...document.querySelectorAll('[id]')].map(node => node.id);
-  assert.deepEqual(ids, ['build-format-title', 'result-format-title']);
+  assert.deepEqual(ids, ['build-format-title', 'build-format-blocks', 'build-format-strength', 'result-format-title', 'result-format-blocks', 'result-format-strength']);
   assert.equal(new Set(ids).size, ids.length);
 });
 
