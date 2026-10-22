@@ -676,6 +676,7 @@ export default [
     "load": {
       "traps": 0.5,
       "delts_front": 1,
+      "delts_side": 0.5,
       "forearms": 0.5
     },
     "pattern": "isolation",
@@ -882,6 +883,7 @@ export default [
       "0:00"
     ],
     "load": {
+      "lower_back": 0.5,
       "delts_rear": 0.5,
       "triceps": 1,
       "forearms": 0.5
@@ -1121,6 +1123,7 @@ export default [
       "0:22"
     ],
     "load": {
+      "glutes": 0.5,
       "glutes_med": 1,
       "obliques": 0.5
     },
@@ -1953,7 +1956,8 @@ export default [
     "load": {
       "glutes": 1,
       "glutes_med": 0.5,
-      "hamstrings": 0.5
+      "hamstrings": 0.5,
+      "hip_flexors": 0.5
     },
     "pattern": "hinge",
     "gear": [
@@ -2035,7 +2039,8 @@ export default [
     "load": {
       "glutes": 1,
       "glutes_med": 0.5,
-      "hamstrings": 0.5
+      "hamstrings": 0.5,
+      "lower_back": 0.5
     },
     "pattern": "isolation",
     "gear": [
@@ -2512,7 +2517,8 @@ export default [
     ],
     "load": {
       "glutes": 0.5,
-      "glutes_med": 1
+      "glutes_med": 1,
+      "lower_back": 0.5
     },
     "pattern": "mobility",
     "gear": [
@@ -2772,7 +2778,8 @@ export default [
     "load": {
       "chest": 1,
       "delts_front": 0.5,
-      "triceps": 0.5
+      "triceps": 0.5,
+      "forearms": 0.5
     },
     "pattern": "push",
     "gear": [
@@ -2799,7 +2806,8 @@ export default [
     ],
     "load": {
       "chest": 1,
-      "delts_front": 0.5
+      "delts_front": 0.5,
+      "forearms": 0.5
     },
     "pattern": "isolation",
     "gear": [
@@ -2903,6 +2911,7 @@ export default [
     ],
     "load": {
       "glutes": 0.5,
+      "glutes_med": 0.5,
       "adductors": 0.5
     },
     "pattern": "mobility",
