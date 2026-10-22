@@ -416,3 +416,28 @@ test('необязательный focus допустим только как tr
   assert.match(withFocus(false).join('\n'), /focus — только true/);
   assert.equal(withFocus('да').length, 1);
 });
+
+test('необязательный unit блока: нет, rounds и sets допустимы', () => {
+  const withUnit = unit => {
+    const w = minimalWorkout();
+    if (unit !== undefined) w.blocks[0].unit = unit;
+    return validateWorkout(w);
+  };
+  assert.deepEqual(withUnit(undefined), []);
+  assert.deepEqual(withUnit('rounds'), []);
+  assert.deepEqual(withUnit('sets'), []);
+});
+
+test('unit, которого нет среди rounds и sets, попадает в отчёт с названием блока', () => {
+  const withUnit = unit => {
+    const w = minimalWorkout();
+    w.blocks[0].unit = unit;
+    return validateWorkout(w);
+  };
+  assert.deepEqual(withUnit('reps'), ['Блок b1: unit должен быть rounds или sets, получено reps']);
+  assert.deepEqual(withUnit(''), ['Блок b1: unit должен быть rounds или sets, получено ']);
+  assert.deepEqual(withUnit(null), ['Блок b1: unit должен быть rounds или sets, получено null']);
+  assert.deepEqual(withUnit(2), ['Блок b1: unit должен быть rounds или sets, получено 2']);
+  // «toString» из прототипа не единица: проверка по списку, а не по свойству.
+  assert.equal(withUnit('toString').length, 1);
+});

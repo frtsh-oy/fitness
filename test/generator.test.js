@@ -5,6 +5,7 @@ import {
   missingGroupsMessage, missingZoneMessage, ceilingMessage,
 } from '../builder/generator.js';
 import { fitLibrary } from '../gear.js';
+import { DEFAULT_FORMAT } from '../builder/format.js';
 import {
   CORE_GROUPS, LEVELS, ZONES, FOCUS_MIN, SOFT_CEILING, MAX_STRENGTH, SKELETON,
 } from '../builder/rules.js';
@@ -61,6 +62,15 @@ test('запись генератора читается приложением 
   assert.deepEqual(parseCompact(serializeCompact(compact)), compact);
   assert.deepEqual([compact.v, compact.level, compact.zones, compact.days, compact.t, compact.name],
     [1, 'intermediate', ['glutes', 'back'], [1, 3, 5], 1, 'Всё тело. Упор: ягодицы и спина']);
+});
+
+// Формат выбирает человек на экране правки: генератор ему не указ и кладёт
+// прежний вид силовой части. Поле есть всегда, чтобы запись была полной.
+test('запись генератора несёт формат «Пары»', () => {
+  for (const level of Object.keys(LEVELS)) {
+    assert.equal(run(level, [], 3).compact.format, DEFAULT_FORMAT, level);
+  }
+  assert.equal(DEFAULT_FORMAT, 'pairs');
 });
 
 test('одинаковый вход даёт одинаковую тренировку', () => {

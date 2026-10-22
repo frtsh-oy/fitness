@@ -3,8 +3,10 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { makeDom } from './setup.js';
-import { renderWorkout, renderIntro, renderHowto, bindHowto, markId, videoUrl, scheduleShort, scheduleLong } from '../render.js';
-import { countMarks } from '../workouts/schema.js';
+import {
+  renderWorkout, renderIntro, renderHowto, bindHowto, markId, videoUrl, scheduleShort, scheduleLong, roundsTag,
+} from '../render.js';
+import { countMarks, validateWorkout } from '../workouts/schema.js';
 import legsMwf from '../workouts/legs-mwf.js';
 
 // Достаёт заголовок и текст вставки pairRules прямо из src-original/app.js
@@ -148,6 +150,90 @@ test('у блока с одним кругом отметка подписана
   const circuit = fragment.querySelector('#circuit');
   const labels = [...circuit.querySelectorAll('.exercise')[0].querySelectorAll('label.check')].map(b => b.textContent);
   assert.deepEqual(labels, ['Круг 1', 'Круг 2', 'Круг 3']);
+});
+
+// Тренировка из одного блока legs3 (два упражнения) с нужными кругами и единицей:
+// готовые тренировки блоков с unit не имеют, а подписи отметок и метки зависят
+// только от этих двух полей.
+function oneBlock(changes) {
+  const block = { ...structuredClone(legsMwf.blocks.find(b => b.id === 'legs3')), ...changes };
+  return { ...legsMwf, blocks: [block] };
+}
+const checkLabels = article => [...article.querySelectorAll('label.check')].map(l => l.textContent);
+const checkAria = article => [...article.querySelectorAll('input[data-mark]')].map(i => i.getAttribute('aria-label'));
+const tagOf = fragment => fragment.querySelector('.round-tag').textContent;
+
+test('блок с unit: sets: отметки «Подход N», подпись для диктора и метка «2 подхода»', () => {
+  const { document } = makeDom();
+  const workout = oneBlock({ rounds: 2, unit: 'sets' });
+  const fragment = renderWorkout(workout, document);
+  const [first, second] = fragment.querySelectorAll('.exercise');
+  assert.deepEqual(checkLabels(first), ['Подход 1', 'Подход 2']);
+  assert.deepEqual(checkAria(first), [`${workout.blocks[0].items[0].name}: подход 1`, `${workout.blocks[0].items[0].name}: подход 2`]);
+  assert.deepEqual(checkLabels(second), ['Подход 1', 'Подход 2']);
+  assert.equal(tagOf(fragment), '2 подхода');
+  // Идентификаторы отметок от единицы не зависят: сегодняшние отметки не «переезжают».
+  assert.deepEqual([...first.querySelectorAll('input[data-mark]')].map(i => i.dataset.mark),
+    ['legs3-side-leg-raise-1', 'legs3-side-leg-raise-2']);
+});
+
+test('блок без unit: «Круг N», метка склоняется: 5 кругов, а не 5 круга', () => {
+  const { document } = makeDom();
+  const fragment = renderWorkout(oneBlock({ rounds: 5 }), document);
+  assert.equal(tagOf(fragment), '5 кругов');
+  const first = fragment.querySelector('.exercise');
+  assert.deepEqual(checkLabels(first), ['Круг 1', 'Круг 2', 'Круг 3', 'Круг 4', 'Круг 5']);
+  assert.match(checkAria(first)[4], /: круг 5$/);
+});
+
+test('unit: rounds — то же, что без unit', () => {
+  const { document } = makeDom();
+  const plain = renderWorkout(oneBlock({ rounds: 3 }), document);
+  const explicit = renderWorkout(oneBlock({ rounds: 3, unit: 'rounds' }), makeDom().document);
+  assert.equal(tagOf(explicit), '3 круга');
+  assert.deepEqual(checkLabels(explicit.querySelector('.exercise')), checkLabels(plain.querySelector('.exercise')));
+});
+
+test('один повтор: метка «1 круг» и «Готово» с подписью «выполнено»; у блока подходов — «1 подход»', () => {
+  const { document } = makeDom();
+  const rounds = renderWorkout(oneBlock({ rounds: 1 }), document);
+  assert.equal(tagOf(rounds), '1 круг');
+  assert.deepEqual(checkLabels(rounds.querySelector('.exercise')), ['Готово']);
+  assert.match(checkAria(rounds.querySelector('.exercise'))[0], /: выполнено$/);
+
+  const sets = renderWorkout(oneBlock({ rounds: 1, unit: 'sets' }), makeDom().document);
+  assert.equal(tagOf(sets), '1 подход');
+  assert.deepEqual(checkLabels(sets.querySelector('.exercise')), ['Готово']);
+  assert.match(checkAria(sets.querySelector('.exercise'))[0], /: выполнено$/);
+});
+
+test('roundsTag склоняет число по-русски для кругов и подходов', () => {
+  const rounds = n => roundsTag({ rounds: n });
+  const sets = n => roundsTag({ rounds: n, unit: 'sets' });
+  assert.deepEqual([1, 2, 3, 4, 5, 11, 12, 21, 22, 25].map(rounds),
+    ['1 круг', '2 круга', '3 круга', '4 круга', '5 кругов', '11 кругов', '12 кругов', '21 круг', '22 круга', '25 кругов']);
+  assert.deepEqual([1, 2, 3, 4, 5, 11, 12, 21, 22, 25].map(sets),
+    ['1 подход', '2 подхода', '3 подхода', '4 подхода', '5 подходов', '11 подходов', '12 подходов', '21 подход', '22 подхода', '25 подходов']);
+  assert.equal(roundsTag({ rounds: 3, unit: 'rounds' }), '3 круга');
+});
+
+test('метки блоков готовой тренировки не изменились: 1 круг, 2 круга, 3 круга', () => {
+  const { document } = makeDom();
+  const fragment = renderWorkout(legsMwf, document);
+  const tags = [...fragment.querySelectorAll('.round-tag')].map(t => t.textContent);
+  assert.deepEqual(tags, legsMwf.blocks.map(b => (b.rounds === 1 ? '1 круг' : `${b.rounds} круга`)));
+  assert.ok(legsMwf.blocks.every(b => !('unit' in b)));
+});
+
+test('тренировка с блоком unit: sets проходит схему и рисуется целиком', () => {
+  const workout = oneBlock({ rounds: 2, unit: 'sets' });
+  assert.deepEqual(validateWorkout(workout), []);
+  const { document } = makeDom();
+  assert.equal(renderWorkout(workout, document).querySelectorAll('input[data-mark]').length, countMarks(workout));
+});
+
+test('блок с unit, которого схема не знает, не проходит проверку', () => {
+  assert.deepEqual(validateWorkout(oneBlock({ unit: 'reps' })), ['Блок legs3: unit должен быть rounds или sets, получено reps']);
 });
 
 test('ссылка на видео ведёт на YouTube с таймкодом', () => {

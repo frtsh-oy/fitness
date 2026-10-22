@@ -9,6 +9,10 @@ export const PATTERNS = ['hinge', 'squat', 'lunge', 'push', 'pull', 'core', 'iso
 // одно от другого отличалось.
 export const NO_LOAD_PATTERN = 'recovery';
 export const KINDS = ['warmup', 'strength', 'cooldown'];
+// Чем «Сегодня» называет повтор блока: кругами (по умолчанию) или подходами.
+// Необязательное поле блока unit; задаёт только подписи, на счёт нагрузки не
+// влияет: подходов в блоке столько, сколько rounds.
+export const BLOCK_UNITS = ['rounds', 'sets'];
 export const LOAD_VALUES = [0.5, 1];
 
 const WORKOUT_FIELDS = ['id', 'kicker', 'title', 'titleLines', 'lead', 'days', 'stats', 'equipment', 'blocks', 'progression', 'caution'];
@@ -230,6 +234,9 @@ export function validateWorkout(workout) {
     seenBlockIds.add(block.id);
     if (!Number.isInteger(block.rounds) || block.rounds < 1) {
       problems.push(`${where}: rounds должен быть целым числом не меньше 1, получено ${block.rounds}`);
+    }
+    if (block.unit !== undefined && !BLOCK_UNITS.includes(block.unit)) {
+      problems.push(`${where}: unit должен быть ${BLOCK_UNITS.join(' или ')}, получено ${block.unit}`);
     }
 
     if (block.preamble !== undefined) {
