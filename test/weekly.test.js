@@ -1,18 +1,21 @@
 // Недельный объём по группам мышц. Два числа на группу считаются РАЗНО, и это
 // главное, что проверяется: наше — с коэффициентом 0.5 за вспомогательную
 // работу и односторонними один раз, сопоставимое — только целевые доли и
-// односторонние по сторонам. Числа ниже посчитаны из данных программы, а не
+// односторонние по сторонам. Числа ниже посчитаны из данных legs-mwf, а не
 // выбраны: три тренировки в неделю (days = [1,3,5]).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { weeklySets } from '../weekly.js';
 import { MUSCLES } from '../muscles.js';
-import { WORKOUTS } from '../workouts/index.js';
+import legsMwf from '../workouts/legs-mwf.js';
 
-const all = Object.values(WORKOUTS);
+// Неделя одной тренировки, а не сумма реестра: экран считает неделю текущей
+// тренировки (app.js). Готовых тренировок в реестре больше одной, и сумма по
+// ним — неделя человека, который делает все программы сразу.
+const week = [legsMwf];
 
 test('ягодичные: вспомогательная работа поднимает наше число выше сопоставимого', () => {
-  const row = weeklySets(all).get('glutes');
+  const row = weeklySets(week).get('glutes');
   assert.equal(row.ours, 18);
   assert.equal(row.comparable, 12);
 });
@@ -20,30 +23,30 @@ test('ягодичные: вспомогательная работа подни
 test('средняя ягодичная: односторонние поднимают сопоставимое выше нашего', () => {
   // Подъём верхней ноги лёжа на боку — целевое и одностороннее: 2 круга × 2
   // стороны × 3 дня = 12. Наше число меньше, потому что сторону не удваивает.
-  const row = weeklySets(all).get('glutes_med');
+  const row = weeklySets(week).get('glutes_med');
   assert.equal(row.ours, 9);
   assert.equal(row.comparable, 12);
 });
 
 test('предплечья: работа есть, но целевой ни одной', () => {
-  const row = weeklySets(all).get('forearms');
+  const row = weeklySets(week).get('forearms');
   assert.equal(row.ours, 18);
   assert.equal(row.comparable, 0);
 });
 
 test('сгибатели бедра: в силовых блоках не работают вовсе', () => {
-  const row = weeklySets(all).get('hip_flexors');
+  const row = weeklySets(week).get('hip_flexors');
   assert.equal(row.ours, 0);
   assert.equal(row.comparable, 0);
 });
 
 test('в ответе все двадцать групп, и порядок словаря сохранён', () => {
-  const keys = [...weeklySets(all).keys()];
+  const keys = [...weeklySets(week).keys()];
   assert.deepEqual(keys, Object.keys(MUSCLES));
 });
 
 test('групп без целевой работы ровно девять — это считается, а не вписано', () => {
-  const idle = [...weeklySets(all).values()].filter(row => row.comparable === 0);
+  const idle = [...weeklySets(week).values()].filter(row => row.comparable === 0);
   assert.equal(idle.length, 9);
 });
 
