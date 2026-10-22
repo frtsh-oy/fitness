@@ -6,12 +6,14 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { weeklyRows } from '../weekly-rows.js';
-import { WORKOUTS } from '../workouts/index.js';
+import legsMwf from '../workouts/legs-mwf.js';
 
-const all = Object.values(WORKOUTS);
+// Неделя одной тренировки, как на экране: сумма реестра — неделя человека,
+// который делает все готовые программы сразу (test/weekly.test.js).
+const week = [legsMwf];
 
 test('строка соединяет число, вердикт и подпись группы — числа из данных, не из воздуха', () => {
-  const rows = weeklyRows(all);
+  const rows = weeklyRows(week);
   const glutes = rows.find(r => r.group === 'glutes');
   assert.equal(glutes.label, 'Ягодичные');
   assert.equal(glutes.comparable, 12);
@@ -28,7 +30,7 @@ test('строка соединяет число, вердикт и подпис
 });
 
 test('в ответе все двадцать групп', () => {
-  assert.equal(weeklyRows(all).length, 20);
+  assert.equal(weeklyRows(week).length, 20);
 });
 
 // Синтетические тренировки, а не реальная программа: каждая фикстура нагружает

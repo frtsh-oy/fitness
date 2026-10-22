@@ -4,9 +4,17 @@ import { readFileSync } from 'node:fs';
 import { buildReportLines } from '../tools/muscle-report.js';
 import { MUSCLES, muscleLabel } from '../muscles.js';
 import legsMwf from '../workouts/legs-mwf.js';
+import { WORKOUTS } from '../workouts/index.js';
 import { LIBRARY, SLOT_LABELS, DIFFICULTY_LABELS } from '../exercises/index.js';
 
 const VALID_LABELS = new Set(Object.values(MUSCLES).map(m => m.ru));
+
+// Отчёт только по legs-mwf. Большинство тестов ниже закрепляет её строки и
+// числа, а готовых тренировок в реестре больше одной: у каждой разделы с теми
+// же заголовками («Силовые подходы за одну тренировку» и др.), и sectionRows
+// взял бы первую попавшуюся. Отчёт по всему реестру проверяют тест «в отчёт по
+// реестру попадает каждая готовая тренировка» и сверка docs/muscle-map.md.
+const LEGS = { 'legs-mwf': legsMwf };
 
 // Строки вида «| Ягодичные | 6 |» — ровно две колонки, число во второй.
 // У таблицы «упражнение → мышцы» колонок шесть, под этот шаблон она не попадает.
@@ -26,9 +34,8 @@ function untouchedLabels(text) {
 }
 
 // Строки одного раздела «### Заголовок» до следующего «### » или конца текста.
-// Предполагает один WORKOUTS (сейчас так и есть — только legs-mwf): при второй
-// зарегистрированной тренировке заголовок раздела повторится, и это придётся
-// либо передавать сюда индекс вхождения, либо резать текст по workout.title.
+// Берёт первое вхождение заголовка, поэтому зовётся на отчёте по одной
+// тренировке (LEGS выше): у каждой тренировки свои разделы с теми же именами.
 function sectionRows(text, heading) {
   const after = text.split(`### ${heading}`)[1];
   assert.ok(after, `в отчёте нет раздела «${heading}»`);
@@ -42,7 +49,7 @@ function sectionRows(text, heading) {
 }
 
 test('в сводку попадают все упражнения тренировки, без потерь и дублей', () => {
-  const text = buildReportLines().join('\n');
+  const text = buildReportLines(LEGS).join('\n');
   const names = legsMwf.blocks.flatMap(b => b.items).map(i => i.name);
   assert.equal(names.length, 19, 'в legs-mwf ожидается 19 упражнений — проверь фикстуру, если данные изменились');
 
@@ -62,7 +69,7 @@ test('подписи групп мышц в сводных таблицах по
   // таблицы «упражнение → мышцы». Ту таблицу проверяет отдельный тест ниже —
   // «строки таблицы...» — и объединять их в один тест не стоит: они ловят
   // разные, не зависящие друг от друга поломки.
-  const text = buildReportLines().join('\n');
+  const text = buildReportLines(LEGS).join('\n');
   const labels = totalsRowLabels(text);
   assert.ok(labels.length > 0, 'сводные таблицы подходов пусты — тест ничего не проверяет');
   for (const label of labels) {
@@ -93,7 +100,7 @@ test('подписи групп мышц в сводных таблицах по
 // MUSCLES: в таком порядке пишет load библиотека, а не в том, в каком их
 // когда-то перечислили в тренировке.
 test('строки таблицы «упражнение → мышцы» содержат русские подписи мышц и верный тип, а не только название упражнения', () => {
-  const text = buildReportLines().join('\n');
+  const text = buildReportLines(LEGS).join('\n');
   const expectedRows = [
     // Разминка, несколько целевых групп и несколько вспомогательных
     '| Разогрев | «Китайское» приседание с подъёмом таза и разворотом | Ноги и подвижность корпуса | Ягодичные, Квадрицепсы | Икроножные, Косые мышцы живота | Разминка |',
@@ -111,7 +118,7 @@ test('строки таблицы «упражнение → мышцы» сод
 });
 
 test('«Нет разметки» согласована с load по ВСЕМ упражнениям тренировки (любого kind)', () => {
-  const text = buildReportLines().join('\n');
+  const text = buildReportLines(LEGS).join('\n');
   const untouched = new Set(untouchedLabels(text));
   const touchedIds = new Set(legsMwf.blocks.flatMap(b => b.items).flatMap(i => Object.keys(i.load)));
 
@@ -169,7 +176,7 @@ test('регрессия: группа, занятая только в разм�
 // вперемешку с порядком появления упражнений в файле. Тест ниже проверяет и
 // общее свойство (не по возрастанию), и именно эту пару как читаемый якорь.
 test('сводные таблицы подходов отсортированы по убыванию — иначе аномалии вроде «разгибатели поясницы выше квадрицепсов» останутся незамеченными', () => {
-  const text = buildReportLines().join('\n');
+  const text = buildReportLines(LEGS).join('\n');
 
   for (const heading of ['Силовые подходы за одну тренировку', 'Дополнительно нагружаются в разминке']) {
     const rows = sectionRows(text, heading);
@@ -194,7 +201,7 @@ test('сводные таблицы подходов отсортированы 
 // поясница», а размечено без поясницы). Отчёт печатал только колонки из load,
 // поэтому вычитывающий человек расхождения не видел.
 test('в каждой строке таблицы рядом с упражнением стоит его подпись из данных', () => {
-  const text = buildReportLines().join('\n');
+  const text = buildReportLines(LEGS).join('\n');
   for (const item of legsMwf.blocks.flatMap(b => b.items)) {
     assert.ok(text.includes(`| ${item.name} | ${item.muscles} |`),
       `в строке «${item.name}» нет подписи «${item.muscles}»`);
@@ -205,7 +212,7 @@ test('в каждой строке таблицы рядом с упражнен
 // Объём при этом обязан остаться силовым: разминка и заминка — качественно
 // другая нагрузка, и попади они в силовую сводку, числа стали бы враньём.
 test('в силовую сводку попадают подходы только силовых упражнений', () => {
-  const text = buildReportLines().join('\n');
+  const text = buildReportLines(LEGS).join('\n');
   const rows = new Map(sectionRows(text, 'Силовые подходы за одну тренировку'));
 
   // Независимый пересчёт из данных, а не повторение кода генератора.
@@ -255,7 +262,7 @@ test('упражнение с пустым load стоит в таблице с 
 // И обратная сторона: заминка со своей разметкой в отчёте есть — иначе «не
 // попала в силовую сводку» можно было бы получить, просто потеряв её везде.
 test('заминочная нагрузка показана отдельным разделом', () => {
-  const text = buildReportLines().join('\n');
+  const text = buildReportLines(LEGS).join('\n');
   const rows = new Map(sectionRows(text, 'Дополнительно нагружаются в заминке'));
   assert.ok(rows.size > 0, 'раздела заминки нет');
   assert.equal(rows.get(muscleLabel('hip_flexors')), 1,
@@ -265,11 +272,11 @@ test('заминочная нагрузка показана отдельным 
 // Task 4: раздел «Недельный объём» — тот же расчёт, что показывает экран
 // калькулятора (weekly-rows.js соединяет их для обоих потребителей), в
 // отчёте для человека, который добавляет упражнения. Числа — не оценка, а
-// то же самое, что даёт weeklySets на реальном WORKOUTS (test/weekly.test.js:
+// то же самое, что даёт weeklySets на legs-mwf (test/weekly.test.js:
 // ягодичные ours=18/comparable=12, предплечья ours=18/comparable=0), и то же,
 // что в спеке в разделе «Что получается на сегодняшних данных».
 test('в отчёте есть раздел недельного объёма с обоими числами и вердиктом', () => {
-  const text = buildReportLines().join('\n');
+  const text = buildReportLines(LEGS).join('\n');
   assert.match(text, /## Недельный объём/);
   assert.match(text, /Ягодичные \| 12 \| 18 \| рабочий объём/);
   assert.match(text, /Предплечья \| 0 \| 18 \| не тренируется целенаправленно/);
@@ -280,7 +287,7 @@ test('в отчёте есть раздел недельного объёма с
 // всей секции: удаление любой из двух оговорок по отдельности обязано
 // проваливать соответствующую проверку, не задевая другую.
 test('раздел отчёта называет обе оговорки счёта', () => {
-  const text = buildReportLines().join('\n');
+  const text = buildReportLines(LEGS).join('\n');
   assert.match(text, /односторонние считаются по сторонам/);
   assert.match(text, /вспомогательная работа идёт половиной/);
   assert.match(text, /наше чтение, а не цитата/);
@@ -294,7 +301,7 @@ test('раздел отчёта называет обе оговорки счё�
 // (task-3-review.md, находка 1) — занижала бы обоснованность строки, вход в
 // которую подтверждён источником (Schoenfeld 2017: «десять и больше»).
 test('у «рабочего объёма» «Откуда число» — полная смешанная формулировка, а не короткая «наша линия»', () => {
-  const text = buildReportLines().join('\n');
+  const text = buildReportLines(LEGS).join('\n');
   assert.match(text, /Ягодичные \| 12 \| 18 \| рабочий объём \| низ из источника, верх — наша линия \|/);
   assert.doesNotMatch(text, /рабочий объём \| наша линия \|/,
     'у «рабочего объёма» нельзя писать голое «наша линия» — источник подтверждает нижнюю границу (это и была ошибка экрана)');
@@ -327,7 +334,7 @@ test('у «выше нашей границы» «Откуда число» — 
 // порядок подписей обязан совпадать с порядком ячеек в строках ниже (тест
 // «в отчёте есть раздел недельного объёма…» закрепляет 12 и 18 по местам).
 test('шапка таблицы недельного раздела подписывает колонки в том же порядке, в каком печатаются ячейки', () => {
-  const text = buildReportLines().join('\n');
+  const text = buildReportLines(LEGS).join('\n');
   assert.ok(text.includes('| Группа | Целевые | Как на карте | Вердикт | Откуда число |'),
     `шапка таблицы недельного раздела не та:\n${text.split('\n').filter(l => l.startsWith('| Группа')).join('\n')}`);
 });
@@ -348,13 +355,14 @@ function flat(text) {
 }
 
 test('вводный абзац недельного раздела говорит, что и за какой срок посчитано', () => {
-  const text = flat(buildReportLines().join('\n'));
-  assert.match(text, /Сколько подходов получает каждая группа за неделю по всем тренировкам реестра/);
+  const text = flat(buildReportLines(LEGS).join('\n'));
+  assert.match(text, /Сколько подходов получает каждая группа за неделю в каждой тренировке реестра/);
+  assert.match(text, /Тренировки считаются по отдельности, как на экране приложения/);
   assert.match(text, /Считается только силовая работа/);
 });
 
 test('легенда «Откуда число» объясняет все три основания и смешанный случай', () => {
-  const text = flat(buildReportLines().join('\n'));
+  const text = flat(buildReportLines(LEGS).join('\n'));
   assert.match(text, /Колонка «Откуда число» — как получена граница вердикта/);
   assert.match(text, /`определение`: на группу нет ни одного упражнения/);
   assert.match(text, /`источник`: граница подтверждена исследованием/);
@@ -411,6 +419,25 @@ test('раздел библиотеки: каждое упражнение ро�
     assert.ok(own[0].startsWith(head), `${e.key}: начало строки «${own[0]}» не «${head}»`);
     assert.match(own[0].slice(head.length), musclesEnd, `${e.key}: колонки мышц`);
   }
+});
+
+// Каждая готовая тренировка — со своей недельной таблицей и своей таблицей
+// упражнений. Тесты выше строят отчёт по одной legs-mwf, и без этого теста
+// вторую тренировку из отчёта по реестру можно было бы потерять незамеченной.
+test('в отчёт по реестру попадает каждая готовая тренировка — неделя и таблица упражнений', () => {
+  const text = buildReportLines().join('\n');
+  const weekly = text.split('## Недельный объём')[1].split('\n## ')[0];
+  const workouts = Object.values(WORKOUTS);
+  assert.ok(workouts.length > 1, 'в реестре одна тренировка — тест проверяет меньше, чем обещает');
+  for (const workout of workouts) {
+    assert.ok(weekly.includes(`### ${workout.title}\n`), `в недельном разделе нет таблицы «${workout.title}»`);
+    assert.ok(text.includes(`\n## ${workout.title}\n`), `нет таблицы упражнений «${workout.title}»`);
+  }
+  // По двадцать строк групп на тренировку и по строке на каждое упражнение.
+  const groupRows = weekly.split('\n').filter(line => /^\| [^|]+ \| [\d,]+ \| [\d,]+ \| /.test(line));
+  assert.equal(groupRows.length, 20 * workouts.length);
+  const exerciseRows = text.split('\n').filter(line => /\| (Разминка|Силовое|Заминка) \|$/.test(line));
+  assert.equal(exerciseRows.length, workouts.flatMap(w => w.blocks.flatMap(b => b.items)).length);
 });
 
 // Файл в репозитории — то, что читает владелец; генератор — то, что он должен

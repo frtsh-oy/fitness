@@ -2,7 +2,6 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { setsByGroup, setsByRegion, regionSummary, PALETTE_STEPS } from '../volume.js';
 import legs from '../workouts/legs-mwf.js';
-import { WORKOUTS } from '../workouts/index.js';
 
 test('силовой объём по группам совпадает с разметкой', () => {
   const s = setsByGroup(legs, 'strength');
@@ -159,14 +158,16 @@ test('сводка по регионам совпадает с точным об
     'в режиме всей нагрузки обязаны быть дробные объёмы — иначе проверка слепа к округлению');
 });
 
-test('палитра закрывает максимальный силовой объём по всем тренировкам', () => {
-  let maxVolume = 0;
-  for (const workout of Object.values(WORKOUTS)) {
-    const regions = setsByRegion(workout, 'strength');
-    const max = Math.max(...regions.values(), 0);
-    maxVolume = Math.max(maxVolume, max);
-  }
-  assert.ok(maxVolume <= PALETTE_STEPS, `объём ${maxVolume} превышает ${PALETTE_STEPS} уровней`);
+// Сторож стоит на legs-mwf, а не на всём реестре: палитра откалибрована по её
+// силовому максимуму (volume.js). У «Всё тело. Сначала кор.» шкалу переходят
+// четыре зоны, больше всех пресс — больше чем вдвое: в круге на кор пять
+// упражнений и три круга. Такие зоны красятся последним оттенком, как в режиме
+// «вся нагрузка», а точное число видно по нажатию. Растянуть шкалу под одну
+// программу значило бы обесцветить карту у другой.
+test('палитра закрывает максимальный силовой объём legs-mwf', () => {
+  const regions = setsByRegion(legs, 'strength');
+  const max = Math.max(...regions.values(), 0);
+  assert.ok(max <= PALETTE_STEPS, `объём ${max} превышает ${PALETTE_STEPS} уровней`);
 });
 
 test('неизвестный тип упражнения даёт пустой результат, а не ошибку', () => {

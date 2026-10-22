@@ -45,8 +45,18 @@ export function toItem(e) {
   return rest;
 }
 
-export function item(key) {
+// Дозировка — свойство программы, а не упражнения: «птица-собака» в одной
+// тренировке идёт по 6–8 раз с паузой, в другой — по 15. Поэтому готовая
+// тренировка может задать своё reps, и только его: техника, видео и разметка
+// мышц остаются общими и правятся в таблице, иначе у упражнения снова было бы
+// два источника правды. Другое поле в overrides — ошибка, а не тихая замена.
+const OVERRIDABLE = new Set(['reps']);
+
+export function item(key, overrides = {}) {
   const e = entry(key);
   if (!e) throw new Error(`Нет упражнения «${key}» в библиотеке`);
-  return toItem(e);
+  for (const field of Object.keys(overrides)) {
+    if (!OVERRIDABLE.has(field)) throw new Error(`Упражнение «${key}»: тренировка может заменить только reps, а не ${field}`);
+  }
+  return { ...toItem(e), ...overrides };
 }
