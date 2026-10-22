@@ -17,7 +17,10 @@ function visitHtml(file) {
     const ref = m[1];
     if (/^(https?:)?\/\//.test(ref)) { external.add(ref); continue; }
     if (ref.startsWith('data:') || ref.startsWith('#')) continue;
-    visit(normalize(join(dirname(file), ref)));
+    // Якорь и запрос к файлу не относятся (sources.html#volume), а ссылка на
+    // папку («./» — вернуться в приложение) ведёт на её index.html.
+    const path = ref.split(/[?#]/)[0];
+    visit(normalize(join(dirname(file), path.endsWith('/') ? `${path}index.html` : path)));
   }
   // точка входа — инлайновый модуль с импортом
   for (const m of html.matchAll(/import\s+[^'"]*['"]([^'"]+)['"]/g)) {
