@@ -101,5 +101,13 @@ export function renderWeekly({ host, workouts }) {
     el(document, 'p', 'weekly-note',
       'Односторонние упражнения в первом числе считаются по сторонам. Это наше чтение: договорённости об этом в проверенных источниках нет, в отличие от вспомогательной работы, для которой коэффициент половины назван прямо.'),
     el(document, 'p', 'weekly-note', WORKING_CEILING_NOTE),
+    sourcesLink(document),
   );
+}
+
+// Откуда границы и ориентиры — в статье sources.html, раздел про объём.
+function sourcesLink(document) {
+  const link = el(document, 'a', 'sources-link', 'Почему так — источники');
+  link.href = 'sources.html#volume';
+  return link;
 }

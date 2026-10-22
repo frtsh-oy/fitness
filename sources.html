@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#152d4a"><meta name="description" content="На каких рекомендациях и исследованиях построены тренировки «Моей тренировки» и где решения приняли мы сами.">
+<title>На чём построены тренировки — Моя тренировка</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23152d4a'/%3E%3Crect x='7' y='10' width='18' height='12' rx='6' fill='none' stroke='%23ceef69' stroke-width='3'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="style.css">
+<script src="https://telegram.org/js/telegram-web-app.js" defer></script>
+<!-- Страница открывается и внутри Telegram: там нужна системная кнопка «Назад».
+     Назад по истории, если пришли из приложения, иначе — в само приложение.
+     Слой Telegram тот же, что у приложения (цвета шапки, ready): вне Telegram
+     он ничего не делает, и страница остаётся обычной статьёй. Модуль
+     выполняется после отложенного скрипта Telegram, как и в index.html. -->
+<script type="module">
+import { initTelegram } from './telegram.js';
+const tg = initTelegram(window);
+tg.onBack(() => (history.length > 1 ? history.back() : location.assign('./')));
+tg.setBackVisible(true);
+</script>
+</head>
+<body>
+<header class="masthead"><div class="wrap mastrow"><a class="brand" href="./"><span class="brand-icon" aria-hidden="true">∞</span> МОЯ ТРЕНИРОВКА</a><span class="schedule">ИСТОЧНИКИ</span></div></header>
+<main class="wrap article">
+<a class="sources-back" href="./">← В приложение</a>
+<p class="eyebrow">ПОЧЕМУ ТАК</p>
+<h1>На чём построены тренировки</h1>
+<p class="article-lead">Приложение собирает тренировку по правилам, а не наугад. Правила взяты из рекомендаций Американской коллегии спортивной медицины (American College of Sports Medicine, ACSM) и из мета-анализов — работ, которые сводят вместе десятки исследований. Ниже — какие правила откуда и где решение приняли мы сами.</p>
+
+<section id="short" aria-labelledby="short-title">
+<h2 id="short-title">Коротко</h2>
+<div class="facts article-facts">
+<div><strong>10+</strong><span>подходов в неделю на группу мышц: с таким объёмом мышцы росли лучше [<a class="cite" href="#lit-1">1</a>, <a class="cite" href="#lit-3">3</a>]</span></div>
+<div><strong>2+</strong><span>тренировки в неделю, в которых работают все основные группы мышц, — главная рекомендация ACSM [<a class="cite" href="#lit-1">1</a>]</span></div>
+<div><strong>2–3</strong><span>подхода на упражнение: ACSM советует не меньше двух [<a class="cite" href="#lit-1">1</a>]</span></div>
+<div><strong>Без отказа</strong><span>работа «до последнего повтора» стабильного преимущества не дала [<a class="cite" href="#lit-1">1</a>]</span></div>
+</div>
+</section>
+
+<section id="volume" aria-labelledby="volume-title">
+<h2 id="volume-title">Сколько подходов нужно мышце</h2>
+<p>Чем больше подходов мышца получает за неделю, тем в среднем сильнее она растёт. Это показал мета-анализ 15 исследований: каждый лишний подход в неделю добавлял к приросту мышц в среднем около 0,4% [<a class="cite" href="#lit-3">3</a>]. ACSM называет ориентир — от 10 подходов в неделю на группу мышц [<a class="cite" href="#lit-1">1</a>]. Отдача при этом затухает: каждый следующий подход добавляет меньше предыдущего [<a class="cite" href="#lit-5">5</a>].</p>
+<div class="article-app">
+<p><b>В приложении.</b> Экран «Сколько получает каждая мышца за неделю» даёт каждой группе мышц оценку:</p>
+<ul>
+<li>1–4 подхода — «работает, но не оптимально»;</li>
+<li>5–9 — «поддержание и слабый рост»;</li>
+<li>10–20 — «рабочий объём».</li>
+</ul>
+<p>Пороги 5 и 10 — те же группы, на которые авторы мета-анализа делили исследования: меньше 5 подходов в неделю, 5–9 и 10 и больше [<a class="cite" href="#lit-3">3</a>]. Оговорка: разница именно между этими тремя группами статистически не подтвердилась, была только тенденция. Подтвердилось общее правило «больше подходов — больше рост».</p>
+<p>В оценку идут подходы, где мышца главная: так считают ориентиры объёма [<a class="cite" href="#lit-6">6</a>]. Около шести таких подходов в неделю обычно хватает, чтобы удержать набранное [<a class="cite" href="#lit-6">6</a>]. На карте тела подход, где мышца только помогает, считается половиной — так же, как в мета-регрессии 67 исследований [<a class="cite" href="#lit-5">5</a>].</p>
+</div>
+<p class="article-ours"><b>Решили мы:</b> верхнюю границу, 20 подходов в неделю. Общего потолка в исследованиях нет, а ориентиры у разных людей разные [<a class="cite" href="#lit-6">6</a>]. ACSM приводит похожее число: по одной из мета-регрессий отдача для роста мышц заметно падает после 18–20 подходов в неделю [<a class="cite" href="#lit-1">1</a>].</p>
+</section>
+
+<section id="frequency" aria-labelledby="frequency-title">
+<h2 id="frequency-title">Сколько раз в неделю</h2>
+<p>Для роста мышц важно, сколько подходов набралось за неделю, а не на сколько дней они разбиты. Девять подходов на ягодицы за неделю дадут примерно одинаковый рост, сделаешь ли ты их за одну тренировку или по три за три тренировки. К этому пришёл мета-анализ 25 исследований: при равном числе подходов частота на рост мышц не влияла, и авторы прямо пишут, что её можно выбирать по удобству [<a class="cite" href="#lit-4">4</a>]. То же показали обзор ACSM [<a class="cite" href="#lit-1">1</a>] и мета-регрессия [<a class="cite" href="#lit-5">5</a>].</p>
+<p>Для силы частота важнее: сила росла лучше при тренировках не реже двух раз в неделю [<a class="cite" href="#lit-1">1</a>], и чем чаще, тем больше прибавка, хотя и всё меньше с каждым днём [<a class="cite" href="#lit-5">5</a>]. Главная рекомендация ACSM — тренироваться с усилием минимум дважды в неделю так, чтобы работали все основные группы мышц [<a class="cite" href="#lit-1">1</a>].</p>
+<p class="article-app"><b>В приложении.</b> Нагрузка считается за неделю целиком — по дням, в которые стоит тренировка. Если поставить свою тренировку на один день, конструктор предупредит, что этого мало.</p>
+</section>
+
+<section id="order" aria-labelledby="order-title">
+<h2 id="order-title">Почему сначала большие упражнения</h2>
+<p>ACSM советует ставить многосуставные упражнения (приседание, тягу) раньше односуставных, а упражнения на крупные мышцы — раньше, чем на мелкие [<a class="cite" href="#lit-2">2</a>]. В новом обзоре упражнение в начале тренировки давало больше силы, чем то же упражнение в конце [<a class="cite" href="#lit-1">1</a>]. На рост мышц порядок не влиял [<a class="cite" href="#lit-1">1</a>].</p>
+<p class="article-app"><b>В приложении.</b> Конструктор ставит силовые именно так: сначала многосуставные, затем упражнения на ягодицы, бёдра, спину и грудь, потом остальные.</p>
+</section>
+
+<section id="reserve" aria-labelledby="reserve-title">
+<h2 id="reserve-title">Зачем останавливаться с запасом</h2>
+<p>Работа до отказа — пока не получается ни одного повтора — в обзоре ACSM не дала стабильного преимущества ни силе, ни росту мышц [<a class="cite" href="#lit-1">1</a>]. Важно тренироваться с усилием, но выжимать последний повтор не обязательно.</p>
+<p class="article-ours"><b>Решили мы:</b> насколько останавливаться до отказа. Начальный уровень — за 3–4 повтора, средний — за 2–3, продвинутый — за 1–2. Точных чисел для каждого уровня в источниках нет.</p>
+</section>
+
+<section id="progress" aria-labelledby="progress-title">
+<h2 id="progress-title">Как расти дальше</h2>
+<p>Новичкам ACSM советует нагрузку, с которой получается 8–12 повторов. Когда удаётся сделать на 1–2 повтора больше нужного, нагрузку стоит увеличить на 2–10% [<a class="cite" href="#lit-2">2</a>].</p>
+<p>Уровни взяты из того же документа [<a class="cite" href="#lit-2">2</a>]: начальный — тренировок не было или был перерыв в несколько лет, средний — около полугода регулярных занятий, продвинутый — годы.</p>
+<p class="article-ours"><b>Решили мы:</b> как перевести проценты на резинку. Сделала на 1–2 повтора больше верхней границы на двух тренировках подряд — возьми резинку жёстче или перехвати её короче и вернись к нижней границе.</p>
+</section>
+
+<section id="bands" aria-labelledby="bands-title">
+<h2 id="bands-title">Резинки</h2>
+<p>В обзоре ACSM тренировки с резинками давали прирост силы и мышц по сравнению с отсутствием тренировок [<a class="cite" href="#lit-1">1</a>].</p>
+<p class="article-ours"><b>Чего мы не знаем:</b> натяжение резинки меняется по ходу движения, и как это сдвигает числа подходов, в источниках не сказано. Поэтому ориентиры объёма взяты как есть, без поправки на резинку.</p>
+</section>
+
+<section id="ours" aria-labelledby="ours-title">
+<h2 id="ours-title">Что мы решили сами</h2>
+<p>Исследования отвечают не на всё. Там, где ответа нет, мы приняли инженерные решения — это не заключение тренера. Пишем о них прямо, чтобы было видно, где кончаются исследования.</p>
+<ul class="article-list">
+<li><b>Какие мышцы работают в упражнении</b> и какая из них главная. По этой разметке считаются карта тела и недельная нагрузка.</li>
+<li><b>Граница 20 подходов в неделю</b> и запас повторов по уровням — о них выше.</li>
+<li><b>Число подходов:</b> 2 на начальном и среднем уровне, 3 на продвинутом.</li>
+<li><b>Отдых между подходами.</b> Короткий (меньше минуты) и длинный отдых в обзоре ACSM на силу не повлияли по-разному [<a class="cite" href="#lit-1">1</a>], поэтому время отдыха в приложении — удобный ориентир, а не правило.</li>
+<li><b>Форматы силовой части</b> — пары, круг, подходы.</li>
+<li><b>Зоны упора:</b> одно целевое упражнение на каждую основную группу мышц и второе — на выбранные зоны.</li>
+<li><b>Односторонние упражнения</b> в недельной нагрузке считаются по сторонам.</li>
+</ul>
+</section>
+
+<section id="exercises" aria-labelledby="exercises-title">
+<h2 id="exercises-title">Откуда упражнения</h2>
+<p>Литература отвечает за то, как упражнения собраны в тренировку, но не за выбор самих упражнений. Упражнения и готовые программы подобраны вручную. Технику показывают ролики авторов на YouTube: ссылка есть в карточке каждого упражнения.</p>
+</section>
+
+<aside class="care" id="limits" aria-labelledby="limits-title">
+<h2 id="limits-title">Чего приложение не заменяет</h2>
+<p>Исследования дают средние по группам людей. Например, в мета-регрессии [<a class="cite" href="#lit-5">5</a>] почти 80% участников — мужчины, средний возраст около 25 лет. Твой результат может отличаться.</p>
+<p>Приложение — не медицинская консультация. Если есть боль, травма, беременность или хроническая болезнь, сначала посоветуйся с врачом.</p>
+</aside>
+
+<section id="literature" aria-labelledby="literature-title">
+<h2 id="literature-title">Литература</h2>
+<ol class="literature">
+<li id="lit-1"><p>Currier B. S., D’Souza A. C., Singh M. A. F. и др. American College of Sports Medicine Position Stand. Resistance Training Prescription for Muscle Function, Hypertrophy, and Physical Performance in Healthy Adults: An Overview of Reviews. <i>Medicine &amp; Science in Sports &amp; Exercise</i>, 2026, т. 58, № 4, с. 851–872.</p>
+<p class="literature-links"><a href="https://doi.org/10.1249/MSS.0000000000003897" target="_blank" rel="noopener">doi.org/10.1249/MSS.0000000000003897</a> · <a href="https://pubmed.ncbi.nlm.nih.gov/41843416/" target="_blank" rel="noopener">PubMed</a> · <a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC12965823/" target="_blank" rel="noopener">полный текст</a></p>
+<p class="literature-took">Что взяли: от 10 подходов в неделю, минимум две тренировки в неделю, не меньше двух подходов на упражнение, работа до отказа не обязательна, частота при равном объёме, порядок упражнений, резинки, отдых.</p></li>
+<li id="lit-2"><p>American College of Sports Medicine Position Stand. Progression Models in Resistance Training for Healthy Adults. <i>Medicine &amp; Science in Sports &amp; Exercise</i>, 2009, т. 41, № 3, с. 687–708.</p>
+<p class="literature-links"><a href="https://doi.org/10.1249/MSS.0b013e3181915670" target="_blank" rel="noopener">doi.org/10.1249/MSS.0b013e3181915670</a> · <a href="https://pubmed.ncbi.nlm.nih.gov/19204579/" target="_blank" rel="noopener">PubMed</a></p>
+<p class="literature-took">Что взяли: определения уровней, порядок упражнений, 8–12 повторов для новичков, правило «на 1–2 повтора больше — увеличивай нагрузку».</p></li>
+<li id="lit-3"><p>Schoenfeld B. J., Ogborn D., Krieger J. W. Dose-response relationship between weekly resistance training volume and increases in muscle mass: A systematic review and meta-analysis. <i>Journal of Sports Sciences</i>, 2017, т. 35, № 11, с. 1073–1082.</p>
+<p class="literature-links"><a href="https://doi.org/10.1080/02640414.2016.1210197" target="_blank" rel="noopener">doi.org/10.1080/02640414.2016.1210197</a> · <a href="https://pubmed.ncbi.nlm.nih.gov/27433992/" target="_blank" rel="noopener">PubMed</a></p>
+<p class="literature-took">Что взяли: «больше подходов в неделю — в среднем больше рост» и пороги 5 и 10 подходов.</p></li>
+<li id="lit-4"><p>Schoenfeld B. J., Grgic J., Krieger J. How many times per week should a muscle be trained to maximize muscle hypertrophy? A systematic review and meta-analysis of studies examining the effects of resistance training frequency. <i>Journal of Sports Sciences</i>, 2019, т. 37, № 11, с. 1286–1295.</p>
+<p class="literature-links"><a href="https://doi.org/10.1080/02640414.2018.1555906" target="_blank" rel="noopener">doi.org/10.1080/02640414.2018.1555906</a> · <a href="https://pubmed.ncbi.nlm.nih.gov/30558493/" target="_blank" rel="noopener">PubMed</a></p>
+<p class="literature-took">Что взяли: при равном числе подходов частота на рост мышц не влияет, поэтому нагрузка считается за неделю.</p></li>
+<li id="lit-5"><p>Pelland J. C., Remmert J. F., Robinson Z. P., Hinson S. R., Zourdos M. C. The Resistance Training Dose Response: Meta-Regressions Exploring the Effects of Weekly Volume and Frequency on Muscle Hypertrophy and Strength Gains. <i>Sports Medicine</i>, 2026, т. 56, № 2, с. 481–505.</p>
+<p class="literature-links"><a href="https://doi.org/10.1007/s40279-025-02344-w" target="_blank" rel="noopener">doi.org/10.1007/s40279-025-02344-w</a> · <a href="https://pubmed.ncbi.nlm.nih.gov/41343037/" target="_blank" rel="noopener">PubMed</a></p>
+<p class="literature-took">Что взяли: отдача от объёма затухает; подход, где мышца помогает, — половина; частота важнее для силы, чем для роста мышц.</p></li>
+<li id="lit-6"><p>Renaissance Periodization. Training Volume Landmarks for Muscle Growth. 2017. Статья тренеров на сайте, не научная публикация.</p>
+<p class="literature-links"><a href="https://rpstrength.com/blogs/articles/training-volume-landmarks-muscle-growth" target="_blank" rel="noopener">rpstrength.com</a></p>
+<p class="literature-took">Что взяли: ориентиры объёма считают только подходы, где мышца главная; около шести подходов — поддержание; у разных людей ориентиры разные.</p></li>
+</ol>
+</section>
+
+<p class="article-updated">Обновлено: октябрь 2026. <a href="./">Вернуться в приложение</a></p>
+</main>
+</body></html>

@@ -130,6 +130,12 @@ export function renderBuilder({
 }) {
   const document = host.ownerDocument;
   const make = (tag, className, text) => el(document, tag, className, text);
+  // По каким правилам и источникам собирается тренировка — статья sources.html.
+  const sourcesLink = () => {
+    const link = make('a', 'sources-link', 'На чём построены тренировки');
+    link.href = 'sources.html';
+    return link;
+  };
 
   // Черновик и id, под которым он будет сохранён. id заводится вместе с
   // черновиком, а не при сохранении: повтор после отказа хранилища пишет ту же
@@ -238,7 +244,7 @@ export function renderBuilder({
     }
     root.append(heading('Конструктор'), make('p', 'builder-lead', ENTRY_LEAD),
       path('Собрать самому', MANUAL_NOTE, startManual), path('Сгенерировать', GENERATE_NOTE, startGenerator),
-      make('h3', 'builder-steps-title', 'Из чего обычно состоит тренировка'), steps);
+      make('h3', 'builder-steps-title', 'Из чего обычно состоит тренировка'), steps, sourcesLink());
     return root;
   }
 

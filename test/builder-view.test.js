@@ -183,6 +183,11 @@ test('вход: «Собрать самому» и устройство трен
     ['Завершение', '2–3 минуты в спокойном темпе, дыхание'],
   ]);
 
+  // Откуда правила — статья об источниках, сразу под составом тренировки.
+  const sources = root.querySelector('.builder-steps + .sources-link');
+  assert.equal(sources.textContent, 'На чём построены тренировки');
+  assert.equal(sources.getAttribute('href'), 'sources.html');
+
   assert.doesNotMatch(root.textContent, /(^|[^а-яё])ИИ([^а-яё]|$)|персональн|тренер/i);
 });
 

@@ -1279,6 +1279,7 @@ const TAP_TARGETS = new Map([
   ['.zone-chip', TAP_CHIP],
   ['.builder-generate', TAP_MAIN],
   ['.builder-variant', TAP_BUTTON],
+  ['.sources-link', TAP_CHIP],
 ]);
 
 const HEIGHT_PROPS = ['min-height', 'height', 'max-height'];
