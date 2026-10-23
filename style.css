@@ -758,42 +758,52 @@ body::after{content:"";position:fixed;left:0;right:0;bottom:0;height:calc(72px +
 .library-gear-grp .gear-name{font-size:15px;font-weight:600}
 .library-chips{display:flex;flex-wrap:wrap;gap:8px}
 
-/* ======= ВРЕМЕННО: старые правила экранов, которые ещё не переоформлены (задачи 4–6 плана) ======= */
-/* Статья «На чём построены тренировки» (sources.html) и ссылки на неё из
-   приложения. Колонка уже, чем у тренировки: это текст для чтения подряд.
-   «Коротко» — те же .facts, что в шапке тренировки, «Чего не заменяет» — та
-   же .care. Своего у статьи два вида заметок: «В приложении» (голубая, как
-   .block-note) и «Решили мы» (с жёлтой чертой, как .care, но без заливки:
-   это не предупреждение, а пометка, где кончается источник). Нижнего меню на
-   странице нет, поэтому отступ снизу — только безопасная зона. */
-.article{max-width:720px;padding-bottom:calc(32px + env(safe-area-inset-bottom))}
-.sources-back{display:inline-flex;align-items:center;min-height:32px;margin:14px 0 10px;font-size:14px;font-weight:600;color:#193d6a;text-underline-offset:3px}
-.article h1{font-size:clamp(32px,5vw,46px)}
-.article-lead{margin:0 0 6px;color:#46566b}
+/* ---------- статья «На чём построены тренировки» (sources.html) ---------- */
+/* Колонка та же, что у приложения; нижнего меню на странице нет, поэтому отступ
+   снизу — только безопасная зона. «Коротко» — строки с рукописными числами;
+   «В приложении» (голубая) и «Решили мы» (жёлтая) — мягкие плашки без рамок:
+   первая говорит, что делает приложение, вторая — где кончается источник и
+   начинается наше решение. Сноски — маленькие плашки цвета страницы. */
+.article{padding-bottom:calc(40px + env(safe-area-inset-bottom))}
+.sources-back{display:inline-flex;align-items:center;gap:2px;min-height:36px;margin-left:-6px;padding:0 8px 0 2px;border-radius:12px;font-size:14px;font-weight:600;color:var(--ink2);text-decoration:none}
 .article section{margin-top:34px;scroll-margin-top:12px}
-.article h2{font-size:23px;line-height:1.3;letter-spacing:-.02em;margin:0 0 10px}
-.article section>p{margin:0 0 12px}
-.article-facts{margin-top:4px}
-.article-facts strong{font-size:26px}
-.article-app{margin:0 0 12px;padding:13px 16px;border-radius:10px;background:#e8edf4;font-size:15px;color:#33475f}
-.article-app p{margin:0 0 8px}
-.article-app p:last-child{margin-bottom:0}
-.article-app ul{margin:0 0 8px;padding-left:20px}
-.article-ours{margin:0 0 12px;padding:2px 0 2px 14px;border-left:3px solid #c49346;font-size:15px;color:#46566b}
-.article-list{margin:0;padding-left:20px}
-.article-list li+li{margin-top:8px}
-.cite{text-decoration:none;font-weight:650;color:#193d6a}
-.literature{margin:0;padding-left:22px;font-size:14px;color:#33475f}
-.literature li{scroll-margin-top:12px}
-.literature li+li{margin-top:16px}
-.literature p{margin:0 0 4px;overflow-wrap:anywhere}
-.literature-links a{color:#193d6a;text-underline-offset:3px}
-.literature-took{color:#526278}
-.literature li:target{background:#fff8d6;border-radius:8px;box-shadow:0 0 0 6px #fff8d6}
-.article-updated{margin:30px 0 0;font-size:13px;color:#657289}
-/* Вход в статью из приложения: строка-ссылка под текстом блока. */
-.sources-link{display:inline-flex;align-items:center;min-height:32px;margin-top:8px;font-size:14px;font-weight:600;color:#193d6a;text-underline-offset:3px}
-@media print{.sources-back{display:none}}
+.article section>h2{margin:0 0 10px;font:600 28px/1.05 var(--hand)}
+.article section>p{margin:0 0 12px;font-size:15px;line-height:1.6;color:var(--ink2)}
+.article-facts{display:block;margin-top:4px}
+.article-facts>div{display:flex;align-items:center;gap:14px;padding:14px 0;border-top:1px solid var(--hair)}
+.article-facts>div:first-child{border-top:0}
+.article-facts strong{flex:none;width:92px;font:600 38px/.95 var(--hand)}
+.article-facts strong.word{font-size:30px}
+.article-facts span{flex:1;min-width:0;max-width:none;font-size:14px;line-height:1.5;color:var(--ink2)}
+.article-app,.article-ours{margin:14px 0 12px;padding:16px 18px;border-radius:22px;font-size:15px;line-height:1.6;color:var(--ink)}
+.article-app{background:var(--sky-s)}
+.article-ours{background:var(--butter-s)}
+.article-app p{margin:0}
+.article-app p+p,.article-app p+ul,.article-app ul+p{margin-top:10px}
+.article-app ul{margin:6px 0 0;padding:0;list-style:none}
+.article-list{margin:0;padding:0;list-style:none;font-size:15px;line-height:1.6;color:var(--ink2)}
+.article-app li,.article-list li{position:relative;padding:0 0 6px 20px}
+.article-app li::before,.article-list li::before{content:"";position:absolute;left:4px;top:.72em;width:6px;height:6px;border-radius:50%;background:var(--lead-d)}
+.article-app li::before{background:var(--sky-d)}
+.article-app b,.article-ours b,.article-list b{font-weight:700;color:var(--ink)}
+.article .care p{font-size:14px;line-height:1.55}
+.cite{position:relative;display:inline-grid;place-items:center;min-width:20px;height:20px;margin-left:2px;padding:0 5px;border-radius:10px;background:var(--lead);color:var(--lead-i);font-size:12px;font-weight:700;line-height:1;text-decoration:none;vertical-align:1px;font-variant-numeric:tabular-nums}
+/* Площадь нажатия шире самой плашки: 20px пальцем не попасть. */
+.cite::after{content:"";position:absolute;inset:-6px -3px}
+.literature{margin:0;padding:0;list-style:none;counter-reset:lit}
+.literature>li{position:relative;min-height:34px;padding:16px 0 16px 48px;border-top:1px solid var(--hair);counter-increment:lit;scroll-margin-top:12px}
+.literature>li:first-child{border-top:0}
+.literature>li::before{content:counter(lit);position:absolute;left:0;top:16px;display:grid;place-items:center;width:34px;height:34px;border-radius:50%;background:var(--lead);font:600 22px/1 var(--hand);color:var(--ink)}
+.literature p{margin:0;overflow-wrap:anywhere;font-size:13px;line-height:1.5;color:var(--ink)}
+.literature p+p{margin-top:6px}
+.literature i{font-style:italic}
+.literature-links a{color:var(--ink);text-underline-offset:3px;text-decoration-thickness:1px}
+.literature p.literature-took{color:var(--ink2)}
+/* Источник, на который пришли по сноске, подсвечен мягкой заливкой, не рамкой. */
+.literature>li:target{background:var(--butter-s);border-radius:18px;box-shadow:0 0 0 10px var(--butter-s)}
+.literature>li:target,.literature>li:target+li{border-top-color:transparent}
+.article-updated{margin:30px 0 0;font-size:13px;line-height:1.5;color:var(--ink2)}
+.article-updated a{color:var(--ink);text-underline-offset:3px;text-decoration-thickness:1px}
 
 /* Порог телефона. Мобильный порог в проекте один — 480px: он покрывает 375, 390,
    414 и 430. То же число знает app.js (PHONE_MAX_WIDTH), потому что раскрытие
@@ -828,7 +838,7 @@ body::after{content:"";position:fixed;left:0;right:0;bottom:0;height:calc(72px +
    перекрыто» это сторожит. Блоки и описания на бумаге раскрыты, отметки, панель
    и шторки не нужны. */
 @media print{
-  .tabbar,.timer-sheet,.wave,.week,.stats,.next,.analysis,.text-button,.checks,.check,.blk-prog,.blk-caret,.sources-back{display:none}
+  .tabbar,.timer-sheet,.wave,.week,.stats,.next,.analysis,.text-button,.checks,.check,.blk-prog,.blk-caret,.appbar,.sources-back{display:none}
   body::after{display:none}
   .hero{background:none;padding:0 0 12px}
   .blk-body,.blk-body[hidden]{display:block}

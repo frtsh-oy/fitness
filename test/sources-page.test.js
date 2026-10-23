@@ -25,7 +25,7 @@ test('страница: заголовок, разделы по порядку, 
   assert.equal(document.querySelector('h1').textContent, 'На чём построены тренировки');
   assert.deepEqual([...ARTICLE.querySelectorAll('[id]')].map(node => node.id).filter(id => SECTIONS.includes(id)), SECTIONS);
   assert.equal(document.querySelector('.sources-back').getAttribute('href'), './');
-  assert.equal(document.querySelector('.masthead .brand').getAttribute('href'), './');
+  assert.equal(document.body.dataset.tint, 'peach', 'страница красится тоном персика, как в макете');
   // Кнопка «Назад» в Telegram — через тот же слой, что у приложения.
   assert.match(document.querySelector('script[type="module"]').textContent, /from '\.\/telegram\.js'/);
 });
@@ -58,6 +58,17 @@ test('у научных источников есть DOI, у каждого —
     assert.equal(link.target, '_blank', link.href);
     assert.equal(link.rel, 'noopener', link.href);
   }
+});
+
+// Сноска — маленькая плашка с номером, без квадратных скобок вокруг. Номер
+// сам по себе диктору ничего не говорит, поэтому у каждой есть подпись «Источник N».
+test('сноски — плашки без скобок, у каждой подпись для чтения с экрана', () => {
+  const cites = [...ARTICLE.querySelectorAll('a.cite')];
+  assert.ok(cites.length > 0);
+  for (const cite of cites) {
+    assert.equal(cite.getAttribute('aria-label'), `Источник ${cite.textContent}`);
+  }
+  assert.doesNotMatch(text(ARTICLE), /\[\d/, 'вокруг сносок остались квадратные скобки');
 });
 
 test('ACSM расшифрована при первом упоминании', () => {
