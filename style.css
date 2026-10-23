@@ -313,21 +313,37 @@ body::after{content:"";position:fixed;left:0;right:0;bottom:0;height:calc(72px +
 .tabbar-timer[data-running=true] .tabbar-label{font-weight:700;font-variant-numeric:tabular-nums}
 
 /* ---------- шторка таймера (плавающий лист) ---------- */
-.timer-sheet{position:fixed;left:0;right:0;bottom:calc(84px + var(--tabbar-safe-bottom));z-index:7;display:grid;grid-template-columns:1fr auto;gap:8px;
-  width:min(calc(100% - 24px),calc(var(--col) - 24px));margin:0 auto;padding:10px 20px 20px;border-radius:28px;background:var(--surface);color:var(--ink);
+/* Мятная: лист над нижней панелью, заголовок рукописью, табло — белый узел
+   петли с рукописным временем, вокруг него петля заполняется по мере отдыха.
+   Пресеты — сегмент, «Старт» — главная кнопка (44), сброс — круглая (44). Своя
+   цветовая семья листа не зависит от вкладки под ним. Когда отдых закончился
+   (.done), узел становится мятным, а под ним появляется галочка. */
+.timer-sheet{--lead:var(--mint);--lead-s:var(--mint-s);--lead-i:var(--mint-i);--lead-d:var(--mint-d);--lead-b:var(--mint-b);--lead-m:var(--mint-m);
+  position:fixed;left:0;right:0;bottom:calc(84px + var(--tabbar-safe-bottom));z-index:7;
+  width:min(calc(100% - 24px),calc(var(--col) - 24px));margin:0 auto;padding:12px 20px 18px;border-radius:28px;background:var(--surface);color:var(--ink);
   box-shadow:0 -14px 44px -12px rgba(42,44,72,.28),0 2px 8px rgba(42,44,72,.06)}
 .timer-sheet[hidden]{display:none}
-.timer-sheet-head,.timer-sheet output,.presets{grid-column:1/-1}
-.timer-sheet-head{display:flex;align-items:center;justify-content:space-between;gap:16px;font:600 24px/1.05 var(--hand);color:var(--ink)}
-.timer-sheet output{display:block;text-align:center;font:600 64px/1 var(--hand);margin:0 0 6px;font-variant-numeric:tabular-nums}
-.presets{display:flex;gap:2px;padding:4px;border-radius:16px;background:var(--tonal)}
-.presets button{flex:1;min-width:0}
-.timer-sheet button{min-height:36px;padding:0 12px;border-radius:12px;font-size:14px;font-weight:600;color:var(--ink2);text-align:center}
-.timer-sheet button[aria-pressed=true]{background:#fff;color:var(--ink);box-shadow:0 1px 3px rgba(42,44,72,.14)}
-.timer-sheet .timer-start{min-height:44px;border-radius:14px;background:var(--mint-b);color:var(--ink);font-size:15px;font-weight:700}
-.timer-sheet .timer-reset{min-width:44px;min-height:44px;padding:0;border-radius:50%;background:var(--tonal);font-size:20px;color:var(--ink)}
-.timer-sheet.done{background:var(--mint-s)}
-.timer-sheet.done output{color:var(--mint-i)}
+.timer-sheet-head{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.timer-title{font:600 28px/1.05 var(--hand)}
+.timer-face{position:relative;width:200px;height:122px;margin:2px auto 8px}
+.timer-loop{position:absolute;left:0;top:6px;width:200px;height:110px;overflow:visible}
+.timer-loop .loop-track{stroke:var(--tonal);stroke-width:8}
+.timer-loop .loop-fill{stroke:var(--mint-d);stroke-width:8}
+/* Узел стоит в перекрестье петли (66,36 из 132×72, то есть 100×55 при ширине 200). */
+.timer-knot{position:absolute;left:50%;top:61px;display:flex;align-items:center;justify-content:center;width:92px;height:92px;margin:-46px 0 0 -46px;border-radius:50%;
+  background:var(--mint-s);font:600 34px/1 var(--hand);color:var(--ink);transition:background .2s}
+.timer-knot i,.timer-knot em{display:inline-block;font-style:normal;text-align:center}
+.timer-knot i{width:.52em}
+.timer-knot em{width:.3em}
+.timer-say{margin:0 0 12px;text-align:center;font-size:13px;line-height:1.4;color:var(--ink2)}
+.timer-sheet.done .timer-knot{background:var(--mint)}
+.timer-sheet.done .timer-say{font-weight:600;color:var(--mint-i)}
+.timer-sheet.done .timer-say::before{content:"";display:inline-block;width:14px;height:14px;margin:0 6px -2px 0;background:currentColor;
+  -webkit-mask:var(--i-check) center/contain no-repeat;mask:var(--i-check) center/contain no-repeat}
+.presets{margin-bottom:12px}
+.timer-acts{display:flex;gap:10px}
+.timer-start{display:inline-flex;align-items:center;justify-content:center;flex:1;min-height:44px;padding:0 24px;border-radius:20px;background:var(--lead-b);font-size:15px;font-weight:700;line-height:1;color:var(--ink)}
+.timer-reset{display:inline-grid;place-items:center;flex:none;min-width:44px;min-height:44px;border-radius:50%;background:var(--tonal);color:var(--ink2)}
 
 /* ---------- компактная шапка вкладки ---------- */
 .hero.compact{padding-bottom:40px}

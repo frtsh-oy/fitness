@@ -1434,14 +1434,17 @@ const TAP_MAIN = 44;
 //
 // Ступень сверяется со ВСЕМИ объявлениями высоты, которые накрывают узлы
 // селектора, без учёта каскада. Поэтому у группы ступень — по самому низкому
-// её члену: «Старт» таймера стоит в 44px, но правило `.timer-sheet button`
-// накрывает и его, и пресеты, и проверяется на 36.
+// её члену, а общее правило на разные ступени не годится: у «Старт» и сброса
+// таймера (44px) свои правила, пресеты — сегмент `.seg button` (36px), а базовая
+// высота `.btn` стоит на `.btn:not(.main)`, чтобы не накрывать главные кнопки.
 const TAP_TARGETS = new Map([
   ['.blk-head', TAP_MAIN],
   ['.text-button', TAP_CHIP],
   ['.video', TAP_BUTTON],
   ['.check', TAP_BUTTON],
-  ['.timer-sheet button', TAP_BUTTON],
+  ['.timer-start', TAP_MAIN],
+  ['.timer-reset', TAP_MAIN],
+  ['#timer-close', TAP_BUTTON],
   ['.tabbar button', TAP_MAIN],
   ['.bodymap-toggle', TAP_BUTTON],
   ['.bodymap-modes button', TAP_CHIP],

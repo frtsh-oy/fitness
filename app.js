@@ -20,6 +20,7 @@ import { renderBuilder } from './builder-view.js';
 import { createGearProfile } from './gear-profile.js';
 import { hasOwn } from './own.js';
 import { TINT_BASE } from './tint.js';
+import { loopMeter } from './icons.js';
 
 // Отсчёт сверяется с часами часто, чтобы экран не отставал от них больше чем
 // на глаз: на границе секунды подпись меняется в пределах пятой доли.
@@ -731,6 +732,23 @@ export function startApp(win = globalThis.window, { library = LIBRARY } = {}) {
   const value = document.getElementById('timer-value');
   const status = document.getElementById('timer-status');
   const toggle = document.getElementById('timer-toggle');
+  const say = document.getElementById('timer-say');
+  // Петля вокруг табло заполняется по мере отдыха: доля прошедшего от выбранной
+  // длительности. Длительность знает только связывание (timer.js её не отдаёт),
+  // поэтому restTotal хранится здесь и ставится до setDuration.
+  const meter = loopMeter(document, 'timer-loop');
+  sheet.querySelector('.timer-face').prepend(meter.svg);
+  let restTotal = 0;
+
+  // Время — по знаку на узел: рукописные цифры разной ширины, и одной строкой
+  // табло дрожало бы каждую секунду. Текст табло при этом тот же «01:00».
+  function paintTime(text) {
+    value.replaceChildren(...[...text].map(char => {
+      const node = document.createElement(char === ':' ? 'em' : 'i');
+      node.textContent = char;
+      return node;
+    }));
+  }
 
   const openButton = document.getElementById('timer-open');
   // Подпись пункта — отдельный узел рядом со значком: textContent самой кнопки
@@ -747,7 +765,13 @@ export function startApp(win = globalThis.window, { library = LIBRARY } = {}) {
 
   const timer = createTimer({
     onTick: remaining => {
-      value.textContent = formatTime(remaining);
+      paintTime(formatTime(remaining));
+      meter.set(restTotal > 0 ? (restTotal - remaining) / restTotal : 0);
+      // Подпись под табло — для глаза; диктору события говорит #timer-status.
+      say.textContent = remaining === 0 ? 'Отдых закончился'
+        : timer.running ? 'Идёт отдых'
+        : remaining < restTotal ? 'На паузе'
+        : 'Выбери время и нажми «Старт»';
       // «Ещё раз» в нуле — как в оригинале: старт на отработавшем таймере
       // начинает отсчёт заново, и кнопка обязана обещать именно это.
       toggle.textContent = timer.running ? 'Пауза' : remaining === 0 ? 'Ещё раз' : 'Старт';
@@ -834,7 +858,8 @@ export function startApp(win = globalThis.window, { library = LIBRARY } = {}) {
 
   function selectDuration(preset) {
     for (const other of presets) other.setAttribute('aria-pressed', String(other === preset));
-    timer.setDuration(Number(preset.dataset.time));
+    restTotal = Number(preset.dataset.time);
+    timer.setDuration(restTotal);
     stopTicking();
     pausedMs = 0;
   }

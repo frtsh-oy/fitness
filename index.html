@@ -67,11 +67,12 @@
 <div class="screen" id="screen-builder" hidden></div>
 </main>
 <div class="timer-sheet" id="timer-sheet" hidden>
-<div class="timer-sheet-head"><span>Отдых</span><button type="button" id="timer-close" aria-label="Закрыть">✕</button></div>
-<output id="timer-value" role="timer" aria-label="Оставшееся время отдыха"></output>
-<div class="presets" aria-label="Длительность отдыха"><button data-time="20">20с</button><button data-time="45">45с</button><button data-time="60" aria-pressed="true">60с</button><button data-time="90">90с</button></div>
-<button class="timer-start" id="timer-toggle">Старт</button>
-<button class="timer-reset" id="timer-reset" aria-label="Сбросить таймер">↺</button>
+<div class="timer-sheet-head"><span class="timer-title">Отдых</span><button type="button" class="icon-btn" id="timer-close" aria-label="Свернуть таймер"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M6 9l6 6 6-6"/></svg></button></div>
+<!-- Петлю-счётчик app.js кладёт в начало .timer-face; время пишет в output по знаку на узел. -->
+<div class="timer-face"><output class="timer-knot" id="timer-value" role="timer" aria-label="Оставшееся время отдыха"></output></div>
+<p class="timer-say" id="timer-say" aria-hidden="true">Выбери время и нажми «Старт»</p>
+<div class="presets seg" role="group" aria-label="Длительность отдыха"><button type="button" data-time="20">20&nbsp;с</button><button type="button" data-time="45">45&nbsp;с</button><button type="button" data-time="60" aria-pressed="true">60&nbsp;с</button><button type="button" data-time="90">90&nbsp;с</button></div>
+<div class="timer-acts"><button type="button" class="timer-start" id="timer-toggle">Старт</button><button type="button" class="timer-reset" id="timer-reset" aria-label="Сбросить таймер"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M20 12a8 8 0 1 1-2.6-5.9M20 4v4h-4"/></svg></button></div>
 </div>
 <!-- Вне шторки и не спрятана атрибутом hidden: шторка в покое стоит закрытой
      (display:none), а сообщение о конце отдыха обязано доходить и тогда —
