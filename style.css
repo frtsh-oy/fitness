@@ -89,9 +89,9 @@ button:focus-visible,a:focus-visible,input:focus-visible,summary:focus-visible{o
    480px по центру. Шапки тянутся от края до края, внутри них тоже колонка. */
 .wrap{max-width:var(--col);margin:0 auto;padding:0 20px}
 .screen{padding-bottom:calc(72px + var(--tabbar-safe-bottom) + 36px)}
-/* Пока «Тренировки» и «Конструктор» не получили своих шапок, их содержимое
-   (старые правила ниже) ложится в ту же колонку. */
-#screen-workouts,#screen-builder{max-width:var(--col);margin:0 auto;padding:calc(20px + var(--safe-top)) 20px calc(72px + var(--tabbar-safe-bottom) + 36px)}
+/* Пока «Конструктор» не получил своей шапки, его содержимое (старые правила
+   ниже) ложится в ту же колонку. */
+#screen-builder{max-width:var(--col);margin:0 auto;padding:calc(20px + var(--safe-top)) 20px calc(72px + var(--tabbar-safe-bottom) + 36px)}
 /* Под плавающей панелью контент уходит в цвет бумаги, а не обрезается краем. */
 body::after{content:"";position:fixed;left:0;right:0;bottom:0;height:calc(72px + var(--tabbar-safe-bottom) + 24px);z-index:4;pointer-events:none;
   background:linear-gradient(to top,var(--paper) 36%,rgba(251,248,249,0))}
@@ -99,6 +99,8 @@ body::after{content:"";position:fixed;left:0;right:0;bottom:0;height:calc(72px +
 /* ---------- значки и рукописное ---------- */
 .ic{width:22px;height:22px;flex:none;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
 .ic-fill{fill:currentColor;stroke:none}
+.ic-sm{width:18px;height:18px}
+.ic-hand{stroke-width:2.2}
 .hand{font-family:var(--hand);font-weight:600;letter-spacing:0}
 
 /* ---------- шапка «Сегодня» ---------- */
@@ -327,43 +329,53 @@ body::after{content:"";position:fixed;left:0;right:0;bottom:0;height:calc(72px +
 .timer-sheet.done{background:var(--mint-s)}
 .timer-sheet.done output{color:var(--mint-i)}
 
-/* ======= ВРЕМЕННО: старые правила экранов, которые ещё не переоформлены (задачи 4–6 плана) ======= */
-/* «Тренировки» и «Конструктор» — содержимое рисуется в app.js (workouts-view.js,
-   builder-view.js) при первом показе раздела. Отступ снизу — под .tabbar,
-   которая всегда стоит внизу этих экранов (53px с границей плюс безопасная
-   зона). Шторка таймера этим отступом не покрывается и не должна: она
-   всплывает поверх содержимого раздела, а не встраивается в его поток. */
+/* ---------- компактная шапка вкладки ---------- */
+.hero.compact{padding-bottom:40px}
+.hero.compact h1{margin-top:10px}
+.hero.compact .intro-copy{margin-top:8px}
 
-.workout-card{display:flex;flex-direction:column;align-items:flex-start;gap:3px;width:100%;min-height:44px;margin:0 0 8px;padding:12px 14px;border:1px solid #d8e1eb;border-radius:14px;background:#fff;font:inherit;color:inherit;text-align:left;cursor:pointer}
-.workout-card[aria-current]{border-color:#152d4a;background:#eef3fa}
+/* ---------- «Тренировки» ---------- */
+/* Панель тренировки — карточка («Готовые») или карточка с кнопками под ней
+   («Мои»). Она выступает за колонку на 14px, чтобы текст стоял по полю 20px, а
+   подсветка текущей была шире текста. У своей тренировки панель — .workout-item,
+   и карточка внутри неё без собственного фона и полей: правило про неё стоит
+   ПОСЛЕ правила текущей карточки (та же специфичность). */
+.workout-card,.workout-item{display:block;width:calc(100% + 28px);margin:4px -14px;padding:14px 14px 12px;border-radius:24px;text-align:left}
+.workout-card{min-height:44px}
+.workout-card[aria-current],.workout-item.is-current{background:var(--lead-s)}
+.workout-item .workout-card{width:100%;margin:0;padding:0;border-radius:0;background:none}
 /* Название вводит человек, и слово без пробелов (до 60 знаков) иначе вылезло бы
-   за карточку; так же переносится h1 в «Сегодня» (правило в начале файла).
-   anywhere, а не break-word: только оно сужает и минимальную ширину, на которую
-   смотрит flex-элемент. */
-.workout-card-title{font-size:16px;line-height:1.35;font-weight:650;letter-spacing:-.02em;overflow-wrap:anywhere}
-.workout-card-kicker{font-size:11px;letter-spacing:.08em;font-weight:650;color:#657289}
-/* «Сейчас в «Сегодня»» у текущей тренировки: подпись для глаза, а не кнопка.
-   Та же плашка, что у метки «упор» (.focus-tag), без выравнивания по строке:
-   в карточке она стоит последней и держится слева сама. */
-.workout-card-now{margin-top:2px;padding:2px 8px;border-radius:6px;background:#e0edc2;color:#39571b;font-size:12px;font-weight:650;letter-spacing:.06em}
-/* «Мои» и «Готовые». Своя тренировка — строка из карточки и кнопки «Удалить»:
-   карточка занимает всё, что осталось, и сжимается (min-width:0), чтобы длинная
-   строка под названием переносилась, а не выталкивала кнопку за край. Кнопка по
-   высоте посередине, а не во всю карточку: у карточки в три строки сплошная
-   кнопка такой же высоты выглядела бы главным действием. */
-.workouts-title{margin:22px 0 10px;font-size:20px;line-height:1.3;letter-spacing:-.025em}
-.workouts-title:first-child{margin-top:0}
-.workouts-saved,.workouts-empty{margin:0 0 10px;padding:10px 12px;border-radius:10px;font-size:13px}
-.workouts-saved{background:#e0edc2;color:#39571b}
-.workouts-empty{background:#e8edf4;color:#53637a}
-.workout-item{display:flex;align-items:center;gap:8px;margin:0 0 8px}
-.workout-item .workout-card{flex:1 1 auto;width:auto;min-width:0;margin:0}
-.workout-delete,.workout-edit{flex:none;min-height:32px;padding:0 12px;border:1px solid #d8e1eb;border-radius:10px;background:#fff;font:inherit;font-size:13px;font-weight:600;color:#53637a;cursor:pointer}
-.workout-actions{display:flex;flex-direction:column;gap:6px;flex:none}
+   за карточку. anywhere, а не break-word: только оно сужает и минимальную
+   ширину, на которую смотрит flex-элемент. */
+.workout-card-title{display:block;font:600 27px/1.05 var(--hand);overflow-wrap:anywhere}
+.workout-card-lead{display:-webkit-box;margin-top:6px;font-size:13px;line-height:1.5;color:var(--ink2);-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+/* Строка «дома · с резинками · пн · ср · пт» набрана в данных заглавными:
+   строчные с заглавной первой буквой читаются спокойнее. */
+.workout-card-kicker{display:block;margin-top:6px;font-size:12px;line-height:1.35;color:var(--ink2);text-transform:lowercase}
+.workout-card-kicker::first-letter{text-transform:uppercase}
+/* У своей тренировки описания нет, и эта строка — единственная под названием. */
+.workout-card-title+.workout-card-kicker{font-size:13px}
+/* «Сейчас в «Сегодня»»: подпись для глаза, а не кнопка; мятный и галочка. */
+.workout-card-now{display:inline-flex;align-items:center;gap:6px;height:24px;margin-top:10px;padding:0 10px;border-radius:12px;background:var(--mint);color:var(--mint-i);font-size:12px;font-weight:700;line-height:1}
+.workout-card-now .ic{width:14px;height:14px;stroke-width:2.2}
+.workout-actions{display:flex;gap:2px;margin:6px 0 0 -8px}
+.workout-edit,.workout-delete{display:inline-flex;align-items:center;min-height:32px;padding:0 8px;border-radius:12px;font-size:14px;font-weight:600;color:var(--ink2)}
+.workouts-title{margin:30px 0 6px;font:600 28px/1.05 var(--hand)}
+.workouts-title:first-child{margin-top:24px}
+/* Плашка после сохранения: мятная, с галочкой, которую рисует CSS (текст
+   узла — только слова, и роль status читает диктор одну фразу). */
+.workouts-saved{display:flex;align-items:flex-start;gap:10px;margin:24px 0 0;padding:12px 16px;border-radius:18px;background:var(--mint-s);color:var(--mint-i);font-size:14px;line-height:1.45}
+.workouts-saved::before{content:"";flex:none;width:18px;height:18px;margin-top:2px;background:currentColor;
+  -webkit-mask:var(--i-check) center/contain no-repeat;mask:var(--i-check) center/contain no-repeat}
+.workouts-saved+.workouts-title{margin-top:20px}
+.workouts-empty{display:flex;flex-direction:column;align-items:flex-start;gap:6px;margin-top:8px;padding:18px 18px 16px;border-radius:24px;background:var(--butter-s)}
+.ic-loop{stroke-width:9}
+.workouts-empty .ic-loop{width:44px;height:24px;margin-bottom:4px;color:var(--butter-d)}
+.workouts-empty-title{font:600 24px/1.05 var(--hand);color:var(--ink)}
+.workouts-empty-hint{font-size:13px;line-height:1.45;color:var(--ink2)}
+.workouts-build{display:inline-flex;align-items:center;justify-content:center;min-height:44px;margin-top:8px;padding:0 24px;border-radius:14px;background:var(--butter-b);font-size:15px;font-weight:700;color:var(--ink)}
 
-
-
-
+/* ======= ВРЕМЕННО: старые правила экранов, которые ещё не переоформлены (задачи 4–6 плана) ======= */
 /* Экран библиотеки упражнений (library-view.js), живёт в «Конструкторе».
    Высоты нажимаемого — по ступеням (чип 32, кнопка 36, главная 44, см.
    телефонный блок); эти селекторы проверяет сторож высоты (TAP_TARGETS в

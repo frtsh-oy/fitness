@@ -198,7 +198,7 @@ export function startApp(win = globalThis.window, { library = LIBRARY } = {}) {
 
   function drawWorkouts() {
     renderWorkouts({
-      host: document.getElementById('screen-workouts'),
+      host: document.getElementById('workouts-list'),
       ready: WORKOUTS,
       mine,
       currentId: workout.id,
@@ -207,6 +207,7 @@ export function startApp(win = globalThis.window, { library = LIBRARY } = {}) {
       onPick: selectWorkout,
       onDelete: deleteOwn,
       onEdit: editOwn,
+      onBuild: () => sections.show('builder'),
     });
   }
 

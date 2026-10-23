@@ -20,6 +20,7 @@ import { regionSummary } from '../volume.js';
 import { warmupOnlyGroups, idleGroups } from '../bodymap.js';
 import { groupsPhrase } from '../muscles.js';
 import legs from '../workouts/legs-mwf.js';
+import { WORKOUTS } from '../workouts/index.js';
 
 const PAGE = readFileSync(fileURLToPath(new URL('../index.html', import.meta.url)), 'utf8');
 
@@ -431,8 +432,32 @@ test('«Мои» пусто — подсказка про «Конструкто
 
   const screen = document.getElementById('screen-workouts');
   assert.deepEqual([...screen.querySelectorAll('h2')].map(h => h.textContent), ['Мои', 'Готовые']);
-  assert.match(screen.textContent, /Своих тренировок пока нет — собери первую в «Конструкторе»\./);
+  assert.equal(screen.querySelector('.workouts-empty-title').textContent, 'Своих тренировок пока нет');
+  assert.equal(screen.querySelector('.workouts-empty-hint').textContent, 'Собери первую в «Конструкторе».');
   assert.equal(screen.querySelectorAll('.workout-delete').length, 0);
+
+  // Пустота — приглашение: кнопка сразу ведёт в «Конструктор».
+  const build = screen.querySelector('.workouts-build');
+  assert.equal(build.textContent, 'Собрать тренировку');
+  build.click();
+  assert.deepEqual(shown(document), ['screen-builder']);
+});
+
+test('карточка готовой тренировки: название, описание, строка с днями; у текущей пометка с галочкой', async t => {
+  const { document } = mount(t);
+  await settle(0);
+  openWorkouts(document);
+
+  const card = cardOf(document, legs.title);
+  assert.equal(card.querySelector('.workout-card-lead').textContent, legs.lead);
+  assert.equal(kickerOf(document, legs.title), `${legs.kicker} · ПН · СР · ПТ`);
+  const now = card.querySelector('.workout-card-now');
+  assert.equal(now.textContent, 'Сейчас в «Сегодня»');
+  assert.ok(now.querySelector('svg.ic-hand'), 'у пометки галочка: смысл не держится на одном цвете');
+
+  const other = cardOf(document, WORKOUTS['core-arms-legs'].title);
+  assert.equal(other.querySelector('.workout-card-now'), null, 'пометка только у текущей');
+  assert.equal(other.hasAttribute('aria-current'), false);
 });
 
 test('карточка своей тренировки: название, уровень или «Своя сборка», дни и число упражнений', async t => {

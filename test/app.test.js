@@ -1453,6 +1453,7 @@ const TAP_TARGETS = new Map([
   ['.workout-card', TAP_MAIN],
   ['.workout-delete', TAP_CHIP],
   ['.workout-edit', TAP_CHIP],
+  ['.workouts-build', TAP_MAIN],
   ['.builder-path', TAP_MAIN],
   ['.builder-back', TAP_CHIP],
   ['.builder-add', TAP_MAIN],
@@ -1560,6 +1561,11 @@ test('ни одно правило не опускает нажимаемое н
   // всё. Кнопка «Другой вариант» живёт только на результате, а чипы зон и
   // уровни — на генераторе.
   const rich = mount(t, { screenWidth: 375, library: TEST_LIBRARY, scrollStub: true });
+  // Своих тренировок здесь нет, и «Тренировки» показывают приглашение с главной
+  // кнопкой «Собрать тренировку»; список своих приходит следом за запуском.
+  await settle(0);
+  rich.document.querySelector('[data-section="workouts"]').click();
+  collect(rich.document.getElementById('screen-workouts'));
   const richBuilder = rich.document.getElementById('screen-builder');
   rich.document.querySelector('[data-section="builder"]').click();
   richBuilder.querySelectorAll('.builder-path')[1].click();
