@@ -42,10 +42,11 @@
 <section class="bodymap">
 <button class="bodymap-toggle tile tile-sky" type="button" aria-expanded="false" aria-controls="bodymap-body"><span class="tile-text"><span class="tile-title">Что работает</span><span class="tile-sub">Карта тела по этой тренировке</span></span><span class="tile-go"><span class="go-open">Открыть</span><span class="go-close">Скрыть</span><svg class="ic" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M9 6l6 6-6 6"/></svg></span></button>
 <div class="bodymap-body" id="bodymap-body" hidden>
-<div class="bodymap-modes" role="group" aria-label="Что показывать на карте"><button type="button" data-mode="strength" aria-pressed="true">Силовые</button><button type="button" data-mode="all" aria-pressed="false">Вся нагрузка</button></div>
-<div class="bodymap-views"><div class="bodymap-anterior"></div><div class="bodymap-posterior"></div></div>
+<div class="bodymap-modes seg" role="group" aria-label="Что показывать на карте"><button type="button" data-mode="strength" aria-pressed="true">Силовые</button><button type="button" data-mode="all" aria-pressed="false">Вся нагрузка</button></div>
+<div class="bodymap-views"><figure class="bodymap-fig"><div class="bodymap-anterior"></div><figcaption>спереди</figcaption></figure><figure class="bodymap-fig"><div class="bodymap-posterior"></div><figcaption>сзади</figcaption></figure></div>
 <p class="bodymap-note"></p>
 <p class="bodymap-groups"></p>
+<div class="bodymap-legend" aria-hidden="true"><div class="bodymap-scale"><span>меньше</span><i></i><span>больше</span></div><div class="bodymap-idle"><i></i>не работает</div></div>
 <div class="bodymap-pick" aria-live="polite"></div>
 </div>
 </section>

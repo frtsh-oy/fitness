@@ -11,7 +11,7 @@ import { LIBRARY } from './exercises/index.js';
 import { initTelegram } from './telegram.js';
 import { createTimer, formatTime } from './timer.js';
 import { setupPlayers } from './player.js';
-import { createBodyMap, warmupOnlyGroups, idleGroups, isMode, DEFAULT_MODE } from './bodymap.js';
+import { createBodyMap, legendColors, warmupOnlyGroups, idleGroups, isMode, DEFAULT_MODE } from './bodymap.js';
 import { groupsPhrase, regionGroups } from './muscles.js';
 import { renderWeekly } from './weekly-view.js';
 import { createSections, savedSection } from './sections.js';
@@ -403,6 +403,8 @@ export function startApp(win = globalThis.window, { library = LIBRARY } = {}) {
 
   function openMap() {
     if (!bodyMap) {
+      // Ключ шкалы под схемой красится теми же цветами, что и сама схема.
+      for (const [name, value] of Object.entries(legendColors())) mapBody.style.setProperty(name, value);
       bodyMap = createBodyMap({
         workout,
         anteriorHost: document.querySelector('.bodymap-anterior'),

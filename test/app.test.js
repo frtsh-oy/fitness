@@ -1447,7 +1447,7 @@ const TAP_TARGETS = new Map([
   ['#timer-close', TAP_BUTTON],
   ['.tabbar button', TAP_MAIN],
   ['.bodymap-toggle', TAP_BUTTON],
-  ['.bodymap-modes button', TAP_CHIP],
+  ['.bodymap-modes button', TAP_BUTTON],
   ['.bodymap-pick button', TAP_CHIP],
   ['.weekly-toggle', TAP_BUTTON],
   ['.howto-toggle', TAP_BUTTON],

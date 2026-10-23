@@ -1,7 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { makeDom } from './setup.js';
-import { createBodyMap, PALETTE, SELECTED_COLOR, warmupOnlyGroups, idleGroups, isMode, MODE_KINDS } from '../bodymap.js';
+import { createBodyMap, PALETTE, SELECTED_COLOR, IDLE_COLOR, legendColors, warmupOnlyGroups, idleGroups, isMode, MODE_KINDS } from '../bodymap.js';
 import { PALETTE_STEPS, setsByRegion } from '../volume.js';
 import { MUSCLES } from '../muscles.js';
 import legs from '../workouts/legs-mwf.js';
@@ -42,12 +43,12 @@ function clickAndCollectErrors(win, run) {
 // тестом список, чтобы после находки в нём лежал pick именно этого полигона.
 //
 // Отдаём не узел, а цвет, снятый ДО клика. Клик выбирает область, а карта сразу
-// заливает выбранную синим и заменяет все полигоны новыми, — значит по
+// заливает выбранную цветом выбора и заменяет все полигоны новыми, — значит по
 // найденному узлу цвет невыбранной области уже не прочитать: он отсоединён от
 // документа и остался с прежним style.fill. Прежний он именно потому, что
 // querySelectorAll отдаёт снимок: все полигоны перебора — из той отрисовки,
 // которая была на экране до первого клика по этому виду. Цвет выбранной
-// области проверяется отдельно, по живой разметке (blueCount ниже).
+// области проверяется отдельно, по живой разметке (selectedCount ниже).
 function findByRegion(hosts, picks, region) {
   for (const host of hosts) {
     const win = host.ownerDocument.defaultView;
@@ -62,7 +63,7 @@ function findByRegion(hosts, picks, region) {
 }
 
 // Сколько полигонов вида залито цветом выбора прямо сейчас.
-function blueCount(host) {
+function selectedCount(host) {
   return [...host.querySelectorAll('polygon')]
     .filter(polygon => polygon.style.fill === hexToRgb(SELECTED_COLOR)).length;
 }
@@ -70,6 +71,39 @@ function blueCount(host) {
 test('палитра ровно на число уровней объёма', () => {
   assert.equal(PALETTE.length, PALETTE_STEPS);
   for (const color of PALETTE) assert.match(color, /^#[0-9a-f]{6}$/i);
+});
+
+// Палитра схемы — розовая шкала страницы: три опоры берутся из токенов
+// style.css, и если токен сдвинули, схема не должна молча остаться прежней.
+// Промежуточные ступени (третья—пятая) токенов не имеют и держатся только тем,
+// что идут от светлого к тёмному.
+test('палитра — шкала страницы: опоры совпадают с токенами и идут от светлого к тёмному', () => {
+  const css = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
+  const token = name => new RegExp(`--${name}:(#[0-9a-fA-F]{6})`).exec(css)?.[1].toLowerCase();
+  assert.equal(PALETTE[0].toLowerCase(), token('rose-s'), 'первая ступень — --rose-s');
+  assert.equal(PALETTE[1].toLowerCase(), token('rose'), 'вторая ступень — --rose');
+  assert.equal(PALETTE.at(-1).toLowerCase(), token('rose-d'), 'последняя ступень — --rose-d');
+  assert.equal(SELECTED_COLOR.toLowerCase(), token('ink'), 'цвет выбора — чернила страницы');
+  const light = color => {
+    const [r, g, b] = [1, 3, 5].map(i => parseInt(color.slice(i, i + 2), 16));
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  };
+  for (let i = 1; i < PALETTE.length; i++) {
+    assert.ok(light(PALETTE[i]) < light(PALETTE[i - 1]), `ступень ${i + 1} не темнее предыдущей`);
+  }
+  assert.ok(light(IDLE_COLOR) < light(PALETTE[0]), 'серый «не работает» темнее самой бледной ступени, иначе схема сольётся с фоном');
+});
+
+test('ключ шкалы под схемой красится теми же цветами, что и схема', () => {
+  const colors = legendColors();
+  assert.equal(colors['--map-idle'], IDLE_COLOR);
+  const stops = colors['--map-scale'];
+  let from = 0;
+  for (const color of PALETTE) {
+    const at = stops.indexOf(color, from);
+    assert.ok(at >= from, `в градиенте шкалы нет ступени ${color} на своём месте`);
+    from = at + color.length;
+  }
 });
 
 test('рисуются оба вида', () => {
@@ -175,8 +209,8 @@ test('клик работает, даже если onPick не передан', 
   // области нет вовсе. Без этой проверки условие в handle можно было бы
   // вернуть к прежнему виду (`!onPick || !KNOWN_REGIONS.has(muscle)`), и ни
   // один тест бы не заметил — проверено мутацией.
-  assert.equal(blueCount(a), 2, 'клик без onPick обязан залить выбранную область');
-  assert.equal(blueCount(b), 0, 'грудных на заднем виде нет — заливать там нечего');
+  assert.equal(selectedCount(a), 2, 'клик без onPick обязан залить выбранную область');
+  assert.equal(selectedCount(b), 0, 'грудных на заднем виде нет — заливать там нечего');
 });
 
 test('цвет мышцы на верхней границе объёма — последний оттенок палитры', () => {
@@ -208,8 +242,7 @@ test('клик по незадействованной мышце даёт пу�
   assert.ok(target, 'регион back-deltoids должен быть кликабелен хотя бы на одном виде');
   assert.equal(picks[0].sets, 0);
   assert.deepEqual(picks[0].exercises, []);
-  // '#cdd8e5' — значение IDLE_COLOR в bodymap.js; наружу константа не экспортирована.
-  assert.equal(target.fill, hexToRgb('#cdd8e5'), 'незадействованная в этом режиме мышца должна быть в цвете фона мышц');
+  assert.equal(target.fill, hexToRgb(IDLE_COLOR), 'незадействованная в этом режиме мышца должна быть в цвете фона мышц');
 });
 
 test('клик по анатомии вне модели (шея, голова, колени, камбаловидная) не бросает и не долетает до onPick', () => {
@@ -398,14 +431,13 @@ test('смена режима перерисовывает и задний ви�
   // Обе области живут на заднем виде, и обе меняют оттенок вместе с режимом.
   // Задняя дельта: силовой нагрузки нет вовсе (разведение резинки — разминка),
   // поэтому цвет фона мышц; во всей нагрузке 3 подхода — третий оттенок.
-  // '#cdd8e5' — значение IDLE_COLOR в bodymap.js, наружу оно не экспортировано.
   // Верх спины: 5 подходов в силовом — пятый оттенок; 5.5 во всей нагрузке, и
   // это последний оттенок, потому что цвет берётся от округлённого числа.
   // Заодно это опора для объяснения шкалы в README: «самый тёмный означает
   // шесть и больше, то есть уже с 5,5». Подписью под картой этот текст был
   // раньше, с экрана его убрали по просьбе владельца программы, и
   // test/bodymap-section.test.js теперь прямо запрещает ему там появиться.
-  assert.equal(findByRegion([b], picks, 'back-deltoids').fill, hexToRgb('#cdd8e5'));
+  assert.equal(findByRegion([b], picks, 'back-deltoids').fill, hexToRgb(IDLE_COLOR));
   assert.equal(findByRegion([b], picks, 'upper-back').fill, hexToRgb(PALETTE[4]));
 
   map.setMode('all');
@@ -483,18 +515,18 @@ function drawnBounds(host) {
   return box;
 }
 
-test('выбранная область заливается синим — на всех своих полигонах и на обоих видах', () => {
+test('выбранная область заливается цветом выбора — на всех своих полигонах и на обоих видах', () => {
   const { a, b } = hosts();
   const picks = [];
   createBodyMap({ workout: legs, anteriorHost: a, posteriorHost: b, onPick: p => picks.push(p) });
-  assert.equal(blueCount(a) + blueCount(b), 0, 'до клика выбранной области нет');
+  assert.equal(selectedCount(a) + selectedCount(b), 0, 'до клика выбранной области нет');
 
   // Икроножные библиотека рисует и спереди, и сзади, по четыре полигона на вид:
   // заливка обязана появиться на обеих схемах целиком, а не на одном полигоне.
   assert.ok(findByRegion([a], picks, 'calves'), 'регион calves должен быть кликабелен');
   assert.equal(picks[0].region, 'calves');
-  assert.equal(blueCount(a), 4, 'на переднем виде залиты не все полигоны икроножных');
-  assert.equal(blueCount(b), 4, 'задний вид не залился вовсе');
+  assert.equal(selectedCount(a), 4, 'на переднем виде залиты не все полигоны икроножных');
+  assert.equal(selectedCount(b), 4, 'задний вид не залился вовсе');
 });
 
 test('выбранная область без нагрузки в этом режиме тоже заливается', () => {
@@ -510,20 +542,20 @@ test('выбранная область без нагрузки в этом ре
   assert.equal(picks[0].sets, 0, 'проверка опирается на регион без нагрузки в этом режиме');
   // Регион рисуется только на заднем виде (два полигона) — на переднем его
   // не существует вовсе, заливать там нечего.
-  assert.equal(blueCount(a), 0, 'на переднем виде задней дельты нет');
-  assert.equal(blueCount(b), 2, 'задняя дельта заднего вида не залилась');
+  assert.equal(selectedCount(a), 0, 'на переднем виде задней дельты нет');
+  assert.equal(selectedCount(b), 2, 'задняя дельта заднего вида не залилась');
 });
 
 test('объём выше шкалы красится последним оттенком, а не цветом выбора', () => {
   // Библиотека берёт цвет как LIBRARY_COLORS[min(len-1, частота-1)], а в
   // палитре теперь семь цветов — значит без ограничения частоты шестёркой
   // любая область с семью и больше подходами получила бы индекс 6, то есть
-  // синий, и выглядела бы выбранной. У квадрицепсов в режиме всей нагрузки
+  // цвет выбора, и выглядела бы выбранной. У квадрицепсов в режиме всей нагрузки
   // 12.5 подхода.
   const { a, b } = hosts();
   const picks = [];
   createBodyMap({ workout: legs, anteriorHost: a, posteriorHost: b, onPick: p => picks.push(p), mode: 'all' });
-  assert.equal(blueCount(a) + blueCount(b), 0, 'до первого клика синей области быть не может');
+  assert.equal(selectedCount(a) + selectedCount(b), 0, 'до первого клика выбранной области быть не может');
 
   const quads = findByRegion([a], picks, 'quadriceps');
   assert.ok(quads, 'регион quadriceps должен быть кликабелен на переднем виде');
@@ -534,15 +566,15 @@ test('объём выше шкалы красится последним отт�
 
 test('смена режима снимает выбор', () => {
   // Подбор под картой app.js при смене режима убирает: в новом режиме у области
-  // и число подходов, и список упражнений другие. Залитая синим область без
+  // и число подходов, и список упражнений другие. Залитая область без
   // подбора осталась бы ответом на вопрос, которого уже нет на экране.
   const { a, b } = hosts();
   const picks = [];
   const map = createBodyMap({ workout: legs, anteriorHost: a, posteriorHost: b, onPick: p => picks.push(p) });
   assert.ok(findByRegion([a], picks, 'calves'), 'регион calves должен быть кликабелен');
-  assert.equal(blueCount(a) + blueCount(b), 8, 'выбор не залился — проверять снятие нечего');
+  assert.equal(selectedCount(a) + selectedCount(b), 8, 'выбор не залился — проверять снятие нечего');
   map.setMode('all');
-  assert.equal(blueCount(a) + blueCount(b), 0, 'после смены режима залитая область осталась');
+  assert.equal(selectedCount(a) + selectedCount(b), 0, 'после смены режима залитая область осталась');
 });
 
 // Главная опасность этой правки: библиотека при каждой отрисовке заменяет

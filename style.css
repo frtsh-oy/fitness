@@ -237,12 +237,13 @@ body::after{content:"";position:fixed;left:0;right:0;bottom:0;height:calc(72px +
 .weekly-body{background:var(--lilac-s)}
 .bodymap-body[hidden],.weekly-body[hidden]{display:none}
 
-/* Режим карты — сегмент на два положения: выбранный белый, без заливки цветом. */
-.bodymap-modes{display:flex;gap:2px;max-width:320px;margin:0 auto 12px;padding:4px;border-radius:16px;background:var(--tonal)}
-.bodymap-modes button{flex:1;min-width:0;min-height:36px;padding:0 10px;border-radius:12px;font-size:13px;font-weight:600;color:var(--ink2);text-align:center;white-space:nowrap}
-.bodymap-modes button[aria-pressed=true]{background:#fff;color:var(--ink);box-shadow:0 1px 3px rgba(42,44,72,.14)}
+/* Режим карты — сегмент (.seg) по центру панели. Слева направо схема читается
+   как «спереди, сзади» с рукописными подписями; на телефоне виды друг под другом,
+   чтобы мышцы были крупнее под пальцем. */
+.bodymap-modes{max-width:320px;margin:0 auto 6px}
 .bodymap-views{display:flex;gap:14px;justify-content:center}
-.bodymap-views>div{flex:1;min-width:0;max-width:220px}
+.bodymap-fig{flex:1;min-width:0;max-width:220px;margin:0}
+.bodymap-fig figcaption{margin-top:2px;text-align:center;font:600 22px/1.1 var(--hand);color:var(--ink2)}
 /* Две подписи под схемой: .bodymap-note — про то, что красит цвет в выбранном
    режиме, .bodymap-groups — оговорки про отдельные группы мышц. Содержимое
    обеих пишет app.js по выборке класса, поэтому второй элемент с тем же
@@ -251,22 +252,47 @@ body::after{content:"";position:fixed;left:0;right:0;bottom:0;height:calc(72px +
    несколько групп мышц, поэтому в index.html его нет. */
 .bodymap-note,.bodymap-groups,.bodymap-shared{font-size:13px;line-height:1.5;color:var(--ink2)}
 .bodymap-note,.bodymap-groups{margin:10px 0 0}
-.bodymap-pick:not(:empty){margin-top:12px;padding-top:12px;border-top:1px solid var(--hair)}
+/* Ключ шкалы: те же цвета, что у схемы (--map-scale и --map-idle выставляет
+   app.js из bodymap.js, чтобы палитра жила в одном месте). */
+.bodymap-legend{display:grid;gap:8px;margin-top:16px}
+.bodymap-scale,.bodymap-idle{display:flex;align-items:center;gap:10px;font-size:12px;font-weight:600;line-height:1.35;color:var(--ink2)}
+.bodymap-scale i{flex:1;height:10px;border-radius:5px;background:var(--map-scale)}
+.bodymap-idle i{flex:none;width:34px;height:10px;border-radius:5px;background:var(--map-idle)}
+.bodymap-pick:not(:empty){margin-top:14px;padding-top:12px;border-top:1px solid var(--hair)}
 .bodymap-pick h3{margin:0 0 6px;font-size:15px;font-weight:700}
 .bodymap-shared{margin:0 0 8px}
 .bodymap-pick button{display:block;width:100%;min-height:32px;padding:4px 0;font-size:14px;font-weight:600;color:var(--ink);text-decoration:underline;text-decoration-thickness:1px;text-underline-offset:3px}
+/* Друг под другом подпись ставится над своей схемой: под схемой она оказалась бы
+   ближе к следующей и читалась бы её заголовком. Порядок в разметке прежний
+   (схема, потом подпись), меняется только вид. */
 @media (max-width:520px){.bodymap-views{flex-direction:column;align-items:center}
-  .bodymap-views>div{max-width:260px;width:100%}}
+  .bodymap-fig{display:flex;flex-direction:column-reverse;max-width:260px;width:100%}
+  .bodymap-fig figcaption{margin:10px 0 4px}}
 
-/* Недельный объём: строки без карточек, числа рукописные. */
+/* Недельный объём: строки без карточек. Под названием — полоска доли от верха
+   «рабочего объёма» (её длину считает weekly-view.js), цвет полоски и вердикта
+   задаёт тон полосы вердикта (load-bands.js, data-tone). Полоска только
+   дублирует число, поэтому aria-hidden: смысл несут число и слова. */
 .weekly-head,.weekly-note{font-size:13px;line-height:1.5;color:var(--ink2)}
 .weekly-head{margin:0 0 6px}
 .weekly-note{margin:10px 0 0}
-.weekly-row{display:grid;grid-template-columns:1fr auto auto;gap:2px 12px;align-items:baseline;padding:10px 0;border-top:1px solid var(--hair)}
-.weekly-name{font-size:14px;font-weight:600}
-.weekly-main{font:600 22px/1 var(--hand);font-variant-numeric:tabular-nums}
-.weekly-ours{font-size:13px;color:var(--ink2);font-variant-numeric:tabular-nums}
-.weekly-verdict{grid-column:1/-1;font-size:12px;color:var(--ink2)}
+.weekly-cols{display:flex;justify-content:flex-end;margin-top:16px;padding-bottom:6px;font-size:12px;font-weight:600;line-height:1.3;color:var(--ink2)}
+.weekly-cols span{display:block;width:62px;text-align:right}
+.weekly-row{display:grid;grid-template-columns:1fr 62px 62px;align-items:baseline;padding:12px 0 13px;border-top:1px solid var(--hair)}
+.weekly-name{font-size:15px;font-weight:600;line-height:1.35}
+.weekly-main{text-align:right;font-size:16px;font-weight:700;line-height:1.3;font-variant-numeric:tabular-nums}
+.weekly-ours{text-align:right;font-size:15px;font-weight:500;line-height:1.3;color:var(--ink2);font-variant-numeric:tabular-nums}
+.weekly-bar{grid-column:1/-1;height:6px;margin-top:9px;border-radius:3px;background:var(--tonal);overflow:hidden}
+.weekly-bar i{display:block;height:100%;border-radius:3px;background:var(--tonal2)}
+.weekly-verdict{grid-column:1/-1;margin-top:6px;font-size:13px;line-height:1.4;font-weight:600;color:var(--ink2)}
+.weekly-row[data-tone=low] .weekly-bar i{background:var(--butter-b)}
+.weekly-row[data-tone=mid] .weekly-bar i{background:var(--sky-b)}
+.weekly-row[data-tone=work] .weekly-bar i{background:var(--mint-b)}
+.weekly-row[data-tone=high] .weekly-bar i{background:var(--peach-b)}
+.weekly-row[data-tone=low] .weekly-verdict{color:var(--butter-i)}
+.weekly-row[data-tone=mid] .weekly-verdict{color:var(--sky-i)}
+.weekly-row[data-tone=work] .weekly-verdict{color:var(--mint-i)}
+.weekly-row[data-tone=high] .weekly-verdict{color:var(--peach-i)}
 /* Пометка «наша линия»: у части вердиктов граница — не число из источника, а
    наша (см. weekly-view.js, basis). Пилюля того же кегля, что и вердикт (12px),
    но с цветом: иначе различие потерялось бы среди двадцати одинаковых строк. */
