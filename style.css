@@ -108,7 +108,7 @@ body::after{content:"";position:fixed;left:0;right:0;bottom:0;height:calc(72px +
 .wave{position:absolute;left:0;bottom:-1px;width:100%;height:30px;display:block}
 .wave path{fill:var(--paper)}
 .hero-top{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:36px}
-.brand{display:flex;align-items:center;gap:8px;font:600 24px/1 var(--hand);text-decoration:none}
+.brand{display:flex;align-items:center;gap:8px;min-height:32px;font:600 24px/1 var(--hand);text-decoration:none}
 .brand svg{width:34px;height:19px;fill:none;stroke:var(--ink);stroke-width:11;stroke-linecap:round}
 /* Подпись из данных тренировки («ДОМА · С РЕЗИНКАМИ»): рядом с брендом, мелко. */
 .kicker{font-size:12px;font-weight:600;line-height:1.3;color:var(--ink2);text-align:right;text-transform:lowercase}
