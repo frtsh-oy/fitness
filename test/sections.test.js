@@ -167,3 +167,25 @@ test('у каждой своей тренировки есть «Изменит�
   buttons[0].click();
   assert.deepEqual(edited, ['my-test0001']);
 });
+
+// Раздел красит страницу: ведущий цвет задаёт data-tint на body (style.css).
+test('каждый раздел открывается в своём цвете', () => {
+  const { window, document } = mount();
+  startApp(window);
+  const tint = () => document.body.dataset.tint;
+
+  assert.equal(tint(), 'rose', '«Сегодня» — пудра');
+  document.querySelector('[data-section="workouts"]').click();
+  assert.equal(tint(), 'sky');
+  document.querySelector('[data-section="builder"]').click();
+  assert.equal(tint(), 'butter');
+  document.querySelector('[data-section="today"]').click();
+  assert.equal(tint(), 'rose');
+});
+
+test('раздел из хранилища открывается сразу в своём цвете', () => {
+  const { window, document } = mount();
+  window.localStorage.setItem('section', 'builder');
+  startApp(window);
+  assert.equal(document.body.dataset.tint, 'butter');
+});

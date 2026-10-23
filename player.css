@@ -1,2 +1,12 @@
-button.video{width:100%;font:inherit;font-size:13px;font-weight:650;cursor:pointer}button.extra-link{border:0;background:none;padding:4px 0;min-height:32px;text-align:left;text-decoration:underline;font:inherit;font-size:14px;color:#193d6a;cursor:pointer}.player-shell{margin:12px 0 4px;border:1px solid #d2dce8;border-radius:10px;overflow:hidden;background:#f3f7fc;min-width:0}.player-shell iframe{display:block;border:0;width:100%;height:clamp(240px,58vh,420px);min-height:200px;background:#101010}.player-footer{padding:10px 12px;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}.player-footer p{font-size:12px;line-height:1.5;color:#526278;margin:0;flex:1;min-width:155px}.player-footer a{color:#193d6a;text-underline-offset:3px;display:inline-block;padding:6px 0;font-size:14px}.player-close{border:1px solid #cad6e4;background:white;border-radius:16px;color:#193d6a;font:inherit;font-size:13px;font-weight:650;min-height:32px;padding:0 12px;cursor:pointer}button.video[aria-expanded=true]{background:#e4edf8;border-color:#7590b2}@media print{.player-shell,button.video,button.extra-link{display:none}}
-.player-external{border:0;background:none;padding:6px 0;font:inherit;font-size:14px;color:#193d6a;text-decoration:underline;text-underline-offset:3px;cursor:pointer}
+/* Плеер видео: кнопка-чип на месте ссылки и панель под шапкой упражнения.
+   Цвета — токены style.css; обводок нет, панель отделяет мягкий фон. */
+button.video{border:0;font:inherit;font-size:13px;font-weight:600;cursor:pointer}
+button.video[aria-expanded=true]{background:var(--bc,var(--tonal2))}
+button.extra-link{border:0;background:none;padding:6px 0;min-height:32px;text-align:left;text-decoration:underline;text-underline-offset:3px;text-decoration-thickness:1px;font:inherit;font-size:14px;font-weight:600;color:var(--ink);cursor:pointer}
+.player-shell{margin:10px 0 4px;border-radius:20px;overflow:hidden;background:var(--bcs,var(--lead-s));min-width:0}
+.player-shell iframe{display:block;border:0;width:100%;height:clamp(220px,52vh,380px);min-height:200px;background:var(--ink)}
+.player-footer{padding:10px 14px 12px;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.player-footer p{font-size:13px;line-height:1.5;color:var(--ink2);margin:0;flex:1;min-width:155px}
+.player-external{border:0;background:none;padding:6px 0;font:inherit;font-size:14px;font-weight:600;color:var(--ink);text-decoration:underline;text-underline-offset:3px;text-decoration-thickness:1px;cursor:pointer}
+.player-close{border:0;background:var(--surface);border-radius:16px;color:var(--ink);font:inherit;font-size:13px;font-weight:600;min-height:32px;padding:0 14px;cursor:pointer}
+@media print{.player-shell,button.video,button.extra-link{display:none}}

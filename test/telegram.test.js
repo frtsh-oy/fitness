@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { initTelegram } from '../telegram.js';
+import { TINT_BASE, PAPER } from '../tint.js';
 
 function fakeWebApp(overrides = {}) {
   const calls = [];
@@ -48,11 +49,34 @@ test('внутри Telegram вызываются ready, expand и запрет �
   assert.ok(webApp.calls.includes('disableVerticalSwipes'));
 });
 
-test('цвета шапки и фона ставятся в фирменные', () => {
+test('шапка клиента красится в цвет «Сегодня», фон за страницей — в бумажный', () => {
   const webApp = fakeWebApp();
   initTelegram(fakeWin(webApp));
-  assert.ok(webApp.calls.includes('header:#152d4a'));
-  assert.ok(webApp.calls.includes('bg:#152d4a'));
+  assert.ok(webApp.calls.includes(`header:${TINT_BASE.rose}`));
+  assert.ok(webApp.calls.includes(`bg:${PAPER}`));
+});
+
+test('setTint перекрашивает шапку в основу цвета вкладки', () => {
+  const webApp = fakeWebApp();
+  const tg = initTelegram(fakeWin(webApp));
+  for (const [name, color] of Object.entries(TINT_BASE)) {
+    tg.setTint(name);
+    assert.equal(webApp.calls.at(-1), `header:${color}`, name);
+  }
+});
+
+test('setTint с неизвестным именем шапку не трогает', () => {
+  const webApp = fakeWebApp();
+  const tg = initTelegram(fakeWin(webApp));
+  const before = webApp.calls.length;
+  // «constructor» есть у любого объекта: по голому TINT_BASE[name] он нашёлся бы.
+  for (const name of ['выдумка', 'constructor', '', undefined]) tg.setTint(name);
+  assert.equal(webApp.calls.length, before);
+});
+
+test('setTint вне Telegram не падает', () => {
+  const tg = initTelegram({ location: { search: '' }, open: () => {} });
+  assert.doesNotThrow(() => tg.setTint('sky'));
 });
 
 test('отсутствие новых методов у старого клиента не роняет инициализацию', () => {
@@ -193,7 +217,7 @@ const METHOD_CASES = [
   { name: 'ready', remove: w => { delete w.ready; }, corrupt: w => { w.ready = () => { throw new Error('boom'); }; }, exercise: () => {} },
   { name: 'expand', remove: w => { delete w.expand; }, corrupt: w => { w.expand = () => { throw new Error('boom'); }; }, exercise: () => {} },
   { name: 'disableVerticalSwipes', remove: w => { delete w.disableVerticalSwipes; }, corrupt: w => { w.disableVerticalSwipes = () => { throw new Error('boom'); }; }, exercise: () => {} },
-  { name: 'setHeaderColor', remove: w => { delete w.setHeaderColor; }, corrupt: w => { w.setHeaderColor = () => { throw new Error('boom'); }; }, exercise: () => {} },
+  { name: 'setHeaderColor', remove: w => { delete w.setHeaderColor; }, corrupt: w => { w.setHeaderColor = () => { throw new Error('boom'); }; }, exercise: tg => tg.setTint('sky') },
   { name: 'setBackgroundColor', remove: w => { delete w.setBackgroundColor; }, corrupt: w => { w.setBackgroundColor = () => { throw new Error('boom'); }; }, exercise: () => {} },
   { name: 'openLink', remove: w => { delete w.openLink; }, corrupt: w => { w.openLink = () => { throw new Error('boom'); }; }, exercise: tg => tg.openLink('https://x.test') },
   { name: 'HapticFeedback (целиком)', remove: w => { delete w.HapticFeedback; }, corrupt: w => { w.HapticFeedback = null; }, exercise: tg => { tg.haptic('mark'); tg.haptic('done'); } },

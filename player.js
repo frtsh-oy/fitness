@@ -96,7 +96,10 @@ export function setupPlayers(root, openLink, { idPrefix = 'exercise-video' } = {
       }, 3000);
       frame.addEventListener('load', () => clearTimeout(failTimer));
 
-      button.after(panel);
+      // Панель идёт после шапки упражнения, а не после самой кнопки: кнопка
+      // лежит в строке рядом с названием, и панель внутри неё сжалась бы до
+      // ширины остатка строки.
+      (button.closest('.exercise-head') ?? button).after(panel);
       button.setAttribute('aria-expanded', 'true');
       activeVideo = { button, panel, failTimer };
 

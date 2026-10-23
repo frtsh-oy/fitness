@@ -365,8 +365,11 @@ test('ролики библиотеки и «Сегодня» не делят id
   assert.equal(new Set(panels.map(p => p.id)).size, 2, 'id панелей разные');
   assert.match(panels[0].id, /^exercise-video-\d+$/, 'у «Сегодня» прежние id');
   assert.match(panels[1].id, /^library-video-\d+$/);
+  // Панель стоит следом за кнопкой, а если кнопка лежит в шапке упражнения
+  // («Сегодня») — следом за шапкой: внутри строки с названием она бы сжалась.
   for (const button of [todayVideo, libraryVideo]) {
-    assert.equal(document.getElementById(button.getAttribute('aria-controls')), button.nextElementSibling);
+    assert.equal(document.getElementById(button.getAttribute('aria-controls')),
+      (button.closest('.exercise-head') ?? button).nextElementSibling);
   }
   const ids = [...document.querySelectorAll('[id]')].map(node => node.id);
   assert.equal(new Set(ids).size, ids.length, 'на странице нет повторяющихся id');

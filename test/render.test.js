@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { makeDom } from './setup.js';
 import {
   renderWorkout, renderIntro, renderHowto, bindHowto, markId, videoUrl, scheduleShort, scheduleLong, roundsTag,
+  isoWeekday, blockKind, setBlockOpen,
 } from '../render.js';
 import { countMarks, validateWorkout } from '../workouts/schema.js';
 import legsMwf from '../workouts/legs-mwf.js';
@@ -28,16 +29,15 @@ function extractOriginalPairRules() {
 }
 
 // Страница для renderIntro — те же узлы, что в index.html, включая оба места
-// с расписанием. Первым стоит чужой .eyebrow: на реальной странице тем же
-// классом набран заголовок «ДАЛЬШЕ — СИЛЬНЕЕ» в .guide, и выборка по классу
-// взяла бы его.
+// с расписанием (полоса недели в шапке и строка в подвале). Первым стоит чужой
+// .kicker: выборка по классу взяла бы его, а подпись из данных обязана попасть
+// в узел с id.
 const INTRO_PAGE = `<!doctype html><html><body>
-  <header class="masthead"><span class="schedule">ПН · СР · ПТ</span></header>
-  <p class="eyebrow">ДАЛЬШЕ — СИЛЬНЕЕ</p>
-  <p class="eyebrow" id="kicker"></p><h1></h1><p class="intro-copy"></p>
-  <div class="facts"></div><nav class="block-nav"></nav>
+  <p class="kicker">чужая подпись</p>
+  <header class="hero"><p class="kicker" id="kicker"></p><div class="week" id="week" role="img"></div>
+  <h1></h1><p class="intro-copy"></p><div class="facts"></div></header>
   <div class="equipment"></div><ol id="progression-list"></ol><div id="care"></div>
-  <footer>Понедельник · Среда · Пятница<span>Между тренировками — день восстановления.</span></footer>
+  <footer><p class="schedule-note" id="schedule-note">Понедельник · Среда · Пятница<span>Между тренировками — день восстановления.</span></p></footer>
 </body></html>`;
 
 test('markId собирает идентификатор из блока, ключа упражнения и круга', () => {
@@ -255,15 +255,15 @@ test('упражнение без видео не получает ссылку'
   assert.equal(first.querySelector('a.video'), null);
 });
 
-test('вставка «как выполнять силовые пары» стоит между блоками circuit и legs1', () => {
+test('вставка «как выполнять силовые пары» лежит в теле блока legs1 перед упражнениями', () => {
   const { document } = makeDom();
   const fragment = renderWorkout(legsMwf, document);
-  const order = [...fragment.children].map(n => (n.classList.contains('pair-rules') ? 'pair-rules' : n.id));
-  const circuitIndex = order.indexOf('circuit');
-  const pairIndex = order.indexOf('pair-rules');
-  const legs1Index = order.indexOf('legs1');
-  assert.equal(pairIndex, circuitIndex + 1, 'preamble должен идти сразу после circuit');
-  assert.equal(legs1Index, pairIndex + 1, 'legs1 должен идти сразу после preamble');
+  const rules = fragment.querySelector('.pair-rules');
+  assert.equal(rules.closest('.workout-block').id, 'legs1');
+  assert.ok(rules.parentElement.classList.contains('blk-body'), 'вставка — часть тела блока');
+  assert.ok(rules.nextElementSibling.classList.contains('cards'), 'упражнения идут сразу за вставкой');
+  // На верхнем уровне фрагмента одни блоки: вставка больше не стоит между ними.
+  assert.ok([...fragment.children].every(node => node.classList.contains('workout-block')));
 });
 
 test('в preamble ровно два элемента strong — с длительностями отдыха', () => {
@@ -277,8 +277,10 @@ test('заголовок preamble совпадает с оригиналом и�
   const original = extractOriginalPairRules();
   const { document } = makeDom();
   const fragment = renderWorkout(legsMwf, document);
-  const h2 = fragment.querySelector('.pair-rules h2');
-  assert.equal(h2.textContent, original.title);
+  // В оригинале заголовок вставки второго уровня; у нас он лежит внутри
+  // раскрывающегося блока и потому третьего. Текст тот же.
+  const heading = fragment.querySelector('.pair-rules h3');
+  assert.equal(heading.textContent, original.title);
 });
 
 test('текст preamble совпадает с оригиналом из src-original/app.js', () => {
@@ -297,27 +299,58 @@ test('блок без preamble не порождает секцию pair-rules',
 });
 
 test('renderIntro заполняет шапку из данных, а не из статики HTML', () => {
-  // Первым стоит чужой .eyebrow — на реальной странице тем же классом набран
-  // заголовок «ДАЛЬШЕ — СИЛЬНЕЕ» в .guide. Выборка по классу взяла бы его.
+  // Первым стоит чужой .kicker — выборка по классу взяла бы его, а подпись из
+  // данных обязана лечь в узел с id.
   const { document } = makeDom(INTRO_PAGE);
   renderIntro(legsMwf, document);
   assert.equal(document.getElementById('kicker').textContent, legsMwf.kicker);
-  assert.equal(document.querySelector('.eyebrow').textContent, 'ДАЛЬШЕ — СИЛЬНЕЕ', 'чужой .eyebrow не тронут');
-  assert.equal(document.querySelector('h1').childNodes[0].textContent, 'Всё тело.');
-  assert.equal(document.querySelector('h1').querySelector('span').textContent, 'Акцент на ноги.');
+  assert.equal(document.querySelector('.kicker').textContent, 'чужая подпись', 'чужой .kicker не тронут');
+  // Строки заголовка — своими блоками, без <br>: разбиение задают данные.
+  const lines = [...document.querySelectorAll('h1 > span')];
+  assert.deepEqual(lines.map(line => line.textContent), legsMwf.titleLines);
+  assert.equal(document.querySelector('h1 br'), null);
   assert.equal(document.querySelector('.intro-copy').textContent, legsMwf.lead);
   assert.equal(document.querySelectorAll('.facts > div').length, legsMwf.stats.length);
   assert.equal(document.querySelector('.equipment').textContent, legsMwf.equipment);
   assert.equal(document.querySelectorAll('#progression-list li').length, legsMwf.progression.length);
 });
 
-test('renderIntro строит навигацию по реальным блокам', () => {
+// Полоса недели: семь кружков, дни тренировки выделены, сегодняшний обведён.
+// Сегодня передаётся параметром, чтобы тест не зависел от дня запуска.
+test('renderIntro рисует полосу недели: дни тренировки выделены, сегодняшний обведён', () => {
   const { document } = makeDom(INTRO_PAGE);
-  renderIntro(legsMwf, document);
-  const links = [...document.querySelectorAll('.block-nav a')];
-  assert.equal(links.length, 8);
-  assert.deepEqual(links.map(a => a.getAttribute('href')), legsMwf.blocks.map(b => `#${b.id}`));
-  assert.deepEqual(links.map(a => a.textContent), ['Старт', 'Разогрев', 'Ноги 1', 'Ноги 2', 'Ноги 3', 'Верх 1', 'Верх 2', 'Финиш']);
+  renderIntro(legsMwf, document, { today: 3 });
+  const days = [...document.querySelectorAll('#week .day')];
+  assert.deepEqual(days.map(day => day.textContent), ['ПН', 'ВТ', 'СР', 'ЧТ', 'ПТ', 'СБ', 'ВС']);
+  assert.deepEqual(days.flatMap((day, index) => (day.classList.contains('train') ? [index + 1] : [])), [1, 3, 5]);
+  const rings = [...document.querySelectorAll('#week .ring')];
+  assert.equal(rings.length, 1, 'обведён ровно один день');
+  assert.equal(rings[0].parentNode, days[2], 'обведена среда');
+  assert.equal(rings[0].getAttribute('aria-hidden'), 'true', 'кольцо — украшение');
+});
+
+test('у полосы недели есть подпись для диктора: дни тренировок и сегодняшний день', () => {
+  const { document } = makeDom(INTRO_PAGE);
+  renderIntro(legsMwf, document, { today: 3 });
+  assert.equal(document.getElementById('week').getAttribute('aria-label'),
+    'Тренировки по понедельникам, средам и пятницам. Сегодня среда.');
+  renderIntro({ ...legsMwf, days: [2] }, document, { today: 7 });
+  assert.equal(document.getElementById('week').getAttribute('aria-label'),
+    'Тренировки по вторникам. Сегодня воскресенье.');
+});
+
+test('isoWeekday переводит день недели JS в ISO: воскресенье — 7', () => {
+  assert.equal(isoWeekday(new Date(2026, 9, 19)), 1, 'понедельник');
+  assert.equal(isoWeekday(new Date(2026, 9, 21)), 3, 'среда');
+  assert.equal(isoWeekday(new Date(2026, 9, 25)), 7, 'воскресенье');
+});
+
+test('renderIntro каждый раз перерисовывает неделю, а не дописывает её', () => {
+  const { document } = makeDom(INTRO_PAGE);
+  renderIntro(legsMwf, document, { today: 1 });
+  renderIntro({ ...legsMwf, days: [2, 4] }, document, { today: 2 });
+  assert.equal(document.querySelectorAll('#week .day').length, 7);
+  assert.equal(document.querySelectorAll('#week .ring').length, 1);
 });
 
 test('тексты упражнения попадают в разметку', () => {
@@ -346,9 +379,10 @@ test('неизвестный день недели роняет рендер, а
 
 test('renderIntro ставит расписание и в шапку, и в подвал — из дней тренировки', () => {
   const { document } = makeDom(INTRO_PAGE);
-  renderIntro(legsMwf, document);
-  assert.equal(document.querySelector('.masthead .schedule').textContent, 'ПН · СР · ПТ');
-  assert.equal(document.querySelector('footer').textContent,
+  renderIntro(legsMwf, document, { today: 1 });
+  const trained = [...document.querySelectorAll('#week .day.train')].map(day => day.textContent);
+  assert.equal(trained.join(' · '), 'ПН · СР · ПТ');
+  assert.equal(document.getElementById('schedule-note').textContent,
     'Понедельник · Среда · ПятницаМежду тренировками — день восстановления.');
 });
 
@@ -356,11 +390,12 @@ test('renderIntro ставит расписание и в шапку, и в по
 // оба места остались бы понедельничными и тест бы этого не показал.
 test('тренировка с другими днями получает своё расписание в обоих местах', () => {
   const { document } = makeDom(INTRO_PAGE);
-  renderIntro({ ...legsMwf, days: [2, 4] }, document);
-  assert.equal(document.querySelector('.masthead .schedule').textContent, 'ВТ · ЧТ');
-  assert.match(document.querySelector('footer').textContent, /^Вторник · Четверг/);
-  assert.match(document.querySelector('footer').textContent,
-    /Между тренировками — день восстановления\.$/, 'примечание в подвале потерялось');
+  renderIntro({ ...legsMwf, days: [2, 4] }, document, { today: 1 });
+  const trained = [...document.querySelectorAll('#week .day.train')].map(day => day.textContent);
+  assert.equal(trained.join(' · '), 'ВТ · ЧТ');
+  const note = document.getElementById('schedule-note');
+  assert.match(note.textContent, /^Вторник · Четверг/);
+  assert.match(note.textContent, /Между тренировками — день восстановления\.$/, 'примечание в подвале потерялось');
 });
 
 // «Между тренировками — день восстановления» верно, только когда двух дней
@@ -370,7 +405,7 @@ test('тренировка с другими днями получает сво�
 // тренировкой, обязано вернуться, а не остаться спрятанным навсегда.
 test('фраза про день восстановления в подвале — только если в расписании нет соседних дней', () => {
   const { document } = makeDom(INTRO_PAGE);
-  const note = document.querySelector('footer span');
+  const note = document.querySelector('#schedule-note span');
   const cases = [
     [[1, 3, 5], true],
     [[1, 2], false],
@@ -403,6 +438,9 @@ function howtoOf(fragment, article) {
   const id = button.getAttribute('aria-controls');
   return { button, region: fragment.querySelector(`[id="${id}"]`) };
 }
+
+// id всех блоков: раскрывает их разом, чтобы смотреть на карточки внутри.
+const ALL_BLOCKS = legsMwf.blocks.map(block => block.id);
 
 test('у каждого из 19 упражнений есть кнопка «Как выполнять» с aria-expanded', () => {
   const { document } = makeDom();
@@ -499,7 +537,8 @@ test('каждая кнопка управляет областью своего
 // ни одна отметка и ни одна ссылка на видео не должна оказаться под hidden.
 test('свёрнутая карточка скрывает только тексты техники', () => {
   const { document } = makeDom();
-  const fragment = renderWorkout(legsMwf, document, { expandDescriptions: false });
+  // Блоки раскрыты все: здесь проверяется только сворачивание описаний.
+  const fragment = renderWorkout(legsMwf, document, { expandDescriptions: false, open: ALL_BLOCKS });
   const articles = [...fragment.querySelectorAll('.exercise')];
   assert.equal(articles.length, 19);
 
@@ -544,15 +583,14 @@ test('renderWorkout без параметров рисует описания с
   assert.equal(region.hidden, true);
 });
 
-// РАУНД ПРАВОК 2: кнопка «Как выполнять» и ссылка на видео — в одну строку,
-// отметки — своей строкой ниже. Строка из трёх (с отметками) не влезает никогда:
-// отметок на карточке от одной до трёх, и с подписями «Круг N» трём элементам
-// нужно от 348 до 591px при 317 доступных на экране 375px.
+// Строка упражнения: название и видео — в шапке, отметки и «Как выполнять» — в
+// своём ряду ниже. Видео лежит рядом с названием, потому что оно нужно в первые
+// разы и не должно отнимать у отметок ширину: отметок от одной до трёх, и с
+// подписями «Круг N» трём элементам рядом с кнопкой не хватало места.
 //
 // Раскладку в jsdom не посчитать, поэтому тест сторожит то, на чём она держится:
-// состав строки. Видео за её пределами вернуло бы столбик, а отметки внутри —
-// раскладку, которая по ширине не сходится и у которой палец промахивается.
-test('в строке карточки только кнопка «Как выполнять» и видео, отметки — снаружи', () => {
+// состав строк.
+test('в шапке карточки название и видео, в ряду действий — отметки и «Как выполнять»', () => {
   const { document } = makeDom();
   const fragment = renderWorkout(legsMwf, document);
   const articles = [...fragment.querySelectorAll('.exercise')];
@@ -560,46 +598,46 @@ test('в строке карточки только кнопка «Как вып
 
   let withVideo = 0;
   for (const article of articles) {
-    const refs = article.querySelector('.exercise-refs');
-    assert.ok(refs, 'строка есть у каждого упражнения');
-    assert.equal(refs.firstElementChild, article.querySelector('.howto-toggle'),
-      'кнопка раскрытия — первая в строке');
+    const head = article.querySelector('.exercise-head');
+    assert.ok(head, 'шапка есть у каждого упражнения');
+    assert.equal(head.parentNode, article);
+    assert.equal(head.firstElementChild.tagName, 'H3', 'название — первое в шапке');
 
     const video = article.querySelector('a.video');
     if (video) {
       withVideo += 1;
-      assert.equal(video.parentNode, refs, 'ссылка на видео лежит в той же строке');
-      assert.equal(refs.children.length, 2, 'в строке ровно два элемента');
-      assert.equal(refs.lastElementChild, video, 'видео — второе, а не перед кнопкой');
+      assert.equal(video.parentNode, head, 'видео лежит в шапке, рядом с названием');
+      assert.equal(head.children.length, 2);
     } else {
-      assert.equal(refs.children.length, 1, 'без видео в строке остаётся одна кнопка');
+      assert.equal(head.children.length, 1, 'без видео в шапке одно название');
     }
 
-    // Отметки — своей строкой: ни одна не внутри строки, и .checks — прямой
-    // ребёнок карточки, а не её часть.
-    assert.equal(refs.querySelectorAll('input[data-mark]').length, 0);
-    assert.equal(refs.querySelector('.checks'), null);
-    assert.equal(article.querySelector('.checks').parentNode, article);
+    const actions = article.querySelector('.exercise-actions');
+    assert.equal(actions.parentNode, article);
+    assert.deepEqual([...actions.children].map(node => node.className.split(' ')[0]), ['checks', 'howto-toggle'],
+      'ряд действий: отметки, затем «Как выполнять»');
+    assert.equal(article.querySelector('.exercise-refs'), null, 'у «Сегодня» строки refs нет — она нужна библиотеке');
+    assert.equal(head.querySelectorAll('input[data-mark]').length, 0, 'отметки не лежат в шапке');
   }
   assert.equal(withVideo, 18, 'видео есть у восемнадцати упражнений из девятнадцати');
 });
 
-// Область с текстом раскрывается ПОД строкой, а не между кнопкой и видео:
-// иначе раскрытие разрывало бы строку пополам.
-test('область раскрытия стоит следом за строкой, а не внутри неё', () => {
+// Область с текстом раскрывается ПОД рядом действий, а не между кнопкой и
+// отметками: иначе раскрытие разрывало бы ряд пополам.
+test('область раскрытия стоит следом за рядом действий, а не внутри него', () => {
   const { document } = makeDom();
   const fragment = renderWorkout(legsMwf, document);
   for (const article of [...fragment.querySelectorAll('.exercise')]) {
     const { region } = howtoOf(fragment, article);
-    const refs = article.querySelector('.exercise-refs');
+    const actions = article.querySelector('.exercise-actions');
     assert.equal(region.parentNode, article, 'область — прямой ребёнок карточки');
-    assert.equal(refs.nextElementSibling, region, 'область идёт сразу за строкой');
+    assert.equal(actions.nextElementSibling, region, 'область идёт сразу за рядом действий');
   }
 });
 
 // Метка «упор» — у упражнения, добавленного ради зоны упора своей тренировки.
 // Это подпись, а не кнопка: нажимаемого в карточке она не прибавляет.
-test('у упражнения с focus: true в шапке карточки есть метка «упор», у остальных её нет', () => {
+test('у упражнения с focus: true в карточке есть метка «упор», у остальных её нет', () => {
   const { document } = makeDom();
   const marked = structuredClone(legsMwf);
   marked.blocks[2].items[0].focus = true;
@@ -607,7 +645,7 @@ test('у упражнения с focus: true в шапке карточки ес
   const tags = [...fragment.querySelectorAll('.focus-tag')];
   assert.equal(tags.length, 1);
   assert.equal(tags[0].textContent, 'упор');
-  assert.ok(tags[0].parentNode.classList.contains('exercise-top'));
+  assert.ok(tags[0].parentNode.classList.contains('exercise'), 'метка — отдельная строка карточки под шапкой');
   assert.equal(tags[0].closest('.exercise').querySelector('h3').textContent, marked.blocks[2].items[0].name);
   assert.equal(renderWorkout(legsMwf, document).querySelectorAll('.focus-tag').length, 0);
 });
@@ -703,4 +741,79 @@ test('bindHowto: нажатие раскрывает и сворачивает �
   root.click();
   assert.equal(first.body.hidden, true);
   assert.equal(second.body.hidden, false);
+});
+
+// Блок тренировки — раскрывающийся список: заголовок второго уровня с кнопкой
+// внутри, тело под ней. Состояние лежит в разметке (aria-expanded и hidden).
+
+test('блок построен как раскрывающийся список: h2 с кнопкой и тело под ней', () => {
+  const { document } = makeDom();
+  const fragment = renderWorkout(legsMwf, document);
+  for (const [index, block] of legsMwf.blocks.entries()) {
+    const section = fragment.querySelector(`#${block.id}`);
+    const heading = section.firstElementChild;
+    const head = heading.firstElementChild;
+    const body = section.querySelector('.blk-body');
+
+    assert.equal(heading.tagName, 'H2', 'заголовок остаётся в оглавлении страницы');
+    assert.equal(heading.children.length, 1, 'в заголовке одна кнопка');
+    assert.equal(head.tagName, 'BUTTON');
+    assert.equal(head.type, 'button');
+    assert.equal(head.getAttribute('aria-controls'), body.id);
+    assert.equal(head.querySelector('.blk-title').textContent, block.title);
+    assert.equal(head.querySelector('.blk-sub').textContent, block.sub);
+    assert.equal(head.querySelector('.block-number').textContent, block.n);
+    assert.equal(head.querySelector('.block-number').getAttribute('aria-hidden'), 'true', `номер ${index + 1} — украшение`);
+    assert.equal(head.querySelector('.blk-caret').getAttribute('aria-hidden'), 'true');
+    assert.equal(head.querySelector('.blk-prog').textContent, `0/${block.items.length * block.rounds} отметок`);
+    assert.equal(body.parentNode, section);
+  }
+});
+
+test('по умолчанию блоки свёрнуты, open называет раскрытые', () => {
+  const { document } = makeDom();
+  const state = fragment => [...fragment.querySelectorAll('.workout-block')].map(section => ({
+    id: section.id,
+    expanded: section.querySelector('.blk-head').getAttribute('aria-expanded'),
+    hidden: section.querySelector('.blk-body').hidden,
+  }));
+
+  assert.ok(state(renderWorkout(legsMwf, document)).every(s => s.expanded === 'false' && s.hidden));
+  const opened = state(renderWorkout(legsMwf, document, { open: ['legs1', 'finish'] }));
+  assert.deepEqual(opened.filter(s => !s.hidden).map(s => s.id), ['legs1', 'finish']);
+  assert.ok(opened.every(s => s.expanded === String(!s.hidden)), 'aria-expanded и hidden согласованы');
+});
+
+test('setBlockOpen переключает шапку и тело вместе', () => {
+  const { document } = makeDom();
+  const section = renderWorkout(legsMwf, document).querySelector('#legs2');
+  setBlockOpen(section, true);
+  assert.equal(section.querySelector('.blk-head').getAttribute('aria-expanded'), 'true');
+  assert.equal(section.querySelector('.blk-body').hidden, false);
+  setBlockOpen(section, false);
+  assert.equal(section.querySelector('.blk-head').getAttribute('aria-expanded'), 'false');
+  assert.equal(section.querySelector('.blk-body').hidden, true);
+});
+
+// Цвет блока задаёт его тип, а не номер: у своей тренировки блоков столько, сколько
+// собрал человек, а слоты разминки, круга и завершения называются одинаково.
+test('тип блока: разминка, круг, силовые, завершение — он и ставит цвет', () => {
+  assert.equal(blockKind({ id: 'start' }), 'warm');
+  assert.equal(blockKind({ id: 'circuit' }), 'circuit');
+  assert.equal(blockKind({ id: 'finish' }), 'finish');
+  for (const id of ['legs1', 'pair2', 'ex1', 'loop']) assert.equal(blockKind({ id }), 'strength', id);
+
+  const { document } = makeDom();
+  const fragment = renderWorkout(legsMwf, document);
+  assert.deepEqual([...fragment.querySelectorAll('.workout-block')].map(section => section.dataset.kind),
+    ['warm', 'circuit', 'strength', 'strength', 'strength', 'strength', 'strength', 'finish']);
+});
+
+test('метка с числом кругов и заметка блока лежат в теле блока, а не в шапке', () => {
+  const { document } = makeDom();
+  const fragment = renderWorkout(legsMwf, document);
+  const circuit = fragment.querySelector('#circuit');
+  assert.equal(circuit.querySelector('.blk-body .round-tag').textContent, '3 круга');
+  assert.equal(circuit.querySelector('.blk-head .round-tag'), null);
+  assert.ok(circuit.querySelector('.blk-body .block-note'), 'заметка про паузы — в теле');
 });

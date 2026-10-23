@@ -1,45 +1,244 @@
-*{box-sizing:border-box}html{scroll-behavior:smooth;scroll-padding-top:64px}body{margin:0;background:#f4f6f9;color:#152d4a;font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif}button,a,input{-webkit-tap-highlight-color:transparent}button,input{font:inherit}button,a{touch-action:manipulation}button{cursor:pointer}a{color:inherit}button:focus-visible,a:focus-visible,input:focus-visible{outline:3px solid #4267cb;outline-offset:4px}.wrap{max-width:1040px;margin:auto;padding:0 28px}.masthead{background:#152d4a;color:white}.mastrow{height:70px;display:flex;align-items:center;justify-content:space-between;gap:15px}.brand{text-decoration:none;display:flex;align-items:center;gap:10px;font-size:14px;font-weight:750;letter-spacing:.07em}.brand-icon{font-size:32px;color:#ceef69;line-height:1}.schedule{font-size:14px;color:#ceef69;white-space:nowrap}.intro{display:grid;grid-template-columns:1.4fr 1fr;gap:40px;padding:38px 0 30px;align-items:center}.eyebrow{font-size:12px;letter-spacing:.15em;font-weight:750;margin:0 0 10px;color:#53637a}h1{font-size:clamp(34px,5vw,55px);line-height:1.12;letter-spacing:-.04em;margin:0 0 16px;overflow-wrap:anywhere}h1 span{color:#486386}.intro-copy{max-width:460px;margin:0;color:#526278}.facts{display:grid;grid-template-columns:1fr 1fr;gap:18px}.facts div{border-left:3px solid #aac94d;padding-left:17px}.facts strong{display:block;font-size:33px;font-weight:650;letter-spacing:-.04em}.facts span{display:block;font-size:14px;line-height:1.5;color:#526278}.block-nav{display:flex;gap:6px;overflow-x:auto;padding:10px 0;position:sticky;top:0;z-index:3;background:#f4f6f9;border-bottom:1px solid #d9e0e9;scrollbar-width:thin}.block-nav a{white-space:nowrap;text-decoration:none;display:flex;align-items:center;min-height:32px;padding:0 14px;border:1px solid #d4dde8;border-radius:16px;background:white;font-size:13px;font-weight:600}.block-nav a:hover,.block-nav a.active{background:#152d4a;border-color:#152d4a;color:white}.progress-row{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-top:20px;font-size:14px}.text-button{border:0;background:none;color:#53637a;text-decoration:underline;text-underline-offset:3px;font-size:13px;min-height:32px;padding:0 4px}progress{display:block;width:100%;height:6px;border:0;border-radius:8px;overflow:hidden;background:#dbe3ed}progress::-webkit-progress-bar{background:#dbe3ed}progress::-webkit-progress-value{background:#557126}progress::-moz-progress-bar{background:#557126}.storage-note{font-size:12px;color:#657289;margin:8px 0 18px}.equipment{padding:14px 18px;border-radius:10px;background:#e8edf4;font-size:14px}.workout-block{margin-top:38px;scroll-margin-top:12px}.block-heading{display:flex;align-items:flex-start;gap:16px;margin-bottom:16px}.block-number{background:#152d4a;color:#ceef69;min-width:44px;height:44px;border-radius:12px;display:grid;place-items:center;font-size:18px;font-weight:650}.block-heading h2{margin:0;font-size:25px;letter-spacing:-.025em;line-height:1.3}.block-heading p{margin:4px 0 0;font-size:14px;color:#526278}.round-tag{margin-left:auto;white-space:nowrap;background:#e0edc2;padding:6px 10px;border-radius:6px;font-size:14px;font-weight:650}.block-note{font-size:14px;color:#53637a;background:#e8edf4;border-radius:10px;padding:13px 16px;margin:0 0 14px}.cards{display:grid;grid-template-columns:1fr 1fr;gap:14px}.exercise{background:#fff;border:1px solid #d8e1eb;border-radius:14px;padding:18px;display:flex;flex-direction:column;transition:border-color .2s}.exercise.completed{border-color:#a3bc65}.exercise-top{display:flex;justify-content:space-between;gap:14px;align-items:baseline;margin-bottom:8px}.exercise-index{font-size:12px;letter-spacing:.1em;color:#61748b;font-weight:650}.muscles{font-size:12px;color:#657289;text-align:right}.exercise h3{font-size:19px;line-height:1.35;letter-spacing:-.02em;margin:0 0 6px}.reps{font-size:15px;font-weight:700;color:#39571b;margin:0 0 12px}.technique{margin:0;color:#46566b;font-size:16px;line-height:1.65}.video{display:flex;align-items:center;justify-content:center;gap:7px;text-decoration:none;min-height:36px;border-radius:10px;border:1px solid #cad6e4;color:#193d6a;background:#f3f7fc;font-size:13px;font-weight:650;padding:0 12px}.video:hover{background:#e4edf8}.video svg{width:14px;height:14px;fill:currentColor;flex-shrink:0}.extra-link{display:block;font-size:14px;margin-top:10px;text-underline-offset:3px}.checks{display:flex;gap:6px;flex-wrap:wrap;margin-top:auto;padding-top:12px}.check{display:flex;align-items:center;gap:7px;font-size:13px;font-weight:600;min-height:36px;padding:0 12px 0 10px;border-radius:10px;background:#f2f5f8;cursor:pointer}.check:has(input:checked){background:#e6f0d1;color:#345316}.check input{width:17px;height:17px;margin:0;accent-color:#4b6a22;cursor:pointer}.pair-rules{margin:35px 0 0;background:#152d4a;color:white;border-radius:15px;padding:25px}.pair-rules h2{font-size:22px;margin:0 0 10px}.pair-rules p{margin:8px 0;color:#e0e8f3;font-size:15px}.pair-rules strong{color:#ceef69}.guide{margin-top:40px;background:white;border:1px solid #d8e1eb;border-radius:15px;padding:26px}.guide h2,.care h2{font-size:23px;line-height:1.3;margin:0 0 14px}.guide ol{padding-left:23px;margin:0}.guide li+li{margin-top:12px}.care{margin-top:24px;padding:24px;border-left:3px solid #c49346;background:#fff8ed;border-radius:0 12px 12px 0}.care p{font-size:14px;color:#665846;margin:10px 0 0}footer{padding:32px 0 173px;font-size:14px;color:#53637a}footer span{display:block}footer span[hidden]{display:none}.timer-sheet{position:fixed;left:0;right:0;bottom:calc(53px + var(--tabbar-safe-bottom));z-index:7;display:grid;grid-template-columns:1fr auto;gap:8px;max-width:640px;margin:0 auto;background:#152d4a;color:#fff;border-radius:16px 16px 0 0;padding:10px 14px 14px;box-shadow:0 -10px 30px #142a4647}.timer-sheet[hidden]{display:none}.timer-sheet-head,.timer-sheet output,.presets{grid-column:1/-1}.timer-sheet-head{display:flex;align-items:center;justify-content:space-between;gap:16px;font-size:12px;letter-spacing:.12em;color:#d7e0ed}.timer-sheet output{display:block;text-align:center;font-size:42px;font-weight:650;line-height:1;margin:0 0 6px;font-variant-numeric:tabular-nums}.presets{display:flex;gap:6px}.presets button{flex:1}.timer-sheet button{min-height:36px;border-radius:10px;padding:0 12px;font-size:14px;border:1px solid #526982;color:#edf3fb;background:transparent}.timer-sheet button[aria-pressed=true]{background:#344e70;border-color:#7089a8}.timer-sheet .timer-start{min-height:44px;background:#ceef69;color:#162c19;border-color:#ceef69;font-size:15px;font-weight:700}.timer-sheet .timer-reset{min-width:44px;min-height:44px;padding:0;font-size:20px}.timer-sheet.done{background:#294525}.timer-sheet.done output{color:#ceef69}@media(max-width:720px){.wrap{padding:0 18px}.mastrow{height:56px}.brand{font-size:12px;letter-spacing:.035em}.schedule{font-size:12px}.intro{display:block;padding:20px 0 16px}.intro h1{font-size:39px}.intro-copy{font-size:16px}.facts{margin-top:18px;gap:15px;max-width:430px}.facts strong{font-size:26px}.facts span{font-size:14px}.block-nav{margin:0 -18px;padding:8px 18px}.block-nav a{padding:0 13px}.cards{grid-template-columns:1fr}.exercise{padding:16px}.block-heading{gap:10px}.block-heading h2{font-size:22px}.round-tag{font-size:12px;padding:6px 8px}.block-number{min-width:38px;height:38px;border-radius:10px;font-size:16px}.block-heading p{font-size:14px}.presets button{padding:0 8px}.workout-block{margin-top:28px}.pair-rules{padding:18px}.guide,.care{padding:18px}footer{padding-bottom:138px}}@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}*{transition:none!important}}@media print{.masthead,.block-nav,.progress-row,progress,.storage-note,.checks,.timer-sheet{display:none}.intro{padding:0}.cards{display:block}.exercise{break-inside:avoid;margin-bottom:15px}.video{margin:0;justify-content:flex-start;border:0}.video:after{content:attr(href);font-size:10px}footer{padding-bottom:0}body{background:white}}
+/* «Моя тренировка»: пастель и рукописные заголовки («Тетрадь с петлёй»).
+   Спека: docs/superpowers/specs/2026-10-23-pastel-redesign-design.md.
+   Правила оформления:
+   - ни одной обводки: форму держат тон и воздух, между строками списка тонкая
+     линия --hair; рамка остаётся только фокусным кольцом;
+   - тень только у плавающего: нижняя панель, док, шторки;
+   - рукописный шрифт только от 20px и только для заголовков, чисел и подписей,
+     всё рабочее набрано гротеском;
+   - у каждой вкладки свой ведущий цвет (body[data-tint]), цвет блока
+     тренировки задаёт его тип (data-kind), «сделано» всегда мятное с галочкой;
+   - смысл не держится на одном цвете: у выбранного и у сделанного галочка;
+   - нажимаемое — три ступени высоты: чип 32, кнопка 36, главная 44 (сторож
+     TAP_TARGETS в test/app.test.js). */
+
+/* Caveat (SIL OFL, fonts/OFL.txt), насыщенность 600, обрезан до нужных знаков:
+   два файла вместо четырёх вариативных. Запасной шрифт — обычный гротеск, а не
+   cursive: системные «рукописные» выглядят случайно. */
+@font-face{font-family:"Caveat";font-style:normal;font-weight:600;font-display:swap;
+  src:url(fonts/caveat-cyrillic-600.woff2) format("woff2");
+  unicode-range:U+0301,U+0400-045F,U+0490-0491,U+04B0-04B1,U+2116}
+@font-face{font-family:"Caveat";font-style:normal;font-weight:600;font-display:swap;
+  src:url(fonts/caveat-latin-600.woff2) format("woff2");
+  unicode-range:U+0020-007E,U+00A0-00FF,U+2010-2015,U+2018-201E,U+2022,U+2026,U+2212,U+20AC}
+
 /* Нижняя навигация не должна уходить под системную полосу iPhone и под панель
-   Telegram. Вне Telegram переменных --tg-* нет, остаётся env(), как было.
+   Telegram. Вне Telegram переменных --tg-* нет, остаётся env().
    Берём максимум, а не сумму: env() и --tg-safe-area-inset-bottom описывают одну
    и ту же полосу устройства, и там, где заполнены оба, сложение задрало бы панель
    вдвое. А вот два --tg-* складываются: полоса Telegram отсчитывается уже внутри
-   безопасной зоны устройства. */
-.masthead{padding-top:var(--tg-content-safe-area-inset-top,0px)}
+   безопасной зоны устройства. Переменная заведена один раз, а не повторена
+   текстом: шторки своим нижним краем обязаны упираться точно в верх панели при
+   любой безопасной зоне. То же для верха (--safe-top) у шапки. */
+:root{
+  --tabbar-safe-bottom:max(env(safe-area-inset-bottom,0px),calc(var(--tg-safe-area-inset-bottom,0px) + var(--tg-content-safe-area-inset-bottom,0px)));
+  --safe-top:max(env(safe-area-inset-top,0px),calc(var(--tg-safe-area-inset-top,0px) + var(--tg-content-safe-area-inset-top,0px)));
+  --col:480px;
 
-.bodymap{margin:14px 0}
-.bodymap-toggle{display:flex;align-items:center;justify-content:space-between;gap:10px;
-  width:100%;text-align:left;border:1px solid #cad6e4;background:white;border-radius:10px;
-  font:inherit;font-size:14px;font-weight:650;line-height:1.35;color:#193d6a;min-height:40px;padding:8px 12px;cursor:pointer}
-/* Уголок у обеих раскрывашек «Сегодня» — тот же треугольник, что у «Как
-   выполнять» (.howto-caret), только нарисован рамкой: кнопки стоят в index.html
-   текстом, и вставлять в них разметку ради украшения незачем. Без уголка
-   строка читалась как заголовок, а не как то, что раскрывается. */
-.bodymap-toggle::after,.weekly-toggle::after{content:"";flex:none;width:0;height:0;
-  border-left:5px solid transparent;border-right:5px solid transparent;border-top:6px solid currentColor;transition:transform .2s}
-.bodymap-toggle[aria-expanded=true]::after,.weekly-toggle[aria-expanded=true]::after{transform:rotate(180deg)}
-/* В раскрытом виде кнопка и панель — один блок, а не две фигуры рядом: у кнопки
-   закруглены только верхние углы (иначе её закруглённый низ оставляет в стыке
-   зарубку с обеих сторон), граница у обеих одна и та же, и панель не прозрачная,
-   а белая — как соседние карточки .exercise и .guide. Прозрачная панель
-   показывала серый фон страницы под голубоватой кнопкой. */
-.bodymap-toggle[aria-expanded=true]{border-color:#d8e1eb;background:#e4edf8;border-radius:10px 10px 0 0}
-.bodymap-body{border:1px solid #d8e1eb;border-top:0;border-radius:0 0 10px 10px;padding:14px;background:white}
-/* Переключатель режима: что считает карта — одни силовые подходы или всю
-   нагрузку. Выбранный режим тёмный, как активная кнопка блока в .block-nav, —
-   на этой странице так уже выглядит «сейчас показано вот это». Кнопки обычные,
-   поэтому фокусную рамку им даёт общее правило button:focus-visible. */
-/* Зазор 10px, а не 6: общая фокусная рамка страницы — outline 3px с отступом
-   4px, то есть выходит за кнопку на 7px, и на 6px рамка «Силовых» упиралась в
-   границу соседа. */
-/* Ширина — по содержимому. Прежние flex:1 в полосе шириной до 340px растягивали
-   обе кнопки на всю её ширину (на экране 375px это 150px каждая), и короткое
-   слово «Силовые» получало столько же места, сколько «Вся нагрузка». Высота —
-   чип, 32px (ступени высоты — в комментарии к телефонному блоку ниже). */
-.bodymap-modes{display:flex;gap:10px;justify-content:center;margin:0 auto 12px}
-.bodymap-modes button{min-height:32px;padding:0 12px;border:1px solid #cad6e4;border-radius:16px;
-  background:#f3f7fc;color:#193d6a;font-size:13px;font-weight:650}
-.bodymap-modes button[aria-pressed=true]{background:#152d4a;border-color:#152d4a;color:white}
+  --paper:#FBF8F9; --surface:#FFFFFF;
+  --ink:#2A2C48; --ink2:#565976; --ink3:#5F6280;
+  --hair:rgba(42,44,72,.09); --tonal:rgba(42,44,72,.06); --tonal2:rgba(42,44,72,.11);
+
+  /* Семейства: основа, мягкий фон, текст на тоне (-i), насыщенный для линий (-d),
+     кнопочный (-b: светлый, под чернильный текст не меньше 8:1), средний (-m:
+     дорожка переключателя и радио). */
+  --butter:#F6E7AD; --butter-s:#F7E9B8; --butter-i:#5F4A08; --butter-d:#946F07; --butter-b:#EFDC9C; --butter-m:#C5AB5A;
+  --peach:#FDD9C4;  --peach-s:#FEEBDF;  --peach-i:#6E3416;  --peach-d:#BA5A26;  --peach-b:#F4C7AE;  --peach-m:#DC9A75;
+  --rose:#F8D5DD;   --rose-s:#FBE8EC;   --rose-i:#7A2A41;   --rose-d:#BF3F66;   --rose-b:#F0C0CC;   --rose-m:#DC8AA2;
+  --mint:#CDEADB;   --mint-s:#E7F5EE;   --mint-i:#1D5A3D;   --mint-d:#2F7F5E;   --mint-b:#B7DBCA;   --mint-m:#7EB49C;
+  --sky:#CFE3F6;    --sky-s:#E5F0FB;    --sky-i:#1D4B7A;    --sky-d:#3A76B5;    --sky-b:#BAD4ED;    --sky-m:#84ACD6;
+  --lilac:#DED5F4;  --lilac-s:#EEE9FA;  --lilac-i:#45348A;  --lilac-d:#6D52C9;  --lilac-b:#CEC3EE;  --lilac-m:#A694DE;
+
+  /* Ведущий цвет экрана — псевдонимы на семейство, по умолчанию пудра. */
+  --lead:var(--rose); --lead-s:var(--rose-s); --lead-i:var(--rose-i); --lead-d:var(--rose-d); --lead-b:var(--rose-b); --lead-m:var(--rose-m);
+
+  --hand:"Caveat",system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  --sans:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+
+  /* Значки, которые рисует сам CSS (галочка в круге, петля в заметке): маска и
+     цвет текста, чтобы значок красился тем же цветом, что и подпись рядом. */
+  --i-check:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M5.5 12.8c1.4 1.3 2.7 2.7 3.8 4.4C11.6 12.6 15 8.4 19 5.8' fill='none' stroke='%23000' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  --i-loop:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 132 72'%3E%3Cpath d='M66 36C66 36 52 9 32 9C15 9 6 22 6 36C6 50 15 63 32 63C52 63 66 36 66 36C66 36 80 9 100 9C117 9 126 22 126 36C126 50 117 63 100 63C80 63 66 36 66 36Z' fill='none' stroke='%23000' stroke-width='9' stroke-linecap='round'/%3E%3C/svg%3E");
+}
+body[data-tint=sky]{--lead:var(--sky); --lead-s:var(--sky-s); --lead-i:var(--sky-i); --lead-d:var(--sky-d); --lead-b:var(--sky-b); --lead-m:var(--sky-m)}
+body[data-tint=butter]{--lead:var(--butter); --lead-s:var(--butter-s); --lead-i:var(--butter-i); --lead-d:var(--butter-d); --lead-b:var(--butter-b); --lead-m:var(--butter-m)}
+body[data-tint=peach]{--lead:var(--peach); --lead-s:var(--peach-s); --lead-i:var(--peach-i); --lead-d:var(--peach-d); --lead-b:var(--peach-b); --lead-m:var(--peach-m)}
+body[data-tint=mint]{--lead:var(--mint); --lead-s:var(--mint-s); --lead-i:var(--mint-i); --lead-d:var(--mint-d); --lead-b:var(--mint-b); --lead-m:var(--mint-m)}
+body[data-tint=lilac]{--lead:var(--lilac); --lead-s:var(--lilac-s); --lead-i:var(--lilac-i); --lead-d:var(--lilac-d); --lead-b:var(--lilac-b); --lead-m:var(--lilac-m)}
+
+/* Цвет блока тренировки задаёт его тип (render.js, blockKind), а не номер. */
+[data-kind=warm]{--bc:var(--butter); --bcs:var(--butter-s)}
+[data-kind=circuit]{--bc:var(--peach); --bcs:var(--peach-s)}
+[data-kind=strength]{--bc:var(--sky); --bcs:var(--sky-s)}
+[data-kind=finish]{--bc:var(--mint); --bcs:var(--mint-s)}
+
+/* ---------- основа ---------- */
+*{box-sizing:border-box}
+html{scroll-behavior:smooth;-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--paper);color:var(--ink);font:400 15px/1.5 var(--sans);-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+h1,h2,h3,p,ul,ol,figure{margin:0;padding:0}
+ul,ol{list-style:none}
+button,input{font:inherit;color:inherit}
+button{background:none;border:0;padding:0;margin:0;cursor:pointer;text-align:inherit;touch-action:manipulation}
+button,a,input,label{-webkit-tap-highlight-color:transparent}
+a{color:inherit;touch-action:manipulation}
+button:focus-visible,a:focus-visible,input:focus-visible,summary:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+.sr-only,.check-word{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+
+/* Колонка: на телефоне во всю ширину с полями 20px, на широком экране не шире
+   480px по центру. Шапки тянутся от края до края, внутри них тоже колонка. */
+.wrap{max-width:var(--col);margin:0 auto;padding:0 20px}
+.screen{padding-bottom:calc(72px + var(--tabbar-safe-bottom) + 36px)}
+/* Пока «Тренировки» и «Конструктор» не получили своих шапок, их содержимое
+   (старые правила ниже) ложится в ту же колонку. */
+#screen-workouts,#screen-builder{max-width:var(--col);margin:0 auto;padding:calc(20px + var(--safe-top)) 20px calc(72px + var(--tabbar-safe-bottom) + 36px)}
+/* Под плавающей панелью контент уходит в цвет бумаги, а не обрезается краем. */
+body::after{content:"";position:fixed;left:0;right:0;bottom:0;height:calc(72px + var(--tabbar-safe-bottom) + 24px);z-index:4;pointer-events:none;
+  background:linear-gradient(to top,var(--paper) 36%,rgba(251,248,249,0))}
+
+/* ---------- значки и рукописное ---------- */
+.ic{width:22px;height:22px;flex:none;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.ic-fill{fill:currentColor;stroke:none}
+.hand{font-family:var(--hand);font-weight:600;letter-spacing:0}
+
+/* ---------- шапка «Сегодня» ---------- */
+.hero{position:relative;background:var(--lead);padding:calc(10px + var(--safe-top)) 0 42px}
+.wave{position:absolute;left:0;bottom:-1px;width:100%;height:30px;display:block}
+.wave path{fill:var(--paper)}
+.hero-top{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:36px}
+.brand{display:flex;align-items:center;gap:8px;font:600 24px/1 var(--hand);text-decoration:none}
+.brand svg{width:34px;height:19px;fill:none;stroke:var(--ink);stroke-width:11;stroke-linecap:round}
+/* Подпись из данных тренировки («ДОМА · С РЕЗИНКАМИ»): рядом с брендом, мелко. */
+.kicker{font-size:12px;font-weight:600;line-height:1.3;color:var(--ink2);text-align:right;text-transform:lowercase}
+.week{display:flex;justify-content:space-between;margin:4px 0 14px}
+.day{position:relative;display:grid;place-items:center;width:38px;height:38px;border-radius:50%;font-size:12px;font-weight:600;color:var(--ink2);text-transform:lowercase}
+.day.train{background:rgba(255,255,255,.72);color:var(--ink)}
+.day .ring{position:absolute;left:-3px;top:-3px;width:44px;height:44px;fill:none;stroke:var(--ink);stroke-width:1.6;stroke-linecap:round}
+.hero h1{font:600 40px/1 var(--hand);letter-spacing:0;overflow-wrap:anywhere}
+.hero h1 span{display:block}
+.intro-copy{max-width:310px;margin-top:8px;font-size:14px;line-height:1.5;color:var(--ink2)}
+.stats{display:flex;align-items:center;gap:22px;margin-top:18px}
+.loopbox{position:relative;flex:none;width:152px}
+.loopbox svg{display:block;width:152px;height:84px;overflow:visible}
+.loop-track{fill:none;stroke:rgba(255,255,255,.7);stroke-width:9;stroke-linecap:round}
+.loop-fill{fill:none;stroke:var(--lead-d);stroke-width:9;stroke-linecap:round;transition:stroke-dasharray .6s ease}
+.knot{position:absolute;left:50%;top:42px;width:44px;height:44px;margin:-22px 0 0 -22px;border-radius:50%;background:#fff;display:grid;place-items:center;font:600 26px/1 var(--hand);font-variant-numeric:tabular-nums}
+.loopcap{margin-top:6px;text-align:center;font-size:12px;font-weight:600;color:var(--ink2)}
+.facts{display:grid;gap:12px}
+.facts>div{min-width:0}
+.facts strong{display:block;font:600 38px/.95 var(--hand);color:var(--ink)}
+.facts span{display:block;font-size:12px;line-height:1.3;color:var(--ink2);max-width:140px}
+.next{display:flex;flex-direction:column;margin-top:14px}
+.next .lbl{font:600 22px/1 var(--hand);color:var(--ink2)}
+.next .what{margin-top:2px;font-size:15px;font-weight:700;line-height:1.35;color:var(--ink)}
+.next .what:empty{display:none}
+
+/* ---------- заметки без рамки ---------- */
+.note{display:flex;gap:10px;align-items:flex-start;margin:0;padding:2px 0;font-size:13px;line-height:1.5;color:var(--ink2)}
+.note[hidden]{display:none}
+.note+.note{margin-top:8px}
+/* Заметка про инвентарь: петля резинки значком слева, рисует её CSS, чтобы текст
+   из данных (renderIntro пишет в узел textContent) не стирал значок. */
+.equipment::before{content:"";flex:none;width:20px;height:11px;margin-top:5px;background:currentColor;
+  -webkit-mask:var(--i-loop) center/contain no-repeat;mask:var(--i-loop) center/contain no-repeat}
+.removed-note{margin-top:8px}
+
+/* ---------- блоки тренировки: раскрывающиеся списки ---------- */
+#workout{margin-top:8px}
+.workout-block{border-top:1px solid var(--hair)}
+.workout-block:first-child{border-top:0}
+.block-heading{display:block}
+.blk-head{display:flex;align-items:center;gap:12px;width:100%;min-height:68px;padding:14px 0;text-align:left}
+.block-number{position:relative;flex:none;display:grid;place-items:center;width:38px;height:38px;border-radius:50%;background:var(--bc);font:600 21px/1 var(--hand);color:var(--ink)}
+.workout-block.is-done .block-number{background:var(--mint);color:transparent}
+.workout-block.is-done .block-number::after{content:"";position:absolute;inset:9px;background:var(--ink);
+  -webkit-mask:var(--i-check) center/contain no-repeat;mask:var(--i-check) center/contain no-repeat}
+.blk-text{flex:1;min-width:0}
+.blk-title{display:block;font:600 25px/1.02 var(--hand);overflow-wrap:anywhere}
+.blk-sub{display:block;margin-top:3px;font-size:13px;line-height:1.35;color:var(--ink2)}
+.blk-prog{flex:none;font-size:12px;font-weight:700;color:var(--ink2);font-variant-numeric:tabular-nums}
+.blk-caret{flex:none;width:20px;height:20px;color:var(--ink2);transition:transform .2s}
+.blk-head[aria-expanded=true] .blk-caret{transform:rotate(180deg)}
+.blk-body{padding:0 0 12px}
+.blk-body[hidden]{display:none}
+.round-tag{display:inline-flex;align-items:center;height:24px;padding:0 10px;border-radius:12px;background:var(--bcs,var(--tonal));font-size:12px;font-weight:600;line-height:1;color:var(--ink);white-space:nowrap}
+.blk-tags{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 8px}
+.block-note{margin:0 0 6px;font-size:13px;line-height:1.55;color:var(--ink2)}
+/* Вставка «Как выполнять силовые пары» — первой в теле первого силового блока. */
+.pair-rules{margin:4px 0 8px;padding:16px 18px;border-radius:22px;background:var(--sky-s)}
+.pair-rules h3{margin:0 0 6px;font:600 24px/1.05 var(--hand)}
+.pair-rules p{margin:8px 0 0;font-size:14px;line-height:1.5;color:var(--ink)}
+.pair-rules strong{font-weight:700}
+
+/* ---------- строка упражнения ---------- */
+.cards{display:block}
+.exercise{display:flex;flex-direction:column;padding:12px 0 14px;border-top:1px solid var(--hair)}
+.block-note+.cards>.exercise:first-child,.cards>.exercise:first-child{border-top:0}
+.exercise-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
+.exercise h3{flex:1;min-width:0;font-size:17px;font-weight:700;line-height:1.3;letter-spacing:-.005em;overflow-wrap:anywhere}
+.reps{margin-top:2px;font:600 22px/1.1 var(--hand);color:var(--ink)}
+.muscles{margin-top:1px;font-size:13px;line-height:1.4;color:var(--ink2)}
+/* Метка «упор» у упражнения, добавленного ради зоны упора своей тренировки
+   (render.js). Подпись, а не кнопка: нажимаемого не прибавляет. */
+.focus-tag{display:inline-flex;align-self:flex-start;align-items:center;height:24px;margin:6px 0 0;padding:0 10px;border-radius:12px;background:var(--bcs,var(--tonal));font-size:12px;font-weight:600;line-height:1;color:var(--ink);white-space:nowrap}
+.exercise-actions{display:flex;align-items:center;flex-wrap:wrap;gap:6px 8px;margin-top:10px}
+.exercise-actions .howto-toggle{margin-left:auto}
+.video{display:inline-flex;align-items:center;gap:6px;flex:none;max-width:60%;min-height:36px;margin-top:-4px;padding:0 14px 0 12px;border-radius:12px;background:var(--bcs,var(--tonal));
+  font-size:13px;font-weight:600;line-height:1.25;color:var(--ink);text-decoration:none}
+.video svg{width:13px;height:13px;fill:currentColor;flex:none}
+.video span{font-variant-numeric:tabular-nums}
+.howto-toggle{display:inline-flex;align-items:center;gap:4px;min-height:36px;padding:0 6px 0 10px;border-radius:12px;font-size:13px;font-weight:600;color:var(--ink2)}
+.howto-caret{width:16px;height:16px;flex:none;fill:currentColor;transition:transform .2s}
+.howto-toggle[aria-expanded=true] .howto-caret{transform:rotate(180deg)}
+.howto-body{margin:6px 0 0}
+.howto-body p{font-size:14px;line-height:1.6;color:var(--ink2)}
+.howto-body p+p{margin-top:8px}
+.extra-link{display:block;margin-top:2px;padding:6px 0;font-size:14px;font-weight:600;color:var(--ink);text-underline-offset:3px;text-decoration-thickness:1px}
+
+/* Отметки круга: круг 36px с номером, нажатый — цвет блока с галочкой. Сам
+   чекбокс лежит поверх, прозрачный и во весь круг: палец попадает по нему,
+   фокус и состояние читает диктор, а рисует всё соседний span. */
+.checks{display:flex;gap:6px}
+.check{position:relative;display:grid;place-items:center;min-width:36px;min-height:36px;cursor:pointer}
+.check input{position:absolute;inset:0;width:100%;height:100%;margin:0;opacity:0;cursor:pointer}
+.check>span{position:relative;display:grid;place-items:center;width:36px;height:36px;border-radius:50%;background:var(--bcs,var(--tonal));font:600 20px/1 var(--hand);color:var(--ink2)}
+.check input:checked+span{background:var(--bc,var(--mint));color:transparent}
+.check input:checked+span::after{content:"";position:absolute;inset:8px;background:var(--ink);
+  -webkit-mask:var(--i-check) center/contain no-repeat;mask:var(--i-check) center/contain no-repeat}
+.check input:focus-visible+span{outline:2px solid var(--ink);outline-offset:2px}
+/* Блок с одним повтором: «Готово» — таблетка с кружком слева. */
+.check-one{min-width:0}
+.check-one>span{display:inline-flex;gap:8px;width:auto;padding:0 14px 0 6px;border-radius:18px;background:var(--tonal);font:600 14px/1 var(--sans);color:var(--ink)}
+.check-one>span::before{content:"";flex:none;width:26px;height:26px;border-radius:50%;background:var(--tonal2)}
+.check-one input:checked+span{background:var(--bc,var(--mint));color:var(--ink)}
+.check-one input:checked+span::before{background:#fff}
+.check-one input:checked+span::after{inset:auto;left:11px;top:50%;width:16px;height:16px;margin-top:-8px}
+
+/* ---------- плитки «Что работает» и «За неделю» ---------- */
+/* Плитка — сама кнопка раскрытия (.bodymap-toggle, .weekly-toggle); панель
+   раскрывается под рядом плиток во всю ширину. Секции-обёртки растворены
+   (display:contents), чтобы кнопки и панели стали ячейками одной сетки. */
+.analysis{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:34px}
+.bodymap,.weekly{display:contents}
+.tile{order:1;display:flex;flex-direction:column;justify-content:space-between;gap:10px;min-height:104px;padding:14px 16px;border-radius:22px;color:var(--ink);text-align:left}
+.tile-sky{background:var(--sky)}
+.tile-lilac{background:var(--lilac)}
+.tile-title{display:block;font:600 24px/1.05 var(--hand)}
+.tile-sub{display:block;margin-top:4px;font-size:13px;line-height:1.35;color:var(--ink)}
+.tile-go{display:inline-flex;align-items:center;gap:4px;font-size:13px;font-weight:700}
+.tile-go .ic{width:16px;height:16px;transition:transform .2s}
+.tile[aria-expanded=true] .tile-go .ic{transform:rotate(90deg)}
+.tile .go-close,.tile[aria-expanded=true] .go-open{display:none}
+.tile[aria-expanded=true] .go-close{display:inline}
+.bodymap-body,.weekly-body{order:2;grid-column:1/-1;padding:16px 16px 18px;border-radius:22px}
+.bodymap-body{background:var(--sky-s)}
+.weekly-body{background:var(--lilac-s)}
+.bodymap-body[hidden],.weekly-body[hidden]{display:none}
+
+/* Режим карты — сегмент на два положения: выбранный белый, без заливки цветом. */
+.bodymap-modes{display:flex;gap:2px;max-width:320px;margin:0 auto 12px;padding:4px;border-radius:16px;background:var(--tonal)}
+.bodymap-modes button{flex:1;min-width:0;min-height:36px;padding:0 10px;border-radius:12px;font-size:13px;font-weight:600;color:var(--ink2);text-align:center;white-space:nowrap}
+.bodymap-modes button[aria-pressed=true]{background:#fff;color:var(--ink);box-shadow:0 1px 3px rgba(42,44,72,.14)}
 .bodymap-views{display:flex;gap:14px;justify-content:center}
 .bodymap-views>div{flex:1;min-width:0;max-width:220px}
 /* Две подписи под схемой: .bodymap-note — про то, что красит цвет в выбранном
@@ -48,214 +247,93 @@
    классом сломал бы выборку. .bodymap-shared — объяснение про общую область
    схемы; его app.js создаёт внутри подбора, и только когда область объединяет
    несколько групп мышц, поэтому в index.html его нет. */
-.bodymap-note,.bodymap-groups,.bodymap-shared{font-size:13px;line-height:1.5;color:#526278}
+.bodymap-note,.bodymap-groups,.bodymap-shared{font-size:13px;line-height:1.5;color:var(--ink2)}
 .bodymap-note,.bodymap-groups{margin:10px 0 0}
-.bodymap-pick:not(:empty){margin-top:12px;padding-top:12px;border-top:1px solid #e2e9f2}
-.bodymap-pick h3{font-size:15px;margin:0 0 6px}
+.bodymap-pick:not(:empty){margin-top:12px;padding-top:12px;border-top:1px solid var(--hair)}
+.bodymap-pick h3{margin:0 0 6px;font-size:15px;font-weight:700}
 .bodymap-shared{margin:0 0 8px}
-.bodymap-pick button{display:block;width:100%;text-align:left;border:0;background:none;font:inherit;
-  font-size:14px;color:#193d6a;text-decoration:underline;text-underline-offset:3px;
-  min-height:32px;padding:4px 0;cursor:pointer}
+.bodymap-pick button{display:block;width:100%;min-height:32px;padding:4px 0;font-size:14px;font-weight:600;color:var(--ink);text-decoration:underline;text-decoration-thickness:1px;text-underline-offset:3px}
 @media (max-width:520px){.bodymap-views{flex-direction:column;align-items:center}
   .bodymap-views>div{max-width:260px;width:100%}}
 
-/* Описания упражнений — под кнопкой. Карточка упражнения была высотой от 309
-   до 636px (в середине — 500), и девятнадцать таких карточек растягивали
-   страницу телефона 375×812 на шестнадцать экранов. Высота кнопки — 36px,
-   ступень «кнопка»: по ней тыкают между подходами. */
-/* Кнопка раскрытия стоит в строке рядом со ссылкой на видео, поэтому и
-   выглядит её парой: та же рамка, тот же фон, тот же радиус и тот же кегль.
-   Прежняя форма — текст во всю ширину с линейкой сверху — рядом с кнопкой
-   видео читалась бы как подпись, а не как вторая кнопка. */
-.howto-toggle{display:flex;align-items:center;justify-content:space-between;gap:8px;
-  min-height:36px;margin:0;padding:0 12px;border:1px solid #cad6e4;border-radius:10px;
-  background:#f3f7fc;font:inherit;font-size:13px;font-weight:650;color:#193d6a;text-align:left}
-.howto-caret{width:10px;height:10px;flex-shrink:0;fill:currentColor;transition:transform .2s}
-.howto-toggle[aria-expanded=true] .howto-caret{transform:rotate(180deg)}
-/* Строка справочного: «Как выполнять» и видео. Отметки в неё не входят — им
-   своя строка ниже, во всю ширину (ими пользуются между подходами, и промах по
-   ним стоит дороже всего). Тремя элементами строка не собирается ни на одной
-   карточке с видео: отметок от одной до трёх, и с подписями «Круг N» трём
-   элементам нужно от 348 до 591px при 317 доступных на экране 375px.
-   Обе кнопки растут, заполняя строку. Когда вместе они в неё не влезают,
-   строка переносится и каждая встаёт во всю ширину, как стояла до правки: так
-   на экране 375px ведут себя два упражнения, у которых подпись видео с
-   пояснением (например «Видео · 0:00–0:02 · внизу экрана»).
-   Основа именно max-content, а не auto: плеер подменяет ссылку на видео
-   кнопкой, а у той в player.css стоит width:100% (в прежнем столбике кнопка
-   обязана была тянуться во всю ширину). При основе auto эта ширина и
-   становится основой — 317px, — и строка переносится ВСЕГДА, на всех
-   восемнадцати карточках с видео. Проверено замером: было ровно так.
-   Сжатие оставлено разрешённым (shrink 1). На поддерживаемых ширинах оно
-   ненаблюдаемо — при flex-wrap раскладка сначала переносит строку, и до сжатия
-   дело доходит только если элемент шире строки один. Но ниже 346px кнопка
-   видео «Жима двумя ногами лёжа» шире строки именно одна, и с запретом сжатия
-   она вылезала за содержимое карточки (при 320px — на 10,6px). Пусть лучше
-   подпись ляжет в две строки внутри кнопки. */
-.exercise-refs{display:flex;flex-wrap:wrap;gap:6px}
-.exercise-refs>*{flex:1 1 max-content}
-/* Своего правила ширины встроенному плееру не нужно, хотя player.js и вставляет
-   панель внутрь этой строки — сразу ЗА кнопкой видео (button.after(panel)).
-   Панель на строке всегда одна: её собственный max-content — 468px, и вместе с
-   двумя кнопками перед ней она не влезает ни в одну поддерживаемую строку
-   (самая широкая — 642px при экране 720px). А один на строке элемент занимает
-   её целиком при любой основе: растёт за счёт flex-grow, сжимается за счёт
-   flex-shrink и .player-shell{min-width:0} из player.css.
-   Здесь стояло .exercise-refs>.player-shell{flex-basis:100%}; снято как
-   мёртвое. Проверено в браузере: без него ни ширина панели, ни её положение, ни
-   ширина страницы не меняются ни на одной из 20 ширин от 320 до 1440 и ни на
-   одной из 18 карточек с видео. Замер, которым правило обосновывали («панель
-   468px, страница 497px при экране 375px»), воспроизводится только при ЗАПРЕТЕ
-   сжатия (flex:1 0 max-content) — при раскладке, которой здесь больше нет. */
-/* Отступ сверху — про раскрытый вид: в свёрнутом область скрыта атрибутом
-   hidden, то есть display:none, и пустоты от неё не остаётся. Первый абзац
-   области — .technique (крупнее и темнее), за ним подробности и прогрессия;
-   их вид сохранён от прежнего <details>. */
-.howto-body{margin:10px 0 0}
-.howto-body p+p{margin:8px 0 0;font-size:14px;color:#526278}
-/* Печать этих же двух узлов — здесь, а НЕ в общем блоке @media print выше.
-   Медиазапрос специфичности не добавляет, а плоские правила .howto-toggle и
-   .howto-body стоят в файле позже общего блока и перекрывали бы его: кнопка
-   печаталась бы на листе, хотя в @media print у неё стояло display:none.
-   Проверено подменой print на screen — правило не действовало. На бумаге
-   кнопка не нужна, а текст техники печатается так же, как печатался до
-   сворачивания. */
-@media print{.howto-toggle{display:none}.howto-body{display:block}}
-
-/* Порог телефона. Мобильный порог в проекте был один — max-width:720px, и
-   экран 375px получал ровно те же размеры, что почти вдвое более широкий:
-   владелец программы сказал «раскладка и все кнопки очень крупные». Размеры
-   ниже — из согласованного с ним макета; 480px покрывает 375, 390, 414 и 430.
-   То же число знает app.js (PHONE_MAX_WIDTH), потому что раскрытие описаний
-   задаётся атрибутом, а атрибут медиазапросом не поставить.
-   Высота нажимаемого — три ступени (2026-10-21, владелец: «очень крупные
-   кнопки сейчас. в мобильных версиях приложений обычно всё гораздо мельче»;
-   до этого всё было не ниже 44px):
-   - чип, 32px: чипы блоков, фильтров, зон и дней недели, второстепенные кнопки
-     («Заменить», «Убрать», «Удалить», «Изменить», «Сбросить», «Назад»);
-   - кнопка, 36px: то, чем пользуются по ходу тренировки, — «Как выполнять»,
-     «Видео», отметки, пресеты таймера, раскрывашки карты и недели;
-   - главная, 44px: одно главное действие экрана («Добавить упражнение»,
-     «Сохранить», «Сгенерировать», «Старт» таймера) и пункты нижней навигации.
-   32px — с запасом выше минимума WCAG 2.2 AA (2.5.8, 24px). Ступени держатся
-   на всех ширинах, а не только здесь, и проверяются тестом: список нажимаемого
-   с его ступенью — в test/app.test.js (TAP_TARGETS).
-   В список не вошли два узла, которым высоту не задаёт ни одно правило, — она
-   у них от содержимого: ссылка-логотип в шапке (замерено 32px при 375px) и
-   «Открыть в YouTube» в подвале плеера (33px). Оба вне того, чем пользуются
-   между подходами: логотип ведёт на верх страницы, а «Открыть в YouTube» —
-   запасной ход, когда встроенный плеер видео не показывает. */
-@media (max-width:480px){
-  .wrap{padding:0 14px}
-  /* Полоса блоков тянется от края до края экрана, поэтому её отрицательное
-     поле обязано совпадать с отступом .wrap: с прежними 18px она вылезала бы
-     на 4px за экран с каждой стороны и давала горизонтальную прокрутку
-     (проверено снятием правила: страница становилась шире экрана на 4px). */
-  .block-nav{margin:0 -14px;padding:8px 14px}
-  body{font-size:15px;line-height:1.5}
-  .mastrow{height:48px}
-  .brand{gap:8px}
-  .brand-icon{font-size:26px}
-  .eyebrow{font-size:11px;margin:0 0 8px}
-  .intro h1{font-size:26px;letter-spacing:-.03em;line-height:30px;margin:0 0 10px}
-  .intro-copy{font-size:14px}
-  .facts{margin-top:16px;gap:12px}
-  .facts div{padding-left:12px}
-  .facts strong{font-size:20px}
-  .facts span{font-size:12px}
-  .progress-row{margin-top:14px;font-size:13px}
-  .storage-note{margin:6px 0 14px}
-  .equipment{padding:10px 12px;font-size:13px}
-  .workout-block{margin-top:24px}
-  .block-heading{margin-bottom:12px}
-  .block-heading h2{font-size:18px}
-  .block-heading p{margin-top:2px;font-size:13px}
-  .block-number{min-width:30px;height:30px;border-radius:9px;font-size:15px}
-  .round-tag{padding:3px 8px}
-  .block-note{padding:10px 12px;font-size:13px}
-  .cards{gap:10px}
-  .exercise{padding:14px}
-  .exercise-top{margin-bottom:4px}
-  .exercise h3{font-size:16px;line-height:21px}
-  .reps{font-size:14px;margin:0 0 10px}
-  .technique{font-size:15px;line-height:1.55}
-  .checks{padding-top:10px}
-  .pair-rules{margin-top:28px;padding:16px;border-radius:14px}
-  .pair-rules h2{font-size:18px}
-  .pair-rules p{font-size:14px}
-  .guide{margin-top:28px}
-  .guide,.care{padding:16px}
-  .guide h2,.care h2{font-size:19px;margin:0 0 10px}
-}
-
-/* Секция недельного объёма — устроена как .bodymap выше (кнопка + панель),
-   но проще: одна колонка строк, без переключателя режима и подбора. */
-.weekly{margin:10px 0 0;border:1px solid #cad6e4;border-radius:10px;overflow:hidden;background:#fff}
-.weekly-toggle{display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;min-height:40px;background:#fff;border:0;padding:8px 12px;font-size:14px;font-weight:650;line-height:1.35;color:#193d6a;text-align:left;cursor:pointer}
-.weekly-toggle[aria-expanded=true]{background:#e4edf8;border-bottom:1px solid #d8e1eb}
-.weekly-body{padding:10px 12px 12px}
-.weekly-head,.weekly-note{margin:0 0 10px;font-size:13px;line-height:1.5;color:#526278}
+/* Недельный объём: строки без карточек, числа рукописные. */
+.weekly-head,.weekly-note{font-size:13px;line-height:1.5;color:var(--ink2)}
+.weekly-head{margin:0 0 6px}
 .weekly-note{margin:10px 0 0}
-.weekly-row{display:grid;grid-template-columns:1fr auto auto;gap:4px 10px;align-items:baseline;padding:8px 0;border-top:1px solid #e8edf4}
+.weekly-row{display:grid;grid-template-columns:1fr auto auto;gap:2px 12px;align-items:baseline;padding:10px 0;border-top:1px solid var(--hair)}
 .weekly-name{font-size:14px;font-weight:600}
-.weekly-main{font-size:15px;font-weight:700;font-variant-numeric:tabular-nums}
-.weekly-ours{font-size:13px;color:#657289;font-variant-numeric:tabular-nums}
-.weekly-verdict{grid-column:1/-1;font-size:12px;color:#526278}
+.weekly-main{font:600 22px/1 var(--hand);font-variant-numeric:tabular-nums}
+.weekly-ours{font-size:13px;color:var(--ink2);font-variant-numeric:tabular-nums}
+.weekly-verdict{grid-column:1/-1;font-size:12px;color:var(--ink2)}
 /* Пометка «наша линия»: у части вердиктов граница — не число из источника, а
-   наша (см. weekly-view.js, basis). Пилюля того же кегля, что и сам вердикт
-   (12px — не мельче, чтобы не читаться сноской), но с цветом и весом, иначе
-   различие потерялось бы среди двадцати одинаковых с виду строк. Янтарный —
-   тот же оттенок предупреждения, что у .care ниже по странице. */
-.weekly-basis{display:inline-block;margin-left:6px;padding:1px 7px;border-radius:999px;background:#fbe4bd;color:#7a4a06;font-size:12px;font-weight:700}
+   наша (см. weekly-view.js, basis). Пилюля того же кегля, что и вердикт (12px),
+   но с цветом: иначе различие потерялось бы среди двадцати одинаковых строк. */
+.weekly-basis{display:inline-block;margin-left:6px;padding:1px 8px;border-radius:10px;background:var(--butter);color:var(--butter-i);font-size:12px;font-weight:700}
 
-/* Нижняя навигация по разделам. Таймер отдыха переехал в неё же (пункт
-   «Отдых» открывает шторку .timer-sheet) — отдельной полосы таймера больше нет.
-   Безопасная зона снизу — та же формула max(env(), --tg-*), что у .masthead
-   сверху (см. комментарий там: max, а не сумма, потому что env() и
-   --tg-safe-area-inset-bottom описывают одну и ту же полосу устройства).
-   Здесь она заведена переменной, а не повторена текстом: .timer-sheet своим
-   нижним краем обязан упираться точно в верх .tabbar при любой безопасной
-   зоне (иначе шторка либо накрывает навигацию, либо оставляет над ней щель),
-   а держать одно и то же длинное выражение в двух местах — верный способ
-   поправить его в одном и забыть про другое.
-   Высота пункта — 52px ровно (4 + значок 28 + 2 + подпись 14 + 4), с границей
-   53px: это число стоит в bottom у .timer-sheet и шторки замены. */
-:root{--tabbar-safe-bottom:max(env(safe-area-inset-bottom,0px),calc(var(--tg-safe-area-inset-bottom,0px) + var(--tg-content-safe-area-inset-bottom,0px)))}
-.tabbar{position:fixed;left:0;right:0;bottom:0;z-index:6;display:flex;background:#fff;border-top:1px solid #d8e1eb;padding-bottom:var(--tabbar-safe-bottom)}
-.tabbar button{flex:1 1 0;min-height:52px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:4px 0;border:0;background:transparent;font-family:inherit;font-size:11px;font-weight:600;line-height:14px;color:#657289;cursor:pointer}
-/* Значок — контурный, 22px, на «пилюле» 52×28: у текущего раздела пилюля
-   голубая, у идущего отдыха — салатовая, как фирменный акцент. Цвет пилюли
-   говорит «где я» и «идёт время», не меняя ни подписи, ни раскладки. */
-.tabbar svg{width:52px;height:28px;padding:3px 15px;border-radius:14px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;transition:background-color .2s}
-.tabbar button[aria-current=page]{color:#152d4a}
-.tabbar button[aria-current=page] svg,.tabbar-timer[aria-expanded=true] svg{background:#e4edf8}
-.tabbar-timer[aria-expanded=true],.tabbar-timer[data-running=true]{color:#152d4a}
-.tabbar-timer[data-running=true] svg{background:#ceef69}
+/* ---------- «Как повышать нагрузку», ориентир, подвал ---------- */
+.guide{margin-top:34px}
+.guide h2{font:600 28px/1.05 var(--hand)}
+.guide ol{margin-top:14px}
+.guide li{position:relative;padding:0 0 12px 22px;font-size:14px;line-height:1.55;color:var(--ink2)}
+.guide li::before{content:"";position:absolute;left:2px;top:.72em;width:9px;height:2px;border-radius:1px;background:var(--lead-d)}
+.sources-link{display:inline-flex;align-items:center;gap:8px;min-height:36px;font-size:14px;font-weight:600;color:var(--ink);text-underline-offset:3px;text-decoration-thickness:1px}
+.sources-link::before{content:"";flex:none;width:18px;height:18px;background:currentColor;
+  -webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M5 5.5A2.5 2.5 0 0 1 7.5 3H19v15H7.5A2.5 2.5 0 0 0 5 20.5zM5 20.5A2.5 2.5 0 0 0 7.5 23H19' fill='none' stroke='%23000' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/contain no-repeat;
+  mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M5 5.5A2.5 2.5 0 0 1 7.5 3H19v15H7.5A2.5 2.5 0 0 0 5 20.5zM5 20.5A2.5 2.5 0 0 0 7.5 23H19' fill='none' stroke='%23000' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/contain no-repeat}
+.care{margin-top:34px;padding:16px 18px;border-radius:22px;background:var(--butter-s)}
+.care h2{margin:0 0 6px;font:600 24px/1.05 var(--hand)}
+.care p{font-size:13px;line-height:1.45;color:var(--ink)}
+.care p+p{margin-top:10px}
+.foot{padding-top:28px;font-size:12px;line-height:1.5;color:var(--ink2)}
+.foot .schedule-note{margin-top:14px}
+.foot .schedule-note span{display:block}
+.foot .schedule-note span[hidden]{display:none}
+.text-button{display:inline-flex;align-items:center;min-height:32px;margin:6px 0 0 -8px;padding:0 8px;border-radius:12px;font-size:14px;font-weight:600;color:var(--ink2)}
+
+/* ---------- нижняя панель ---------- */
+/* Плавающая «таблетка»: 60px, радиус 30, снизу 12px плюс безопасная зона. Высота
+   пункта — не меньше 44px (ступень «главная»). Шторки считают свой нижний край
+   от верха панели: 12 + 60 + 12 = 84px над безопасной зоной. */
+.tabbar{position:fixed;left:0;right:0;bottom:calc(12px + var(--tabbar-safe-bottom));z-index:6;display:grid;grid-template-columns:repeat(4,1fr);
+  width:min(calc(100% - 24px),calc(var(--col) - 24px));height:60px;margin:0 auto;padding:0 6px;border-radius:30px;
+  background:rgba(255,255,255,.88);-webkit-backdrop-filter:blur(18px);backdrop-filter:blur(18px);
+  box-shadow:0 14px 34px -12px rgba(42,44,72,.34),0 2px 8px rgba(42,44,72,.06)}
+.tabbar button{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;min-height:44px;padding:0;border-radius:26px;
+  font-size:12px;font-weight:600;line-height:1;color:var(--ink2)}
+/* Значок — контурный, 22px, на «пилюле» 46×26: у текущего раздела пилюля цвета
+   вкладки, у идущего отдыха и у открытой шторки — мятная. Цвет пилюли говорит
+   «где я» и «идёт время», не меняя ни подписи, ни раскладки. */
+.tabbar svg{width:46px;height:26px;padding:2px 12px;border-radius:13px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;transition:background-color .2s}
+.tabbar button[aria-current=page]{color:var(--ink)}
+.tabbar button[aria-current=page] svg{background:var(--lead)}
+.tabbar-timer[aria-expanded=true],.tabbar-timer[data-running=true]{color:var(--ink)}
+.tabbar-timer[aria-expanded=true] svg,.tabbar-timer[data-running=true] svg{background:var(--mint)}
 .tabbar-timer[data-running=true] .tabbar-label{font-weight:700;font-variant-numeric:tabular-nums}
-/* Печать .tabbar — здесь, а НЕ в общем блоке @media print в начале файла: та же
-   причина, что у .howto-toggle/.howto-body ниже. Медиазапрос специфичности не
-   добавляет, а плоское правило .tabbar стоит в файле позже общего блока и
-   перекрывало бы его display:none своим display:flex — закреплённая навигация
-   печаталась бы поверх листа. .timer-sheet в общий блок добавлен как обычно:
-   его правило стоит в файле раньше общего блока print, и перекрывать здесь
-   нечему. */
-@media print{.tabbar{display:none}}
 
-/* Визуально скрытый, но читаемый экранным диктором текст. Единственный
-   потребитель сегодня — #timer-status (см. index.html): раньше он жил внутри
-   .timer-sheet и вместе со шторкой пропадал из дерева доступности за display:
-   none, и «Отдых закончен» после закрытия шторки крестиком уже не долетал до
-   диктора — а закрытая шторка во время отдыха это и есть обычный сценарий.
-   Теперь узел вне шторки и виден дереву доступности всегда; от глаз прячет
-   именно этот класс, а не hidden/display:none, которые убрали бы его и оттуда. */
-.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+/* ---------- шторка таймера (плавающий лист) ---------- */
+.timer-sheet{position:fixed;left:0;right:0;bottom:calc(84px + var(--tabbar-safe-bottom));z-index:7;display:grid;grid-template-columns:1fr auto;gap:8px;
+  width:min(calc(100% - 24px),calc(var(--col) - 24px));margin:0 auto;padding:10px 20px 20px;border-radius:28px;background:var(--surface);color:var(--ink);
+  box-shadow:0 -14px 44px -12px rgba(42,44,72,.28),0 2px 8px rgba(42,44,72,.06)}
+.timer-sheet[hidden]{display:none}
+.timer-sheet-head,.timer-sheet output,.presets{grid-column:1/-1}
+.timer-sheet-head{display:flex;align-items:center;justify-content:space-between;gap:16px;font:600 24px/1.05 var(--hand);color:var(--ink)}
+.timer-sheet output{display:block;text-align:center;font:600 64px/1 var(--hand);margin:0 0 6px;font-variant-numeric:tabular-nums}
+.presets{display:flex;gap:2px;padding:4px;border-radius:16px;background:var(--tonal)}
+.presets button{flex:1;min-width:0}
+.timer-sheet button{min-height:36px;padding:0 12px;border-radius:12px;font-size:14px;font-weight:600;color:var(--ink2);text-align:center}
+.timer-sheet button[aria-pressed=true]{background:#fff;color:var(--ink);box-shadow:0 1px 3px rgba(42,44,72,.14)}
+.timer-sheet .timer-start{min-height:44px;border-radius:14px;background:var(--mint-b);color:var(--ink);font-size:15px;font-weight:700}
+.timer-sheet .timer-reset{min-width:44px;min-height:44px;padding:0;border-radius:50%;background:var(--tonal);font-size:20px;color:var(--ink)}
+.timer-sheet.done{background:var(--mint-s)}
+.timer-sheet.done output{color:var(--mint-i)}
 
+/* ======= ВРЕМЕННО: старые правила экранов, которые ещё не переоформлены (задачи 4–6 плана) ======= */
 /* «Тренировки» и «Конструктор» — содержимое рисуется в app.js (workouts-view.js,
    builder-view.js) при первом показе раздела. Отступ снизу — под .tabbar,
    которая всегда стоит внизу этих экранов (53px с границей плюс безопасная
    зона). Шторка таймера этим отступом не покрывается и не должна: она
    всплывает поверх содержимого раздела, а не встраивается в его поток. */
-#screen-workouts,#screen-builder{padding:20px 0 84px}
+
 .workout-card{display:flex;flex-direction:column;align-items:flex-start;gap:3px;width:100%;min-height:44px;margin:0 0 8px;padding:12px 14px;border:1px solid #d8e1eb;border-radius:14px;background:#fff;font:inherit;color:inherit;text-align:left;cursor:pointer}
 .workout-card[aria-current]{border-color:#152d4a;background:#eef3fa}
 /* Название вводит человек, и слово без пробелов (до 60 знаков) иначе вылезло бы
@@ -282,17 +360,9 @@
 .workout-item .workout-card{flex:1 1 auto;width:auto;min-width:0;margin:0}
 .workout-delete,.workout-edit{flex:none;min-height:32px;padding:0 12px;border:1px solid #d8e1eb;border-radius:10px;background:#fff;font:inherit;font-size:13px;font-weight:600;color:#53637a;cursor:pointer}
 .workout-actions{display:flex;flex-direction:column;gap:6px;flex:none}
-/* Пометка про убранные из библиотеки упражнения — между снаряжением и блоками.
-   hidden она скрыта сама, display здесь не задаётся намеренно: он перекрыл бы
-   атрибут. */
-.removed-note{margin:12px 0 0;padding:10px 12px;border-radius:10px;background:#e8edf4;color:#53637a;font-size:13px}
 
-/* Метка «упор» у упражнения, добавленного ради зоны упора своей тренировки
-   (render.js). Подпись, а не кнопка: нажимаемого не прибавляет, поэтому в
-   сторожа высоты нажимаемого не входит. margin-right:auto сажает её вплотную
-   к номеру и отдаёт весь свободный просвет строки списку мышц справа —
-   space-between на трёх элементах поставил бы метку посередине. */
-.focus-tag{margin-right:auto;white-space:nowrap;background:#e0edc2;color:#39571b;padding:2px 8px;border-radius:6px;font-size:12px;font-weight:650;letter-spacing:.06em}
+
+
 
 /* Экран библиотеки упражнений (library-view.js), живёт в «Конструкторе».
    Высоты нажимаемого — по ступеням (чип 32, кнопка 36, главная 44, см.
@@ -520,3 +590,48 @@
 /* Вход в статью из приложения: строка-ссылка под текстом блока. */
 .sources-link{display:inline-flex;align-items:center;min-height:32px;margin-top:8px;font-size:14px;font-weight:600;color:#193d6a;text-underline-offset:3px}
 @media print{.sources-back{display:none}}
+
+/* Порог телефона. Мобильный порог в проекте один — 480px: он покрывает 375, 390,
+   414 и 430. То же число знает app.js (PHONE_MAX_WIDTH), потому что раскрытие
+   описаний задаётся атрибутом, а атрибут медиазапросом не поставить; что оба
+   файла говорят про одну ширину, сторожит test/app.test.js (блок опознаётся по
+   правилу .exercise h3 — такого нет ни в одном другом медиазапросе).
+   Высота нажимаемого — три ступени (2026-10-21, владелец: «очень крупные кнопки
+   сейчас, в мобильных приложениях обычно всё гораздо мельче»):
+   - чип, 32px: чипы фильтров, зон и дней, второстепенные кнопки («Заменить»,
+     «Убрать», «Удалить», «Изменить», «Сбросить», «Назад»);
+   - кнопка, 36px: то, чем пользуются по ходу тренировки — «Как выполнять»,
+     «Видео», отметки, пресеты таймера, плитки карты и недели;
+   - главная, 44px: одно главное действие экрана («Добавить упражнение»,
+     «Сохранить», «Сгенерировать», «Старт» таймера) и пункты нижней навигации.
+   32px — с запасом выше минимума WCAG 2.2 AA (2.5.8, 24px). Ступени держатся на
+   всех ширинах, а не только здесь; список нажимаемого с его ступенью — в
+   test/app.test.js (TAP_TARGETS). */
+@media (max-width:480px){
+  .exercise h3{font-size:16px;line-height:21px}
+}
+/* Совсем узкие экраны (старые iPhone SE): заголовок шапки чуть мельче, чтобы
+   длинная строка не переносилась. */
+@media (max-width:340px){
+  .hero h1{font-size:34px}
+}
+
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}*{transition:none!important;animation:none!important}}
+
+/* Печать — в самом конце файла: медиазапрос специфичности не добавляет, и любое
+   правило с тем же селектором ниже перекрыло бы печатное (так кнопка раскрытия
+   однажды печаталась на каждой карточке). Тест «ни одно правило печати не
+   перекрыто» это сторожит. Блоки и описания на бумаге раскрыты, отметки, панель
+   и шторки не нужны. */
+@media print{
+  .tabbar,.timer-sheet,.wave,.week,.stats,.next,.analysis,.text-button,.checks,.check,.blk-prog,.blk-caret,.sources-back{display:none}
+  body::after{display:none}
+  .hero{background:none;padding:0 0 12px}
+  .blk-body,.blk-body[hidden]{display:block}
+  .howto-toggle{display:none}
+  .howto-body{display:block}
+  .exercise{break-inside:avoid}
+  .video{padding:0;background:none}
+  .video:after{content:attr(href);font-size:10px}
+  body{background:#fff}
+}

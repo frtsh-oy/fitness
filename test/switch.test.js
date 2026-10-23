@@ -115,7 +115,8 @@ test('карточка своей тренировки делает её тек�
 
   assert.equal(heading(document), OWN.name);
   assert.equal(document.getElementById('kicker').textContent, ownWorkout.kicker);
-  assert.equal(document.querySelector('.masthead .schedule').textContent, scheduleShort(OWN.days));
+  const trained = [...document.querySelectorAll('#week .day.train')].map(day => day.textContent);
+  assert.equal(trained.join(' · '), scheduleShort(OWN.days), 'полоса недели показывает дни своей тренировки');
   assert.equal(document.querySelectorAll('#workout .exercise').length, exerciseCount(OWN));
   assert.deepEqual(shown(document), ['screen-today']);
   assert.equal(window.localStorage.getItem(CURRENT_KEY), OWN_ID);
@@ -445,19 +446,22 @@ test('карточка своей тренировки: название, уро
   assert.deepEqual(titles, [OTHER.name, OWN.name], 'новая выше старой');
 });
 
-test('наблюдатель за блоками следит за блоками новой тренировки', async t => {
-  const { window, document } = mount(t, { preload: onDevice() });
+test('после смены тренировки раскрыт первый блок новой, а не выбор прежней', async t => {
+  const { document } = mount(t, { preload: onDevice() });
   await settle(0);
-  const [observer] = window.intersectionObservers;
   const ids = workout => workout.blocks.map(block => block.id);
-  assert.deepEqual(observer.targets.map(node => node.id), ids(legs));
+  const openIds = () => [...document.querySelectorAll('#workout .workout-block')]
+    .filter(section => section.querySelector('.blk-head').getAttribute('aria-expanded') === 'true')
+    .map(section => section.id);
+  assert.deepEqual([...document.querySelectorAll('#workout .workout-block')].map(s => s.id), ids(legs));
+
+  // Человек раскрыл другой блок прежней тренировки; новая открывается с первого.
+  document.querySelector('#legs2 .blk-head').click();
+  assert.deepEqual(openIds(), ['legs2']);
 
   pick(document, OWN.name);
-  assert.deepEqual(observer.targets.map(node => node.id), ids(ownWorkout), 'блоков прежней тренировки в наблюдении нет');
-
-  // И подсветка в навигации идёт по блокам новой.
-  observer.intersect(observer.targets[2]);
-  assert.equal(document.querySelector('.block-nav a.active').hash, `#${ids(ownWorkout)[2]}`);
+  assert.deepEqual([...document.querySelectorAll('#workout .workout-block')].map(s => s.id), ids(ownWorkout));
+  assert.deepEqual(openIds(), [ids(ownWorkout)[0]], 'блоков прежней тренировки на экране нет, раскрыт первый новой');
 });
 
 // Облако, у которого чтение отметок отвечает не сразу: за это время человек

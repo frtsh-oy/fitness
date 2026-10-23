@@ -20,16 +20,17 @@ export function videoUrl([id, start]) {
 
 // Дни недели по ISO-8601: 1 — понедельник, 7 — воскресенье. Подписи живут
 // здесь, а не в данных: в данных лежат номера дней, а как их назвать — вопрос
-// показа. Две формы, потому что на странице два разных места: короткая в шапке
-// (рядом с названием сайта, где место в одну строку) и полная в подвале.
+// показа. Три формы, потому что на странице три разных места: короткая в
+// полосе недели в шапке (кружок 38px), полная в подвале и «по средам» в
+// подписи полосы для диктора.
 const WEEKDAYS = {
-  1: { short: 'ПН', long: 'Понедельник' },
-  2: { short: 'ВТ', long: 'Вторник' },
-  3: { short: 'СР', long: 'Среда' },
-  4: { short: 'ЧТ', long: 'Четверг' },
-  5: { short: 'ПТ', long: 'Пятница' },
-  6: { short: 'СБ', long: 'Суббота' },
-  7: { short: 'ВС', long: 'Воскресенье' },
+  1: { short: 'ПН', long: 'Понедельник', each: 'понедельникам' },
+  2: { short: 'ВТ', long: 'Вторник', each: 'вторникам' },
+  3: { short: 'СР', long: 'Среда', each: 'средам' },
+  4: { short: 'ЧТ', long: 'Четверг', each: 'четвергам' },
+  5: { short: 'ПТ', long: 'Пятница', each: 'пятницам' },
+  6: { short: 'СБ', long: 'Суббота', each: 'субботам' },
+  7: { short: 'ВС', long: 'Воскресенье', each: 'воскресеньям' },
 };
 
 // Неизвестный день — повод упасть, а не напечатать «undefined · СР · ПТ»:
@@ -46,6 +47,22 @@ export function scheduleShort(days) {
 
 export function scheduleLong(days) {
   return days.map(day => weekday(day).long).join(' · ');
+}
+
+// Номер дня недели по ISO для даты: в JS воскресенье — 0, у нас — 7.
+export function isoWeekday(date) {
+  const day = date.getDay();
+  return day === 0 ? 7 : day;
+}
+
+// Подпись полосы недели для диктора: сама полоса — картинка из семи кружков, и
+// без подписи расписание из неё не прочесть. «по понедельникам, средам и
+// пятницам»: перечисление склеивается запятыми и «и» перед последним.
+function weekLabel(days, today) {
+  const each = days.map(day => weekday(day).each);
+  const list = each.length > 1 ? `${each.slice(0, -1).join(', ')} и ${each[each.length - 1]}` : each[0];
+  const plan = list ? `Тренировки по ${list}.` : 'Дни тренировок не выбраны.';
+  return `${plan} Сегодня ${weekday(today).long.toLowerCase()}.`;
 }
 
 // Есть ли в расписании два дня подряд, считая воскресенье и понедельник
@@ -79,9 +96,9 @@ function renderIcon(document, d) {
 
 // Значок play внутри ссылки на видео — как в src-original/app.js (переменная play).
 const PLAY_PATH = 'M8 5v14l12-7z';
-// Уголок в кнопке «Как выполнять»: смотрит вниз, а в раскрытом виде style.css
+// Уголок раскрытия — шеврон линией: смотрит вниз, а в раскрытом виде style.css
 // поворачивает его на 180° — по aria-expanded самой кнопки.
-const CARET_PATH = 'M12 16 4 8h16z';
+const CARET_PATH = 'M6 9l6 6 6-6';
 
 // Уголок раскрытия. Отдельно от renderHowto, потому что тот же уголок нужен
 // кнопке «Ещё фильтры» в библиотеке (library-view.js): свой, нарисованный
@@ -106,9 +123,12 @@ const HOWTO_LABEL = 'Как выполнять';
 // карточки «Сегодня», чтобы экран библиотеки (library-view.js) строил то же
 // самое, а не копию, которая со временем разошлась бы с оригиналом.
 //
-// Ничего никуда не вставляет, а возвращает три части: что и в каком порядке
+// Ничего никуда не вставляет, а возвращает части: что и в каком порядке
 // класть в карточку (строка, область, дополнительные ролики), решает
-// вызывающий. Отметки и шапка карточки сюда не входят — они у «Сегодня» свои.
+// вызывающий. Кнопка раскрытия и ссылка на видео (toggle, video) лежат и в
+// строке refs, и отдельно: библиотека кладёт строку целиком, «Сегодня»
+// разносит их по разным местам карточки. Отметки и шапка карточки сюда не
+// входят — они у «Сегодня» свои.
 //
 // idPrefix обязан быть уникальным на странице: из него и key упражнения
 // строится идентификатор области, а по нему кнопка находит свою область
@@ -153,14 +173,17 @@ export function renderHowto(document, { idPrefix, item, expanded }) {
   const refs = el(document, 'div', 'exercise-refs');
   refs.append(toggle);
 
+  // Подпись — только время ролика рядом со значком play: слово «Видео» значок
+  // говорит сам, а полное имя («Видео: Тяга, 0:04») есть у ссылки для диктора.
+  let video = null;
   if (item.v) {
-    const link = el(document, 'a', 'video');
-    link.href = videoUrl(item.v);
-    link.target = '_blank';
-    link.rel = 'noopener noreferrer';
-    link.setAttribute('aria-label', `Видео: ${item.name}, ${item.v[2]}`);
-    link.append(renderIcon(document, PLAY_PATH), document.createTextNode(` Видео · ${item.v[2]}`));
-    refs.append(link);
+    video = el(document, 'a', 'video');
+    video.href = videoUrl(item.v);
+    video.target = '_blank';
+    video.rel = 'noopener noreferrer';
+    video.setAttribute('aria-label', `Видео: ${item.name}, ${item.v[2]}`);
+    video.append(renderIcon(document, PLAY_PATH), el(document, 'span', null, item.v[2]));
+    refs.append(video);
   }
 
   // Область с текстом — следом за строкой, а не внутри неё: внутри раскрытие
@@ -184,7 +207,7 @@ export function renderHowto(document, { idPrefix, item, expanded }) {
     return link;
   });
 
-  return { refs, body, links };
+  return { refs, toggle, video, body, links };
 }
 
 // Раскрытие описания — делегированием на корень: кнопок десятки, и своего
@@ -219,51 +242,68 @@ export function roundsTag(block) {
   return `${n} ${plural(n, forms)}`;
 }
 
-function renderItem(document, block, item, itemIndex, expandDescriptions) {
+// Отметки упражнения. Повторы блока называются кругами или подходами (поле
+// unit); блок с одним повтором слова не требует: «Готово». Текст метки — целиком
+// («Круг 1»), но на экране остаётся только номер в круге: слово спрятано
+// классом check-word (то же, что .sr-only), так что и текст метки, и имя
+// чекбокса для диктора полные, а круг 36px вмещает одну цифру.
+function renderChecks(document, block, item) {
+  const word = block.unit === 'sets' ? 'Подход' : 'Круг';
+  const one = block.rounds === 1;
+  const checks = el(document, 'div', 'checks');
+  for (let round = 1; round <= block.rounds; round += 1) {
+    const label = el(document, 'label', one ? 'check check-one' : 'check');
+    const input = document.createElement('input');
+    input.type = 'checkbox';
+    input.dataset.mark = markId(block.id, item.key, round);
+    input.setAttribute('aria-label', `${item.name}: ${one ? 'выполнено' : `${word.toLowerCase()} ${round}`}`);
+    const face = document.createElement('span');
+    if (one) {
+      face.textContent = 'Готово';
+    } else {
+      face.append(el(document, 'span', 'check-word', `${word} `), document.createTextNode(String(round)));
+    }
+    label.append(input, face);
+    checks.append(label);
+  }
+  return checks;
+}
+
+// Строка упражнения: название и видео, повторы, мышцы, ряд действий (отметки и
+// «Как выполнять»), под ним раскрывающиеся тексты. Порядок в разметке — это и
+// порядок обхода Tab: видео, отметки, «Как выполнять».
+function renderItem(document, block, item, expandDescriptions) {
   const article = el(document, 'article', 'exercise');
 
-  const top = el(document, 'div', 'exercise-top');
-  top.append(el(document, 'span', 'exercise-index', String(itemIndex + 1).padStart(2, '0')));
-  // Метка стоит сразу за номером, а не в конце: список мышц справа длинный и
-  // переносится, и метка рядом с ним съезжала бы вместе со строками.
-  if (item.focus) top.append(el(document, 'span', 'focus-tag', 'упор'));
-  top.append(el(document, 'span', 'muscles', item.muscles));
-  article.append(top);
-
-  article.append(el(document, 'h3', null, item.name));
-  article.append(el(document, 'p', 'reps', item.reps));
-
-  const { refs, body, links } = renderHowto(document, {
+  const { toggle, video, body, links } = renderHowto(document, {
     idPrefix: `howto-${block.id}`,
     item,
     expanded: expandDescriptions,
   });
-  article.append(refs, body, ...links);
 
-  // Повторы блока называются кругами или подходами (поле unit). Блок с одним
-  // повтором слова не требует: «Готово».
-  const word = block.unit === 'sets' ? 'Подход' : 'Круг';
-  const checks = el(document, 'div', 'checks');
-  for (let round = 1; round <= block.rounds; round += 1) {
-    const label = el(document, 'label', 'check');
-    const input = document.createElement('input');
-    input.type = 'checkbox';
-    input.dataset.mark = markId(block.id, item.key, round);
-    input.setAttribute('aria-label', `${item.name}: ${block.rounds === 1 ? 'выполнено' : `${word.toLowerCase()} ${round}`}`);
-    label.append(input, el(document, 'span', null, block.rounds === 1 ? 'Готово' : `${word} ${round}`));
-    checks.append(label);
-  }
-  article.append(checks);
+  const head = el(document, 'div', 'exercise-head');
+  head.append(el(document, 'h3', null, item.name));
+  if (video) head.append(video);
+  article.append(head);
+
+  // Метка «упор» — подпись, а не кнопка: нажимаемого не прибавляет.
+  if (item.focus) article.append(el(document, 'span', 'focus-tag', 'упор'));
+  article.append(el(document, 'p', 'reps', item.reps), el(document, 'p', 'muscles', item.muscles));
+
+  const actions = el(document, 'div', 'exercise-actions');
+  actions.append(renderChecks(document, block, item), toggle);
+  article.append(actions, body, ...links);
 
   return article;
 }
 
-// Вставка перед блоком (например «Как выполнять силовые пары») — как
+// Вставка в начало блока (например «Как выполнять силовые пары») — как
 // в src-original/app.js (pairRules), но по данным блока, а не по его индексу:
 // рендерер не знает, какой блок по счёту у какой тренировки первый силовой.
+// Лежит внутри тела блока, поэтому заголовок — третьего уровня.
 function renderPreamble(document, preamble) {
   const section = el(document, 'section', 'pair-rules');
-  section.append(el(document, 'h2', null, preamble.title));
+  section.append(el(document, 'h3', null, preamble.title));
   for (const paragraph of preamble.paragraphs) {
     const p = document.createElement('p');
     for (const part of paragraph) {
@@ -274,56 +314,110 @@ function renderPreamble(document, preamble) {
   return section;
 }
 
+// Тип блока — от него красится кружок, метки и отметки: разминка, круг,
+// силовые, завершение. Слоты разминки, круга и завершения у готовых и своих
+// тренировок называются одинаково (start, circuit, finish), всё остальное
+// (legs1, pair1, loop, ex1…) — силовая часть.
+export function blockKind(block) {
+  if (block.id === 'start') return 'warm';
+  if (block.id === 'circuit') return 'circuit';
+  if (block.id === 'finish') return 'finish';
+  return 'strength';
+}
+
+// Раскрытие блока — состояние в разметке (aria-expanded у кнопки и hidden у
+// тела), как у «Как выполнять»: так его читает и диктор, и тест.
+export function setBlockOpen(section, open) {
+  section.querySelector('.blk-head').setAttribute('aria-expanded', String(open));
+  section.querySelector('.blk-body').hidden = !open;
+}
+
+function renderBlock(document, block, { expandDescriptions, open }) {
+  const section = el(document, 'section', 'workout-block');
+  section.id = block.id;
+  section.dataset.kind = blockKind(block);
+
+  // Шапка блока — кнопка внутри заголовка: заголовок остаётся в оглавлении
+  // страницы, а раскрывает блок кнопка. Номер — украшение, диктору он не нужен.
+  const bodyId = `${block.id}-body`;
+  const head = el(document, 'button', 'blk-head');
+  head.type = 'button';
+  head.setAttribute('aria-expanded', String(open));
+  head.setAttribute('aria-controls', bodyId);
+  const number = el(document, 'span', 'block-number', block.n);
+  number.setAttribute('aria-hidden', 'true');
+  const text = el(document, 'span', 'blk-text');
+  text.append(el(document, 'span', 'blk-title', block.title), el(document, 'span', 'blk-sub', block.sub));
+  const progress = el(document, 'span', 'blk-prog', `0/${block.items.length * block.rounds}`);
+  progress.append(el(document, 'span', 'sr-only', ' отметок'));
+  head.append(number, text, progress, renderCaret(document, 'ic blk-caret'));
+  const heading = el(document, 'h2', 'block-heading');
+  heading.append(head);
+
+  const body = el(document, 'div', 'blk-body');
+  body.id = bodyId;
+  body.hidden = !open;
+  const tags = el(document, 'div', 'blk-tags');
+  tags.append(el(document, 'span', 'round-tag', roundsTag(block)));
+  body.append(tags);
+  if (block.note) body.append(el(document, 'p', 'block-note', block.note));
+  if (block.preamble) body.append(renderPreamble(document, block.preamble));
+  const cards = el(document, 'div', 'cards');
+  for (const item of block.items) cards.append(renderItem(document, block, item, expandDescriptions));
+  body.append(cards);
+
+  section.append(heading, body);
+  return section;
+}
+
 // expandDescriptions — раскрыты ли описания упражнений в момент отрисовки.
 // Решает это связывание (app.js) по ширине окна: атрибут раскрытия
 // медиазапросом не задать, а сам рендерер про окно ничего не знает. По
 // умолчанию свёрнуто — это состояние телефона, под который приложение и сделано.
-export function renderWorkout(workout, document, { expandDescriptions = false } = {}) {
+// open — id блоков, которые рисуются раскрытыми (по умолчанию все свёрнуты).
+export function renderWorkout(workout, document, { expandDescriptions = false, open = [] } = {}) {
   const fragment = document.createDocumentFragment();
-
+  const opened = new Set(open);
   for (const block of workout.blocks) {
-    if (block.preamble) fragment.append(renderPreamble(document, block.preamble));
-
-    const section = el(document, 'section', 'workout-block');
-    section.id = block.id;
-
-    const heading = el(document, 'div', 'block-heading');
-    heading.append(el(document, 'span', 'block-number', block.n));
-    const titleBox = document.createElement('div');
-    titleBox.append(el(document, 'h2', null, block.title));
-    titleBox.append(el(document, 'p', null, block.sub));
-    heading.append(titleBox);
-    heading.append(el(document, 'span', 'round-tag', roundsTag(block)));
-    section.append(heading);
-
-    if (block.note) section.append(el(document, 'p', 'block-note', block.note));
-
-    const cards = el(document, 'div', 'cards');
-    block.items.forEach((item, index) =>
-      cards.append(renderItem(document, block, item, index, expandDescriptions)));
-    section.append(cards);
-
-    fragment.append(section);
+    fragment.append(renderBlock(document, block, { expandDescriptions, open: opened.has(block.id) }));
   }
-
   return fragment;
+}
+
+// Полоса недели в шапке: семь кружков, дни тренировки на белой подложке, сегодня
+// обведён нарисованным кольцом. Подпись для диктора — на самой полосе.
+const RING_PATH = 'M22 4.5C32.5 4 40 12 39.5 22.5C39 33 30.5 40 21 39.5C11 39 4.5 31.5 5 21.5C5.5 12 12.5 5.5 23 5.2C27.5 5 31.5 6.5 34 9';
+
+function renderWeek(document, days, today) {
+  const week = document.getElementById('week');
+  week.setAttribute('aria-label', weekLabel(days, today));
+  week.replaceChildren(...[1, 2, 3, 4, 5, 6, 7].map(day => {
+    const cell = el(document, 'span', days.includes(day) ? 'day train' : 'day');
+    if (day === today) {
+      const ring = renderIcon(document, RING_PATH);
+      ring.setAttribute('viewBox', '0 0 44 44');
+      ring.setAttribute('class', 'ring');
+      cell.append(ring);
+    }
+    cell.append(document.createTextNode(weekday(day).short));
+    return cell;
+  }));
 }
 
 // Тексты верхнего уровня тоже живут в данных: держать их ещё и в index.html
 // значит рано или поздно получить расхождение между сайтом и тренировкой.
-export function renderIntro(workout, document) {
-  // По id, а не по классу: .eyebrow на странице не один — тем же классом набран
-  // заголовок блока «ДАЛЬШЕ — СИЛЬНЕЕ» в .guide, и выборка по классу работала бы
-  // только потому, что интро стоит выше по документу.
+//
+// today — номер сегодняшнего дня по ISO (1–7): обведённый кружок в полосе недели.
+// По умолчанию берётся из часов (Date.now, а не new Date(): так время в тестах
+// подменяется одним местом).
+export function renderIntro(workout, document, { today = isoWeekday(new Date(Date.now())) } = {}) {
+  // По id, а не по классу: подпись из данных тренировки — один узел шапки.
   document.getElementById('kicker').textContent = workout.kicker;
 
   // Разбиение заголовка на строки задаётся данными, а не угадывается по пробелам.
-  const [firstLine, ...restLines] = workout.titleLines;
-  const h1 = document.querySelector('h1');
-  h1.replaceChildren(document.createTextNode(firstLine));
-  for (const line of restLines) {
-    h1.append(document.createElement('br'), el(document, 'span', null, line));
-  }
+  // Каждая строка — своим блоком (display:block в style.css), без <br>.
+  document.querySelector('h1')
+    .replaceChildren(...workout.titleLines.map(line => el(document, 'span', null, line)));
 
   document.querySelector('.intro-copy').textContent = workout.lead;
 
@@ -334,25 +428,19 @@ export function renderIntro(workout, document) {
     return box;
   }));
 
-  const nav = document.querySelector('.block-nav');
-  nav.replaceChildren(...workout.blocks.map(block => {
-    const link = el(document, 'a', null, block.nav);
-    link.href = `#${block.id}`;
-    return link;
-  }));
-
-  // Расписание на странице в двух местах, и оба — из данных. Пока эти строки
-  // были зашиты в index.html, вторая тренировка (например, ВТ/ЧТ) отрендерилась
-  // бы с чужим расписанием сразу в двух местах, и ни один тест бы не заметил.
-  document.querySelector('.masthead .schedule').textContent = scheduleShort(workout.days);
+  // Расписание на странице в двух местах, и оба — из данных: полоса недели в
+  // шапке и строка в подвале. Пока эти строки были зашиты в index.html, вторая
+  // тренировка (например, ВТ/ЧТ) отрендерилась бы с чужим расписанием сразу в
+  // двух местах, и ни один тест бы не заметил.
+  renderWeek(document, workout.days, today);
   // В подвале расписание — ведущий текстовый узел. Примечание рядом с ним
   // («Между тренировками — день восстановления») остаётся в разметке, но
   // показывается не всегда: при двух днях подряд (своя тренировка может стоять
   // хоть на все семь) оно неправда. Выставляется при каждой отрисовке, а не
   // только при скрытии: со сменой тренировки примечание должно вернуться.
-  const footer = document.querySelector('footer');
-  footer.firstChild.textContent = scheduleLong(workout.days);
-  footer.querySelector('span').hidden = hasAdjacentDays(workout.days);
+  const note = document.getElementById('schedule-note');
+  note.firstChild.textContent = scheduleLong(workout.days);
+  note.querySelector('span').hidden = hasAdjacentDays(workout.days);
 
   document.querySelector('.equipment').textContent = workout.equipment;
   document.getElementById('progression-list')

@@ -8,6 +8,11 @@
 const KEY = 'section';
 const DEFAULT_ID = 'today';
 
+// Цвет раздела: ведущее семейство в style.css (body[data-tint]). Внутри
+// «Конструктора» генератор перекрашивает страницу сам; здесь только цвет, с
+// которым раздел открывается.
+const TINT = { today: 'rose', workouts: 'sky', builder: 'butter' };
+
 // «Сегодня» — длинный раздел, и возвращаться в его начало при каждом
 // переключении неудобно. Остальные короткие и открываются сверху.
 const REMEMBERS_SCROLL = new Set(['today']);
@@ -34,6 +39,7 @@ export function createSections({ win, onShow }) {
       else button.removeAttribute('aria-current');
     }
     current = next;
+    document.body.dataset.tint = TINT[next];
 
     // Здесь намеренно 'instant', а не scrollBehavior(win) из app.js: тот
     // отдаёт 'smooth' всем, кто не просил убрать плавность, и это уместно для

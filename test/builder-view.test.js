@@ -2220,6 +2220,6 @@ test('приложение: своя тренировка в «Подходах�
   assert.equal(today.querySelector('#circuit .round-tag').textContent, '3 круга');
   assert.deepEqual([...today.querySelectorAll('#circuit .exercise')[0].querySelectorAll('label.check')].map(label => label.textContent),
     ['Круг 1', 'Круг 2', 'Круг 3']);
-  assert.deepEqual([...today.querySelectorAll('.pair-rules h2')].map(h => h.textContent), ['Как выполнять подходы']);
+  assert.deepEqual([...today.querySelectorAll('.pair-rules h3')].map(h => h.textContent), ['Как выполнять подходы']);
   assert.equal(today.querySelector('.facts').textContent.includes('подхода на упражнение'), true);
 });
