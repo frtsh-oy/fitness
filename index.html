@@ -2,51 +2,78 @@
 <html lang="ru">
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#152d4a"><meta name="description" content="Готовая домашняя тренировка с резинками: разминка, пять силовых пар, техника и видео с таймкодами.">
+<meta name="theme-color" content="#F8D5DD"><meta name="description" content="Готовая домашняя тренировка с резинками: разминка, пять силовых пар, техника и видео с таймкодами.">
 <title>Моя тренировка</title>
-<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23152d4a'/%3E%3Crect x='7' y='10' width='18' height='12' rx='6' fill='none' stroke='%23ceef69' stroke-width='3'/%3E%3C/svg%3E">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='9' fill='%23F8D5DD'/%3E%3Cpath d='M16 16C16 16 12.7 9.5 8 9.5C4 9.5 2.5 12.7 2.5 16C2.5 19.3 4 22.5 8 22.5C12.7 22.5 16 16 16 16C16 16 19.3 9.5 24 9.5C28 9.5 29.5 12.7 29.5 16C29.5 19.3 28 22.5 24 22.5C19.3 22.5 16 16 16 16Z' fill='none' stroke='%232A2C48' stroke-width='2.2' stroke-linecap='round'/%3E%3C/svg%3E">
+<link rel="preload" href="fonts/caveat-cyrillic-600.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="fonts/caveat-latin-600.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="style.css"><link rel="stylesheet" href="player.css">
 <script src="https://telegram.org/js/telegram-web-app.js" defer></script>
 <script type="module">import { startApp } from './app.js'; startApp();</script>
 </head>
-<body>
-<header class="masthead"><div class="wrap mastrow"><a class="brand" href="#top"><span class="brand-icon" aria-hidden="true">∞</span> МОЯ ТРЕНИРОВКА</a><span class="schedule">ПН · СР · ПТ</span></div></header>
-<main id="top" class="wrap">
+<body data-tint="rose">
+<main id="top">
 <div class="screen" id="screen-today">
-<section class="intro"><div><p class="eyebrow" id="kicker"></p><h1></h1><p class="intro-copy"></p></div><div class="facts"></div></section>
-<nav class="block-nav" aria-label="Блоки тренировки"></nav>
+<header class="hero">
+<div class="wrap">
+<div class="hero-top"><a class="brand" href="#top"><svg viewBox="0 0 132 72" aria-hidden="true" focusable="false"><path d="M66 36C66 36 52 9 32 9C15 9 6 22 6 36C6 50 15 63 32 63C52 63 66 36 66 36C66 36 80 9 100 9C117 9 126 22 126 36C126 50 117 63 100 63C80 63 66 36 66 36Z"/></svg>моя тренировка</a><p class="kicker" id="kicker"></p></div>
+<div class="week" id="week" role="img"></div>
+<h1></h1>
+<p class="intro-copy"></p>
+<div class="stats">
+<div class="loopbox">
+<svg viewBox="0 0 132 72" aria-hidden="true" focusable="false"><path class="loop-track" pathLength="100" d="M66 36C66 36 52 9 32 9C15 9 6 22 6 36C6 50 15 63 32 63C52 63 66 36 66 36C66 36 80 9 100 9C117 9 126 22 126 36C126 50 117 63 100 63C80 63 66 36 66 36Z"/><path class="loop-fill" id="loop-fill" pathLength="100" d="M66 36C66 36 52 9 32 9C15 9 6 22 6 36C6 50 15 63 32 63C52 63 66 36 66 36C66 36 80 9 100 9C117 9 126 22 126 36C126 50 117 63 100 63C80 63 66 36 66 36Z"/></svg>
+<span class="knot" id="knot" aria-hidden="true">0</span>
+<p class="loopcap" aria-hidden="true">из <span id="loop-total">0</span> отметок</p>
+</div>
+<div class="facts"></div>
+</div>
+<progress id="progress" class="sr-only" value="0" aria-label="Выполненные подходы"></progress>
+<span id="progress-text" class="sr-only" aria-live="polite">Сегодня: 0 отметок</span>
+<p class="next"><span class="lbl" id="next-label"></span><span class="what" id="next-what"></span></p>
+</div>
+<svg class="wave" viewBox="0 0 375 30" preserveAspectRatio="none" aria-hidden="true" focusable="false"><path d="M0 30V15C48 3 108 0 170 9C232 18 304 28 375 9V30Z"/></svg>
+</header>
+<div class="wrap">
+<p class="note equipment"></p>
+<p class="note removed-note" id="removed-note" hidden></p>
+<div id="workout"></div>
+<section class="analysis" aria-label="Разбор тренировки">
 <section class="bodymap">
-<button class="bodymap-toggle" type="button" aria-expanded="false" aria-controls="bodymap-body">Что работает в этой тренировке</button>
+<button class="bodymap-toggle tile tile-sky" type="button" aria-expanded="false" aria-controls="bodymap-body"><span class="tile-text"><span class="tile-title">Что работает</span><span class="tile-sub">Карта тела по этой тренировке</span></span><span class="tile-go"><span class="go-open">Открыть</span><span class="go-close">Скрыть</span><svg class="ic" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M9 6l6 6-6 6"/></svg></span></button>
 <div class="bodymap-body" id="bodymap-body" hidden>
-<div class="bodymap-modes" role="group" aria-label="Что показывать на карте"><button type="button" data-mode="strength" aria-pressed="true">Силовые</button><button type="button" data-mode="all" aria-pressed="false">Вся нагрузка</button></div>
-<div class="bodymap-views"><div class="bodymap-anterior"></div><div class="bodymap-posterior"></div></div>
+<div class="bodymap-modes seg" role="group" aria-label="Что показывать на карте"><button type="button" data-mode="strength" aria-pressed="true">Силовые</button><button type="button" data-mode="all" aria-pressed="false">Вся нагрузка</button></div>
+<div class="bodymap-views"><figure class="bodymap-fig"><div class="bodymap-anterior"></div><figcaption>спереди</figcaption></figure><figure class="bodymap-fig"><div class="bodymap-posterior"></div><figcaption>сзади</figcaption></figure></div>
 <p class="bodymap-note"></p>
 <p class="bodymap-groups"></p>
+<div class="bodymap-legend" aria-hidden="true"><div class="bodymap-scale"><span>меньше</span><i></i><span>больше</span></div><div class="bodymap-idle"><i></i>не работает</div></div>
 <div class="bodymap-pick" aria-live="polite"></div>
 </div>
 </section>
 <section class="weekly">
-<button class="weekly-toggle" type="button" aria-expanded="false" aria-controls="weekly-body">Сколько получает каждая мышца за неделю</button>
+<button class="weekly-toggle tile tile-lilac" type="button" aria-expanded="false" aria-controls="weekly-body"><span class="tile-text"><span class="tile-title">За неделю</span><span class="tile-sub">Сколько получает каждая мышца</span></span><span class="tile-go"><span class="go-open">Открыть</span><span class="go-close">Скрыть</span><svg class="ic" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M9 6l6 6-6 6"/></svg></span></button>
 <div class="weekly-body" id="weekly-body" hidden></div>
 </section>
-<div class="progress-row"><span id="progress-text" aria-live="polite">Сегодня: 0 отметок</span><button class="text-button" id="reset">Сбросить отметки</button></div><progress id="progress" value="0" aria-label="Выполненные подходы"></progress>
-<p class="storage-note">Отметки сохраняются на этом устройстве и обновляются на следующий день.</p>
-<div class="equipment"></div>
-<p class="removed-note" id="removed-note" hidden></p>
-<div id="workout"></div>
-<section class="guide" id="progression"><p class="eyebrow">ДАЛЬШЕ — СИЛЬНЕЕ</p><h2>Как повышать нагрузку</h2><ol id="progression-list"></ol><a class="sources-link" href="sources.html#progress">Почему так — источники</a></section>
+</section>
+<section class="guide" id="progression"><h2>Как повышать нагрузку</h2><ol id="progression-list"></ol><a class="sources-link" href="sources.html#progress">Почему так — источники</a></section>
 <aside class="care"><h2>Ориентир — контроль и комфорт</h2><div id="care"></div></aside>
-<footer>Понедельник · Среда · Пятница<span>Между тренировками — день восстановления.</span></footer>
+</div>
+<footer class="foot wrap">
+<p class="storage-note">Отметки сохраняются на этом устройстве и обновляются на следующий день.</p>
+<button class="text-button" id="reset" type="button">Сбросить отметки</button>
+<p class="schedule-note" id="schedule-note">Понедельник · Среда · Пятница<span>Между тренировками — день восстановления.</span></p>
+</footer>
 </div>
 <div class="screen" id="screen-workouts" hidden></div>
 <div class="screen" id="screen-builder" hidden></div>
 </main>
 <div class="timer-sheet" id="timer-sheet" hidden>
-<div class="timer-sheet-head"><span>ОТДЫХ</span><button type="button" id="timer-close" aria-label="Закрыть">✕</button></div>
-<output id="timer-value" role="timer" aria-label="Оставшееся время отдыха"></output>
-<div class="presets" aria-label="Длительность отдыха"><button data-time="20">20с</button><button data-time="45">45с</button><button data-time="60" aria-pressed="true">60с</button><button data-time="90">90с</button></div>
-<button class="timer-start" id="timer-toggle">Старт</button>
-<button class="timer-reset" id="timer-reset" aria-label="Сбросить таймер">↺</button>
+<div class="timer-sheet-head"><span class="timer-title">Отдых</span><button type="button" class="icon-btn" id="timer-close" aria-label="Свернуть таймер"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M6 9l6 6 6-6"/></svg></button></div>
+<!-- Петлю-счётчик app.js кладёт в начало .timer-face; время пишет в output по знаку на узел. -->
+<div class="timer-face"><output class="timer-knot" id="timer-value" role="timer" aria-label="Оставшееся время отдыха"></output></div>
+<p class="timer-say" id="timer-say" aria-hidden="true">Выбери время и нажми «Старт»</p>
+<div class="presets seg" role="group" aria-label="Длительность отдыха"><button type="button" data-time="20">20&nbsp;с</button><button type="button" data-time="45">45&nbsp;с</button><button type="button" data-time="60" aria-pressed="true">60&nbsp;с</button><button type="button" data-time="90">90&nbsp;с</button></div>
+<div class="timer-acts"><button type="button" class="timer-start" id="timer-toggle">Старт</button><button type="button" class="timer-reset" id="timer-reset" aria-label="Сбросить таймер"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M20 12a8 8 0 1 1-2.6-5.9M20 4v4h-4"/></svg></button></div>
 </div>
 <!-- Вне шторки и не спрятана атрибутом hidden: шторка в покое стоит закрытой
      (display:none), а сообщение о конце отдыха обязано доходить и тогда —

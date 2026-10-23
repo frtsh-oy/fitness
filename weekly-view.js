@@ -3,6 +3,7 @@
 // общим кодом с отчётом (tools/muscle-report.js). Своего расчёта и сортировки
 // здесь нет.
 import { weeklyRows, formatSets } from './weekly-rows.js';
+import { LOAD_BANDS } from './load-bands.js';
 
 // className приходит непустым при каждом вызове ниже, а text не передан ровно
 // в двух местах — у контейнеров, которым он и не нужен: список ('weekly-list')
@@ -13,6 +14,35 @@ function el(document, tag, className, text) {
   node.className = className;
   node.textContent = text;
   return node;
+}
+
+// Полоска под названием показывает долю от верха «рабочего объёма»: чем больше
+// подходов, тем она длиннее, а за верхней границей заполнена целиком. Верх
+// берётся из самой таблицы полос — последняя конечная граница (сегодня двадцать),
+// своего числа здесь нет. Полоска только повторяет число, поэтому aria-hidden:
+// смысл несут число и слова вердикта, а не длина и цвет.
+const BAR_FULL = Math.max(...LOAD_BANDS.map(band => band.max).filter(Number.isFinite));
+
+function barCell(document, sets) {
+  const bar = el(document, 'span', 'weekly-bar', '');
+  bar.setAttribute('aria-hidden', 'true');
+  const fill = document.createElement('i');
+  fill.style.width = `${Math.min(100, Math.round(sets / BAR_FULL * 100))}%`;
+  bar.append(fill);
+  return bar;
+}
+
+// Подписи колонок над списком. Для чтения с экрана их нет (aria-hidden): какое
+// число какое, говорит абзац .weekly-head над ними, а тут — только глазам.
+function columnHeads(document) {
+  const heads = el(document, 'div', 'weekly-cols');
+  heads.setAttribute('aria-hidden', 'true');
+  for (const text of ['целевая', 'по карте']) {
+    const span = document.createElement('span');
+    span.textContent = text;
+    heads.append(span);
+  }
+  return heads;
 }
 
 // Пометка «наша линия» — только когда ВСЯ граница полосы наша, без источника
@@ -81,10 +111,12 @@ export function renderWeekly({ host, workouts }) {
   const list = el(document, 'div', 'weekly-list');
   for (const row of rows) {
     const line = el(document, 'div', 'weekly-row');
+    line.dataset.tone = row.band.tone;
     line.append(
       el(document, 'span', 'weekly-name', row.label),
       el(document, 'span', 'weekly-main', formatSets(row.comparable)),
       el(document, 'span', 'weekly-ours', formatSets(row.ours)),
+      barCell(document, row.comparable),
       verdictCell(document, row.band),
     );
     list.append(line);
@@ -94,6 +126,7 @@ export function renderWeekly({ host, workouts }) {
     el(document, 'p', 'weekly-head',
       'Подходов в неделю на группу мышц. Первое число — целевая работа, по нему и вердикт. Второе — как считает карта: вспомогательная работа идёт половиной.'),
     el(document, 'p', 'weekly-note', OUR_LINE_NOTE),
+    columnHeads(document),
     list,
     el(document, 'p', 'weekly-note',
       'Калькулятор считает количество, а не качество: доводите вы подход до отказа или нет, из данных не видно.'),

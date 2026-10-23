@@ -28,7 +28,9 @@ export function setupPlayers(root, openLink, { idPrefix = 'exercise-video' } = {
     if (restoreFocus) button.focus();
   }
 
-  root.querySelectorAll('.exercise a.video,.exercise a.extra-link').forEach((link, index) => {
+  // Карточка упражнения «Сегодня» (.exercise) и ряд библиотеки (.library-row):
+  // ролики у них одни и те же, различаются название и место панели.
+  root.querySelectorAll('.exercise a.video,.exercise a.extra-link,.library-row a.video,.library-row a.extra-link').forEach((link, index) => {
     const url = new URL(link.href);
     const id = url.searchParams.get('v');
     if (url.hostname !== 'www.youtube.com' || !id || !/^[A-Za-z0-9_-]{11}$/.test(id)) return;
@@ -40,7 +42,7 @@ export function setupPlayers(root, openLink, { idPrefix = 'exercise-video' } = {
     button.innerHTML = link.innerHTML;
     button.setAttribute('aria-expanded', 'false');
     button.setAttribute('aria-controls', `${idPrefix}-${index}`);
-    const title = link.closest('.exercise').querySelector('h3').textContent;
+    const title = link.closest('.exercise,.library-row').querySelector('h3,.row-title').textContent;
     button.setAttribute('aria-label', link.getAttribute('aria-label') || `${title}: ${link.textContent}`);
     const source = link.href;
     link.replaceWith(button);
@@ -96,7 +98,10 @@ export function setupPlayers(root, openLink, { idPrefix = 'exercise-video' } = {
       }, 3000);
       frame.addEventListener('load', () => clearTimeout(failTimer));
 
-      button.after(panel);
+      // Панель идёт после шапки упражнения, а не после самой кнопки: кнопка
+      // лежит в строке рядом с названием, и панель внутри неё сжалась бы до
+      // ширины остатка строки.
+      (button.closest('.exercise-head') ?? button).after(panel);
       button.setAttribute('aria-expanded', 'true');
       activeVideo = { button, panel, failTimer };
 

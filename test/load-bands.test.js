@@ -3,6 +3,7 @@
 // её на глаз невозможно.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { LOAD_BANDS, verdictFor } from '../load-bands.js';
 
 test('ноль — отдельная полоса, а не «мало»', () => {
@@ -64,4 +65,19 @@ test('таблица заморожена: вердикт не подменит�
 test('таблица заморожена и как массив: полосу не добавить и не заменить', () => {
   assert.throws(() => { LOAD_BANDS.push(LOAD_BANDS[0]); });
   assert.throws(() => { LOAD_BANDS[0] = LOAD_BANDS[1]; });
+});
+
+// Тон красит строку недели (style.css, data-tone), и у каждой полосы он свой:
+// иначе две полосы выглядели бы одинаково. Правила для тонов лежат в CSS, а не
+// здесь, поэтому новая полоса без цвета тихо осталась бы серой — тест этого не
+// даёт. Серый («ноль») — тон по умолчанию, отдельного правила у него нет.
+test('у каждой полосы свой тон, и в style.css для него есть цвет полоски и вердикта', () => {
+  const tones = LOAD_BANDS.map(band => band.tone);
+  assert.equal(new Set(tones).size, tones.length, 'два тона совпали: полосы стали бы одного цвета');
+  assert.equal(LOAD_BANDS.find(band => band.tone === 'none').max, 0, 'серый тон принадлежит «нулю»');
+  const css = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
+  for (const tone of tones.filter(tone => tone !== 'none')) {
+    assert.match(css, new RegExp(`\\.weekly-row\\[data-tone=${tone}\\] \\.weekly-bar i\\{`), `нет цвета полоски для тона «${tone}»`);
+    assert.match(css, new RegExp(`\\.weekly-row\\[data-tone=${tone}\\] \\.weekly-verdict\\{`), `нет цвета вердикта для тона «${tone}»`);
+  }
 });

@@ -145,7 +145,7 @@ test('«Конструктор» открывается на входе: как 
   startApp(window);
   document.querySelector('[data-section="builder"]').click();
   const screen = document.querySelector('#screen-builder');
-  assert.equal(screen.querySelector('h2').textContent, 'Конструктор');
+  assert.equal(screen.querySelector('h1').textContent, 'Конструктор');
   assert.equal(screen.querySelectorAll('.builder-path').length, 2);
   assert.equal(screen.querySelectorAll('.builder-steps li').length, 4);
   assert.doesNotMatch(screen.textContent, /платн/i, 'раздел бесплатный');
@@ -166,4 +166,26 @@ test('у каждой своей тренировки есть «Изменит�
     'рядом с «Удалить», в той же строке');
   buttons[0].click();
   assert.deepEqual(edited, ['my-test0001']);
+});
+
+// Раздел красит страницу: ведущий цвет задаёт data-tint на body (style.css).
+test('каждый раздел открывается в своём цвете', () => {
+  const { window, document } = mount();
+  startApp(window);
+  const tint = () => document.body.dataset.tint;
+
+  assert.equal(tint(), 'rose', '«Сегодня» — пудра');
+  document.querySelector('[data-section="workouts"]').click();
+  assert.equal(tint(), 'sky');
+  document.querySelector('[data-section="builder"]').click();
+  assert.equal(tint(), 'butter');
+  document.querySelector('[data-section="today"]').click();
+  assert.equal(tint(), 'rose');
+});
+
+test('раздел из хранилища открывается сразу в своём цвете', () => {
+  const { window, document } = mount();
+  window.localStorage.setItem('section', 'builder');
+  startApp(window);
+  assert.equal(document.body.dataset.tint, 'butter');
 });

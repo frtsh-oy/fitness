@@ -121,3 +121,39 @@ test('повторный вызов renderWeekly на том же host заме�
   assert.equal(h.querySelectorAll('.weekly-row').length, 20,
     'после второго вызова строк вдвое больше — старая разметка не была стёрта');
 });
+
+// Цвет строки и длина полоски под названием. Тон приходит из полосы вердикта
+// (load-bands.js), а длина — доля от верха «рабочего объёма» (двадцать
+// подходов); обе вещи только глазам, смысл несут число и слова.
+const fillOf = row => row.querySelector('.weekly-bar i').style.width;
+
+test('строка несёт тон своей полосы, а полоска — долю от верха «рабочего объёма»', () => {
+  const h = host();
+  renderWeekly({ host: h, workouts: [fixture({ chest: 1 }, 6)] });
+  const chest = rowFor(h, 'Грудные');
+  assert.equal(chest.dataset.tone, 'mid', 'шесть подходов — «поддержание и слабый рост»');
+  assert.equal(fillOf(chest), '30%', 'шесть подходов из двадцати — тридцать процентов длины');
+  const idle = rowFor(h, 'Бицепс');
+  assert.equal(idle.dataset.tone, 'none', 'без целевой работы — тон «не тренируется»');
+  assert.equal(fillOf(idle), '0%');
+});
+
+test('полоска не длиннее самой себя: за верхом «рабочего объёма» — целиком', () => {
+  const h = host();
+  renderWeekly({ host: h, workouts: [fixture({ chest: 1 }, 22)] });
+  const chest = rowFor(h, 'Грудные');
+  assert.equal(chest.dataset.tone, 'high');
+  assert.equal(fillOf(chest), '100%', '22 подхода — больше верха, но не больше всей полоски');
+});
+
+test('полоска и подписи колонок скрыты от чтения с экрана, список под ними — нет', () => {
+  const h = host();
+  renderWeekly({ host: h, workouts: [fixture({ chest: 1 }, 6)] });
+  assert.equal(h.querySelector('.weekly-row .weekly-bar').getAttribute('aria-hidden'), 'true');
+  const cols = h.querySelector('.weekly-cols');
+  assert.equal(cols.getAttribute('aria-hidden'), 'true');
+  assert.deepEqual([...cols.children].map(c => c.textContent), ['целевая', 'по карте']);
+  assert.ok(cols.compareDocumentPosition(h.querySelector('.weekly-list')) & 4,
+    'подписи колонок должны стоять над списком, а не под ним');
+  assert.equal(h.querySelector('.weekly-list').getAttribute('aria-hidden'), null);
+});

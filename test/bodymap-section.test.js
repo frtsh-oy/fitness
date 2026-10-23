@@ -9,7 +9,7 @@ import { makeDom } from './setup.js';
 import { startApp } from '../app.js';
 import legs from '../workouts/legs-mwf.js';
 import { WORKOUTS } from '../workouts/index.js';
-import { warmupOnlyGroups, idleGroups } from '../bodymap.js';
+import { warmupOnlyGroups, idleGroups, legendColors } from '../bodymap.js';
 import { muscleLabel, regionGroups, MUSCLES } from '../muscles.js';
 import { entry } from '../exercises/index.js';
 
@@ -260,6 +260,39 @@ test('под картой ровно две подписи и меньше дв�
   assert.deepEqual(captions.map(p => p.className), ['bodymap-note', 'bodymap-groups']);
   const total = captions.map(p => p.textContent).join(' ');
   assert.ok(total.length < 200, `под картой ${total.length} знаков:\n${total}`);
+});
+
+// Ключ шкалы — не подпись и не абзац (абзацев под картой по-прежнему ровно
+// два, их держит тест выше), а картинка: полоса оттенков и серый «не работает».
+// Читать с экрана в нём нечего, цвета схемы диктор всё равно не передаст, и
+// тот же смысл несёт число подходов в подборе после клика. Красится он теми же
+// цветами, что и сама схема (bodymap.js → legendColors), а не копией в CSS.
+test('под схемой есть ключ шкалы: скрыт от диктора и покрашен цветами карты', () => {
+  const { window } = mount();
+  const d = window.document;
+  d.querySelector('.bodymap-toggle').click();
+  const body = d.querySelector('.bodymap-body');
+  const legend = body.querySelector(':scope > .bodymap-legend');
+  assert.ok(legend, 'нет ключа шкалы .bodymap-legend прямо в панели карты');
+  assert.equal(legend.getAttribute('aria-hidden'), 'true');
+  assert.match(legend.textContent, /меньше/);
+  assert.match(legend.textContent, /больше/);
+  assert.match(legend.textContent, /не работает/);
+  const colors = legendColors();
+  for (const [name, value] of Object.entries(colors)) {
+    assert.equal(body.style.getPropertyValue(name), value, `переменная ${name} не выставлена на панели`);
+  }
+});
+
+test('у каждой схемы своя подпись «спереди» и «сзади», а режимы — сегмент', () => {
+  const { window } = mount();
+  const d = window.document;
+  const figs = [...d.querySelectorAll('.bodymap-views > .bodymap-fig')];
+  assert.deepEqual(figs.map(fig => fig.querySelector('figcaption').textContent), ['спереди', 'сзади']);
+  assert.ok(figs[0].querySelector('.bodymap-anterior'), 'передний вид не под своей подписью');
+  assert.ok(figs[1].querySelector('.bodymap-posterior'), 'задний вид не под своей подписью');
+  assert.ok(d.querySelector('.bodymap-modes').classList.contains('seg'),
+    'режимы карты должны быть общим сегментом .seg, а не своей копией стилей');
 });
 
 test('объяснения про общие области схемы под картой больше нет', () => {

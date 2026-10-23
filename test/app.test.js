@@ -8,6 +8,7 @@ import { makeDom } from './setup.js';
 import { startApp, PHONE_MAX_WIDTH } from '../app.js';
 import { storageKey, currentDay } from '../storage.js';
 import { markId, scheduleShort, scheduleLong } from '../render.js';
+import { TINT_BASE } from '../tint.js';
 import { getWorkout } from '../workouts/index.js';
 import { countMarks } from '../workouts/schema.js';
 import { recordKey } from '../my-workouts.js';
@@ -181,7 +182,9 @@ test('страница собирается: блоки, упражнения, �
 
   const rules = document.querySelector('#workout .pair-rules');
   assert.ok(rules, 'вставка «Как выполнять силовые пары» отрисована');
-  assert.equal(rules.nextElementSibling.id, 'legs1');
+  // Вставка — часть силового блока: лежит в начале его тела, перед упражнениями.
+  assert.equal(rules.closest('.workout-block').id, 'legs1');
+  assert.ok(rules.nextElementSibling.classList.contains('cards'), 'за вставкой идут упражнения блока');
 
   assert.equal(document.getElementById('progress-text').textContent, `Сегодня: 0 из ${TOTAL} отметок`);
   assert.equal(document.getElementById('progress').max, TOTAL);
@@ -195,9 +198,26 @@ test('страница собирается: блоки, упражнения, �
 // его переставить местами с примечанием, renderIntro затрёт примечание.
 test('расписание в шапке и в подвале совпадает с днями тренировки', t => {
   const { document } = mount(t);
-  assert.equal(document.querySelector('.masthead .schedule').textContent, scheduleShort(WORKOUT.days));
-  assert.equal(document.querySelector('footer').textContent,
+  const days = [...document.querySelectorAll('#week .day')];
+  assert.equal(days.length, 7);
+  assert.deepEqual(days.flatMap((day, index) => (day.classList.contains('train') ? [index + 1] : [])), WORKOUT.days);
+  assert.equal(document.getElementById('schedule-note').textContent,
     `${scheduleLong(WORKOUT.days)}Между тренировками — день восстановления.`);
+});
+
+// Сегодняшний день обведён: тест подменяет часы, а не угадывает день недели.
+test('в полосе недели обведён сегодняшний день', t => {
+  const realNow = Date.now;
+  // Среда, 21 октября 2026, полдень по местному времени: день недели не зависит
+  // от часового пояса запуска.
+  Date.now = () => new Date(2026, 9, 21, 12).getTime();
+  t.after(() => { Date.now = realNow; });
+  const { document } = mount(t);
+
+  const days = [...document.querySelectorAll('#week .day')];
+  assert.equal(document.querySelectorAll('#week .ring').length, 1, 'обведён ровно один день');
+  assert.ok(days[2].querySelector('.ring'), 'обведена среда');
+  assert.match(document.getElementById('week').getAttribute('aria-label'), /Сегодня среда\./);
 });
 
 // Начальная длительность живёт в одном месте — в разметке, на пресете
@@ -1120,20 +1140,191 @@ test('«Открыть в YouTube» уходит через слой Telegram', 
   assert.match(opened[0], /^open:https:\/\/www\.youtube\.com\/watch\?v=/);
 });
 
-test('навигация подсвечивает блок, о котором сообщил наблюдатель', t => {
+// Блоки — раскрывающиеся списки, раскрыт один. Состояние лежит в разметке
+// (aria-expanded у шапки и hidden у тела), как у «Как выполнять»: так его читает
+// и диктор, и тест.
+const openBlocks = document => [...document.querySelectorAll('#workout .workout-block')]
+  .filter(section => section.querySelector('.blk-head').getAttribute('aria-expanded') === 'true')
+  .map(section => section.id);
+
+// Все отметки блока: id берутся из данных, как и в приложении.
+const blockMarks = block => block.items.flatMap(item =>
+  Array.from({ length: block.rounds }, (_, index) => markId(block.id, item.key, index + 1)));
+
+test('при запуске раскрыт один блок — первый; шапка и тело блока согласованы', t => {
+  const { document } = mount(t);
+
+  assert.deepEqual(openBlocks(document), ['start']);
+  for (const section of document.querySelectorAll('#workout .workout-block')) {
+    const head = section.querySelector('.blk-head');
+    const body = section.querySelector('.blk-body');
+    assert.equal(head.getAttribute('aria-controls'), body.id, `шапка «${section.id}» знает своё тело`);
+    assert.equal(body.hidden, head.getAttribute('aria-expanded') !== 'true',
+      `у «${section.id}» hidden тела и aria-expanded шапки расходятся`);
+    assert.equal(head.parentElement.tagName, 'H2', 'шапка лежит в заголовке: он остаётся в оглавлении');
+  }
+});
+
+test('нажатие на шапку раскрывает блок и сворачивает прежний, повторное — сворачивает', t => {
+  const { document } = mount(t);
+
+  document.querySelector('#legs1 .blk-head').click();
+  assert.deepEqual(openBlocks(document), ['legs1']);
+  assert.equal(document.querySelector('#start .blk-body').hidden, true, 'прежний свернулся');
+  assert.equal(document.querySelector('#legs1 .blk-body').hidden, false);
+
+  document.querySelector('#legs1 .blk-head').click();
+  assert.deepEqual(openBlocks(document), [], 'повторное нажатие сворачивает блок');
+});
+
+test('нажатие по значку-уголку в шапке блока раскрывает его так же, как по названию', t => {
   const { window, document } = mount(t);
-  const [observer] = window.intersectionObservers;
+  document.querySelector('#legs2 .blk-caret')
+    .dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+  assert.deepEqual(openBlocks(document), ['legs2']);
+});
 
-  assert.equal(observer.targets.length, WORKOUT.blocks.length, 'наблюдают за всеми блоками');
-  observer.intersect(document.getElementById('legs1'));
+// Сжатие закрытого выше блока уносит раскрытый вниз из-под пальца: шапку
+// возвращаем на верх экрана. Сворачивание никуда не прокручивает.
+test('раскрытый блок прокручивается к своей шапке', t => {
+  const { window, document } = mount(t);
+  const scrolled = [];
+  window.Element.prototype.scrollIntoView = function scrollIntoView(options) {
+    scrolled.push([this.id, options.block]);
+  };
 
-  const active = [...document.querySelectorAll('.block-nav a.active')];
-  assert.deepEqual(active.map(link => link.hash), ['#legs1']);
+  document.querySelector('#legs1 .blk-head').click();
+  assert.deepEqual(scrolled, [['legs1', 'start']]);
+  document.querySelector('#legs1 .blk-head').click();
+  assert.equal(scrolled.length, 1, 'сворачивание никуда не прокручивает');
+});
 
-  // Наблюдатель сообщает и об уходе блока с экрана — такое сообщение подсветку
-  // не переносит, иначе она уезжала бы на блок, которого на экране уже нет.
-  observer.intersect(document.getElementById('finish'), false);
-  assert.deepEqual([...document.querySelectorAll('.block-nav a.active')].map(link => link.hash), ['#legs1']);
+test('после ответа хранилища раскрывается первый блок с невыполненным', async t => {
+  const { document, app } = mount(t, {
+    marks: [...blockMarks(WORKOUT.blocks[0]), ...blockMarks(WORKOUT.blocks[1])],
+  });
+  assert.deepEqual(openBlocks(document), ['start'], 'до ответа раскрыт первый: пустого экрана нет');
+
+  await app.ready;
+  assert.deepEqual(openBlocks(document), ['legs1']);
+});
+
+test('блок, который человек раскрыл сам до ответа хранилища, ответ не меняет', async t => {
+  const { document, app } = mount(t, { marks: blockMarks(WORKOUT.blocks[0]) });
+  document.querySelector('#upper2 .blk-head').click();
+
+  await app.ready;
+  assert.deepEqual(openBlocks(document), ['upper2']);
+});
+
+test('отметка до ответа хранилища тоже считается касанием: раскрытый блок остаётся', async t => {
+  const { document, app } = mount(t, {
+    marks: [...blockMarks(WORKOUT.blocks[0]), ...blockMarks(WORKOUT.blocks[1])],
+  });
+  document.querySelector('#start input[data-mark]').click();
+
+  await app.ready;
+  assert.deepEqual(openBlocks(document), ['start'], 'блок не уезжает из-под пальца');
+});
+
+test('когда выполнено всё, блоки свёрнуты, и каждый помечен выполненным', async t => {
+  const { document, app } = mount(t, { marks: WORKOUT.blocks.flatMap(blockMarks) });
+  await app.ready;
+
+  assert.deepEqual(openBlocks(document), []);
+  assert.equal(document.querySelectorAll('#workout .workout-block.is-done').length, WORKOUT.blocks.length);
+});
+
+test('в шапке блока «сделано/всего», выполненный блок помечен', t => {
+  const { document } = mount(t);
+  const progress = document.querySelector('#legs1 .blk-prog');
+  const marks = [...document.querySelectorAll('#legs1 input[data-mark]')];
+  const section = document.getElementById('legs1');
+
+  assert.equal(progress.textContent, '0/4 отметок');
+  marks[0].click();
+  marks[1].click();
+  assert.equal(progress.textContent, '2/4 отметок');
+  assert.equal(section.classList.contains('is-done'), false);
+
+  marks[2].click();
+  marks[3].click();
+  assert.equal(progress.textContent, '4/4 отметок');
+  assert.equal(section.classList.contains('is-done'), true);
+
+  marks[3].click();
+  assert.equal(section.classList.contains('is-done'), false, 'снятая отметка снимает и признак');
+});
+
+test('петля в шапке: число в узле и заливка идут за отметками', t => {
+  const { document } = mount(t);
+  const fill = document.getElementById('loop-fill');
+  const knot = document.getElementById('knot');
+  const all = boxes(document);
+
+  assert.equal(knot.textContent, '0');
+  assert.equal(document.getElementById('loop-total').textContent, String(TOTAL));
+  assert.equal(fill.style.opacity, '0', 'пока ничего не отмечено, заливки нет');
+
+  all[0].click();
+  assert.equal(knot.textContent, '1');
+  assert.equal(fill.style.opacity, '1');
+  assert.ok(Math.abs(Number.parseFloat(fill.style.strokeDasharray) - 100 / TOTAL) < 0.001,
+    `заливка — доля петли: ${fill.style.strokeDasharray}`);
+
+  for (const box of all.slice(1)) box.click();
+  assert.equal(knot.textContent, String(TOTAL));
+  assert.equal(Number.parseFloat(fill.style.strokeDasharray), 100);
+
+  all[0].click();
+  assert.equal(knot.textContent, String(TOTAL - 1), 'снятая отметка убавляет и число, и заливку');
+});
+
+test('строка «дальше» называет первую неотмеченную отметку', t => {
+  const { document } = mount(t);
+  const label = document.getElementById('next-label');
+  const what = document.getElementById('next-what');
+  const [first, second] = WORKOUT.blocks[0].items;
+  const circuit = WORKOUT.blocks[1].items[0];
+  const start = [...document.querySelectorAll('#start input[data-mark]')];
+
+  // Один повтор у блока — круга в названии нет.
+  assert.equal(label.textContent, 'начни');
+  assert.equal(what.textContent, first.name);
+
+  start[0].click();
+  assert.equal(label.textContent, 'дальше');
+  assert.equal(what.textContent, second.name);
+
+  // Следующий блок считает круги: название идёт с номером круга.
+  start[1].click();
+  assert.equal(what.textContent, `${circuit.name}, круг 1`);
+  document.querySelector('#circuit input[data-mark]').click();
+  assert.equal(what.textContent, `${circuit.name}, круг 2`);
+});
+
+test('когда отмечено всё, строка «дальше» об этом говорит', t => {
+  const { document } = mount(t);
+  for (const box of boxes(document)) box.click();
+
+  assert.equal(document.getElementById('next-label').textContent, 'всё сделано');
+  assert.equal(document.getElementById('next-what').textContent, 'Отличная работа.');
+});
+
+test('сброс возвращает петлю, узел, счётчики блоков и строку «начни»', async t => {
+  const { window, document } = mount(t);
+  window.confirm = () => true;
+  for (const box of boxes(document).slice(0, 5)) box.click();
+  assert.equal(document.getElementById('knot').textContent, '5');
+
+  document.getElementById('reset').click();
+  await settle(0);
+
+  assert.equal(document.getElementById('knot').textContent, '0');
+  assert.equal(document.getElementById('loop-fill').style.opacity, '0');
+  assert.equal(document.getElementById('next-label').textContent, 'начни');
+  assert.equal(document.querySelector('#start .blk-prog').textContent, '0/2 отметок');
+  assert.equal(document.querySelectorAll('#workout .workout-block.is-done').length, 0);
 });
 
 // ЗАДАЧА 9: описания упражнений под нажатием. Что в свёрнутой карточке лежит
@@ -1235,25 +1426,29 @@ const TAP_MAIN = 44;
 // Кого здесь нет и почему:
 // - `.check input` (19×19) — сам чекбокс лежит ВНУТРИ метки `.check`, а палец
 //   попадает по метке целиком: тап по любому её месту переключает отметку;
-// - `a.brand` в шапке и `.player-external` в подвале плеера — им высота в
-//   стилях не задана вовсе, она набирается содержимым. В требовании владельца
-//   их нет, и придумывать им проверку значит придумывать требование;
+// - `.player-external` в подвале плеера — ей высота в стилях не задана вовсе,
+//   она набирается содержимым. В требовании владельца её нет, и придумывать ей
+//   проверку значит придумывать требование;
 // - `.block-number` — не нажимаемое, это номер блока (по медиазапросам он
 //   как раз и уезжает 44 → 38 → 34px).
 //
 // Ступень сверяется со ВСЕМИ объявлениями высоты, которые накрывают узлы
 // селектора, без учёта каскада. Поэтому у группы ступень — по самому низкому
-// её члену: «Старт» таймера стоит в 44px, но правило `.timer-sheet button`
-// накрывает и его, и пресеты, и проверяется на 36.
+// её члену, а общее правило на разные ступени не годится: у «Старт» и сброса
+// таймера (44px) свои правила, пресеты — сегмент `.seg button` (36px), а базовая
+// высота `.btn` стоит на `.btn:not(.main)`, чтобы не накрывать главные кнопки.
 const TAP_TARGETS = new Map([
-  ['.block-nav a', TAP_CHIP],
+  ['.brand', TAP_CHIP],
+  ['.blk-head', TAP_MAIN],
   ['.text-button', TAP_CHIP],
   ['.video', TAP_BUTTON],
   ['.check', TAP_BUTTON],
-  ['.timer-sheet button', TAP_BUTTON],
+  ['.timer-start', TAP_MAIN],
+  ['.timer-reset', TAP_MAIN],
+  ['#timer-close', TAP_BUTTON],
   ['.tabbar button', TAP_MAIN],
   ['.bodymap-toggle', TAP_BUTTON],
-  ['.bodymap-modes button', TAP_CHIP],
+  ['.bodymap-modes button', TAP_BUTTON],
   ['.bodymap-pick button', TAP_CHIP],
   ['.weekly-toggle', TAP_BUTTON],
   ['.howto-toggle', TAP_BUTTON],
@@ -1262,19 +1457,28 @@ const TAP_TARGETS = new Map([
   ['.workout-card', TAP_MAIN],
   ['.workout-delete', TAP_CHIP],
   ['.workout-edit', TAP_CHIP],
+  ['.workouts-build', TAP_MAIN],
   ['.builder-path', TAP_MAIN],
-  ['.builder-back', TAP_CHIP],
+  ['.builder-back', TAP_BUTTON],
   ['.builder-add', TAP_MAIN],
   ['.builder-remove', TAP_CHIP],
-  ['.builder-replace', TAP_CHIP],
+  ['.builder-replace', TAP_BUTTON],
   ['.builder-save', TAP_MAIN],
-  ['.library-chip', TAP_CHIP],
-  ['.library-add', TAP_CHIP],
-  ['.library-more', TAP_CHIP],
-  ['.library-reset', TAP_CHIP],
+  ['.save-name', TAP_MAIN],
+  ['.cover-more', TAP_CHIP],
+  ['.format-chip', TAP_BUTTON],
+  ['.gear-switch', TAP_MAIN],
+  ['.library-filter', TAP_BUTTON],
+  ['.library-main', TAP_MAIN],
+  ['.library-add', TAP_BUTTON],
+  ['.library-sheet-close', TAP_BUTTON],
+  ['.seg button', TAP_BUTTON],
+  ['.btn.main', TAP_MAIN],
+  ['.btn.text', TAP_CHIP],
   ['.day-chip', TAP_BUTTON],
-  ['.replace-pick', TAP_CHIP],
+  ['.replace-pick', TAP_MAIN],
   ['.replace-close', TAP_BUTTON],
+  ['.s-clear', TAP_CHIP],
   ['.level-option', TAP_MAIN],
   ['.zone-chip', TAP_CHIP],
   ['.builder-generate', TAP_MAIN],
@@ -1359,6 +1563,11 @@ test('ни одно правило не опускает нажимаемое н
   builder.querySelector('.builder-add').click();
   collect();
   builder.querySelector('.library-add').click();
+  // Шторка фильтров открывается поверх библиотеки и собирает свои сегменты и
+  // кнопки; закрыв её, возвращаемся к сборке.
+  builder.querySelector('.library-filter').click();
+  collect();
+  builder.querySelector('.library-sheet-close').click();
   builder.querySelector('.builder-back').click();
   collect();
   builder.querySelector('.builder-save').click();
@@ -1369,13 +1578,16 @@ test('ни одно правило не опускает нажимаемое н
   // всё. Кнопка «Другой вариант» живёт только на результате, а чипы зон и
   // уровни — на генераторе.
   const rich = mount(t, { screenWidth: 375, library: TEST_LIBRARY, scrollStub: true });
+  // Своих тренировок здесь нет, и «Тренировки» показывают приглашение с главной
+  // кнопкой «Собрать тренировку»; список своих приходит следом за запуском.
+  await settle(0);
+  rich.document.querySelector('[data-section="workouts"]').click();
+  collect(rich.document.getElementById('screen-workouts'));
   const richBuilder = rich.document.getElementById('screen-builder');
   rich.document.querySelector('[data-section="builder"]').click();
   richBuilder.querySelectorAll('.builder-path')[1].click();
   collect(richBuilder);
-  // Первый .zone-chip на экране — переключатель инвентаря: зону выбираем по
-  // тому, что это не он.
-  richBuilder.querySelector('.zone-chip:not(.gear-chip)').click();
+  richBuilder.querySelector('.zone-chip').click();
   richBuilder.querySelector('.builder-generate').click();
   collect(richBuilder);
 
@@ -1466,17 +1678,25 @@ test('раскрытие одного упражнения не сворачив
 // Ревью прошлой итерации ловило дефект «счётчик считал отметки за пределами
 // экрана»: в наборе оказывались отметки, которых на странице нет. Сворачивание
 // описаний — ровно тот случай, когда отметка могла уехать под hidden: тогда
-// счётчик считал бы её, а палец до неё не дотянулся бы.
-test('в свёрнутом виде ни одна отметка и ни одно видео не спрятаны под hidden', t => {
+// счётчик считал бы её, а палец до неё не дотянулся бы. Прятать отметки и видео
+// вправе только свёрнутый блок: у него есть шапка, которая раскрывает тело.
+test('в свёрнутом виде отметки и видео прячет только свёрнутый блок', t => {
   const { document, app } = mount(t, { screenWidth: 375 });
 
   assert.equal(app.total, TOTAL, 'счётчик знает про все отметки тренировки');
   assert.equal(boxes(document).length, TOTAL);
-  assert.equal(boxes(document).filter(box => box.closest('[hidden]')).length, 0);
-
   const videos = [...document.querySelectorAll('#workout button.video')];
   assert.equal(videos.length, 18, 'плеер подменил все ссылки на видео');
-  assert.equal(videos.filter(button => button.closest('[hidden]')).length, 0);
+
+  for (const node of [...boxes(document), ...videos]) {
+    const hider = node.closest('[hidden]');
+    if (!hider) continue;
+    assert.ok(hider.classList.contains('blk-body'),
+      `«${node.getAttribute('aria-label')}» спрятано не телом блока, а «${hider.className}»`);
+    const head = document.querySelector(`.blk-head[aria-controls="${hider.id}"]`);
+    assert.ok(head, 'у спрятанного тела блока есть шапка, которая его раскрывает');
+    assert.equal(head.getAttribute('aria-expanded'), 'false');
+  }
 });
 
 test('отметка в свёрнутой карточке работает и двигает счётчик', t => {
@@ -1491,18 +1711,6 @@ test('отметка в свёрнутой карточке работает и 
   assert.equal(exercise.classList.contains('completed'), true);
   assert.equal(document.getElementById('progress').value, 2);
   assert.equal(document.getElementById('progress-text').textContent, `Сегодня: 2 из ${TOTAL} отметок`);
-});
-
-// Навигация следит за появлением блоков на экране, а не за упражнениями:
-// сворачивание описаний не должно было ни убрать блок из-под наблюдения, ни
-// сбить подсветку.
-test('навигация по блокам работает и при свёрнутых описаниях', t => {
-  const { window, document } = mount(t, { screenWidth: 375 });
-  const [observer] = window.intersectionObservers;
-
-  assert.equal(observer.targets.length, WORKOUT.blocks.length);
-  observer.intersect(document.getElementById('upper2'));
-  assert.deepEqual([...document.querySelectorAll('.block-nav a.active')].map(link => link.hash), ['#upper2']);
 });
 
 // Обработчик раскрытия висит на всём списке упражнений и видит каждый клик
@@ -1553,7 +1761,8 @@ test('ни одно правило печати не перекрыто боле
     const into = rule.media ? (rule.media.mediaText === 'print' ? printed : rest) : rest;
     const rules = rule.media ? [...rule.cssRules] : [rule];
     for (const r of rules) {
-      if (!r.style) continue;
+      // Правила без селектора (@font-face) ничего не перекрывают.
+      if (!r.style || !r.selectorText) continue;
       into.push({ order, selectors: r.selectorText.split(',').map(s => s.trim()), props: [...r.style] });
     }
   });
@@ -1578,4 +1787,29 @@ test('ни одно правило печати не перекрыто боле
   const declared = printed.flatMap(rule => rule.selectors.map(selector => `${selector}{${rule.props.join(',')}}`));
   assert.ok(declared.includes('.howto-toggle{display}'), `.howto-toggle не скрыт при печати: ${declared.join(' ')}`);
   assert.ok(declared.includes('.howto-body{display}'), `.howto-body не раскрыт при печати: ${declared.join(' ')}`);
+});
+
+// Цвет вкладки — атрибут data-tint на body. Шапка клиента Telegram и theme-color
+// браузера следят за ним, а не за кликами по разделам: тон меняет не только
+// раздел, но и генератор внутри конструктора.
+test('цвет шапки Telegram и theme-color следуют за data-tint на body', async t => {
+  const webApp = fakeWebApp();
+  webApp.setHeaderColor = color => webApp.calls.push(`header:${color}`);
+  const { document } = mount(t, { webApp });
+  const lastHeader = () => webApp.calls.filter(call => call.startsWith('header:')).at(-1);
+  const themeColor = () => document.querySelector('meta[name="theme-color"]').getAttribute('content');
+
+  document.querySelector('[data-section="workouts"]').click();
+  await settle(0);
+  assert.equal(lastHeader(), `header:${TINT_BASE.sky}`);
+  assert.equal(themeColor(), TINT_BASE.sky);
+
+  document.body.dataset.tint = 'lilac';
+  await settle(0);
+  assert.equal(lastHeader(), `header:${TINT_BASE.lilac}`, 'тон сменил не раздел, а чужой код — шапка всё равно следует');
+  assert.equal(themeColor(), TINT_BASE.lilac);
+
+  document.querySelector('[data-section="today"]').click();
+  await settle(0);
+  assert.equal(lastHeader(), `header:${TINT_BASE.rose}`);
 });

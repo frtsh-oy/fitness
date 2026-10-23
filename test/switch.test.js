@@ -20,6 +20,7 @@ import { regionSummary } from '../volume.js';
 import { warmupOnlyGroups, idleGroups } from '../bodymap.js';
 import { groupsPhrase } from '../muscles.js';
 import legs from '../workouts/legs-mwf.js';
+import { WORKOUTS } from '../workouts/index.js';
 
 const PAGE = readFileSync(fileURLToPath(new URL('../index.html', import.meta.url)), 'utf8');
 
@@ -115,7 +116,8 @@ test('карточка своей тренировки делает её тек�
 
   assert.equal(heading(document), OWN.name);
   assert.equal(document.getElementById('kicker').textContent, ownWorkout.kicker);
-  assert.equal(document.querySelector('.masthead .schedule').textContent, scheduleShort(OWN.days));
+  const trained = [...document.querySelectorAll('#week .day.train')].map(day => day.textContent);
+  assert.equal(trained.join(' · '), scheduleShort(OWN.days), 'полоса недели показывает дни своей тренировки');
   assert.equal(document.querySelectorAll('#workout .exercise').length, exerciseCount(OWN));
   assert.deepEqual(shown(document), ['screen-today']);
   assert.equal(window.localStorage.getItem(CURRENT_KEY), OWN_ID);
@@ -430,8 +432,32 @@ test('«Мои» пусто — подсказка про «Конструкто
 
   const screen = document.getElementById('screen-workouts');
   assert.deepEqual([...screen.querySelectorAll('h2')].map(h => h.textContent), ['Мои', 'Готовые']);
-  assert.match(screen.textContent, /Своих тренировок пока нет — собери первую в «Конструкторе»\./);
+  assert.equal(screen.querySelector('.workouts-empty-title').textContent, 'Своих тренировок пока нет');
+  assert.equal(screen.querySelector('.workouts-empty-hint').textContent, 'Собери первую в «Конструкторе».');
   assert.equal(screen.querySelectorAll('.workout-delete').length, 0);
+
+  // Пустота — приглашение: кнопка сразу ведёт в «Конструктор».
+  const build = screen.querySelector('.workouts-build');
+  assert.equal(build.textContent, 'Собрать тренировку');
+  build.click();
+  assert.deepEqual(shown(document), ['screen-builder']);
+});
+
+test('карточка готовой тренировки: название, описание, строка с днями; у текущей пометка с галочкой', async t => {
+  const { document } = mount(t);
+  await settle(0);
+  openWorkouts(document);
+
+  const card = cardOf(document, legs.title);
+  assert.equal(card.querySelector('.workout-card-lead').textContent, legs.lead);
+  assert.equal(kickerOf(document, legs.title), `${legs.kicker} · ПН · СР · ПТ`);
+  const now = card.querySelector('.workout-card-now');
+  assert.equal(now.textContent, 'Сейчас в «Сегодня»');
+  assert.ok(now.querySelector('svg.ic-hand'), 'у пометки галочка: смысл не держится на одном цвете');
+
+  const other = cardOf(document, WORKOUTS['core-arms-legs'].title);
+  assert.equal(other.querySelector('.workout-card-now'), null, 'пометка только у текущей');
+  assert.equal(other.hasAttribute('aria-current'), false);
 });
 
 test('карточка своей тренировки: название, уровень или «Своя сборка», дни и число упражнений', async t => {
@@ -445,19 +471,22 @@ test('карточка своей тренировки: название, уро
   assert.deepEqual(titles, [OTHER.name, OWN.name], 'новая выше старой');
 });
 
-test('наблюдатель за блоками следит за блоками новой тренировки', async t => {
-  const { window, document } = mount(t, { preload: onDevice() });
+test('после смены тренировки раскрыт первый блок новой, а не выбор прежней', async t => {
+  const { document } = mount(t, { preload: onDevice() });
   await settle(0);
-  const [observer] = window.intersectionObservers;
   const ids = workout => workout.blocks.map(block => block.id);
-  assert.deepEqual(observer.targets.map(node => node.id), ids(legs));
+  const openIds = () => [...document.querySelectorAll('#workout .workout-block')]
+    .filter(section => section.querySelector('.blk-head').getAttribute('aria-expanded') === 'true')
+    .map(section => section.id);
+  assert.deepEqual([...document.querySelectorAll('#workout .workout-block')].map(s => s.id), ids(legs));
+
+  // Человек раскрыл другой блок прежней тренировки; новая открывается с первого.
+  document.querySelector('#legs2 .blk-head').click();
+  assert.deepEqual(openIds(), ['legs2']);
 
   pick(document, OWN.name);
-  assert.deepEqual(observer.targets.map(node => node.id), ids(ownWorkout), 'блоков прежней тренировки в наблюдении нет');
-
-  // И подсветка в навигации идёт по блокам новой.
-  observer.intersect(observer.targets[2]);
-  assert.equal(document.querySelector('.block-nav a.active').hash, `#${ids(ownWorkout)[2]}`);
+  assert.deepEqual([...document.querySelectorAll('#workout .workout-block')].map(s => s.id), ids(ownWorkout));
+  assert.deepEqual(openIds(), [ids(ownWorkout)[0]], 'блоков прежней тренировки на экране нет, раскрыт первый новой');
 });
 
 // Облако, у которого чтение отметок отвечает не сразу: за это время человек

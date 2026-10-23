@@ -1,6 +1,7 @@
 // Слой поверх Telegram WebApp. Всё опционально: приложение обязано
 // работать в обычном браузере, где window.Telegram отсутствует.
-const BRAND_BG = '#152d4a';
+import { TINT_BASE, PAPER, DEFAULT_TINT } from './tint.js';
+import { hasOwn } from './own.js';
 
 // Отвечает, удалось ли позвать клиента: большинству вызовов ответ не нужен,
 // но haptic по нему решает, был ли отклик вообще.
@@ -14,8 +15,10 @@ export function initTelegram(win = globalThis) {
     safely(() => webApp.ready());
     safely(() => webApp.expand());
     safely(() => webApp.disableVerticalSwipes());
-    safely(() => webApp.setHeaderColor(BRAND_BG));
-    safely(() => webApp.setBackgroundColor(BRAND_BG));
+    // Шапка клиента — в цвет шапки вкладки, чтобы они слились в одну; фон за
+    // страницей — бумажный, его видно только за краем прокрутки.
+    safely(() => webApp.setHeaderColor(TINT_BASE[DEFAULT_TINT]));
+    safely(() => webApp.setBackgroundColor(PAPER));
   }
 
   const fromStart = webApp?.initDataUnsafe?.start_param ?? null;
@@ -94,6 +97,12 @@ export function initTelegram(win = globalThis) {
           resolve(true);
         }
       });
+    },
+
+    // Шапка клиента следует за вкладкой. Неизвестное имя тона не трогаем: цвет
+    // из таблицы либо есть, либо шапка остаётся прежней.
+    setTint(name) {
+      if (hasOwn(TINT_BASE, name)) safely(() => webApp.setHeaderColor(TINT_BASE[name]));
     },
 
     onBack(handler) {

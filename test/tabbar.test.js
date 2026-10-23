@@ -98,14 +98,14 @@ test('у «Конструктора» нет замка и подписи про
     'пункт открывает раздел по тому же клику');
 });
 
-// Шторка обязана упираться нижним краем ровно в верх .tabbar при любой
-// безопасной зоне устройства (иначе она либо накрывает подписи навигации на
-// iPhone с домашней чертой, либо оставляет над ней щель) — а достигается это
-// тем, что обе стороны читают одну и ту же переменную, а не два экземпляра
-// одной длинной формулы, которые кто-нибудь однажды поправит только в одном
-// месте. Разбор идёт по CSSOM (как в тесте про порог телефона выше), а не по
-// тексту файла: важно именно значение объявленного свойства.
-test('.timer-sheet и .tabbar сверяют безопасную зону по общей CSS-переменной', () => {
+// Панель плавает над нижним краем, а шторка таймера стоит над панелью. Обе
+// отсчитывают нижний край от одной и той же переменной безопасной зоны
+// устройства, а не от двух экземпляров одной длинной формулы, которые кто-нибудь
+// однажды поправит только в одном месте: иначе шторка либо наедет на подписи
+// навигации на iPhone с домашней чертой, либо оставит над ней щель. Разбор идёт
+// по CSSOM (как в тесте про порог телефона), а не по тексту файла: важно
+// именно значение объявленного свойства.
+test('.timer-sheet и .tabbar отсчитывают нижний край от общей CSS-переменной', () => {
   const { document } = makeDom();
   const style = document.createElement('style');
   style.textContent = readFileSync(fileURLToPath(new URL('../style.css', import.meta.url)), 'utf8');
@@ -121,10 +121,18 @@ test('.timer-sheet и .tabbar сверяют безопасную зону по 
   const sheet = rules.find(rule => rule.selectorText === '.timer-sheet');
   assert.ok(tabbar && sheet, 'правила .tabbar и .timer-sheet должны быть найдены');
 
-  assert.equal(tabbar.style.getPropertyValue('padding-bottom'), 'var(--tabbar-safe-bottom)',
-    '.tabbar обязана читать переменную, а не держать формулу текстом внутри себя');
-  assert.match(sheet.style.getPropertyValue('bottom'), /var\(--tabbar-safe-bottom\)/,
-    '.timer-sheet обязана отсчитывать нижний край через ту же переменную — иначе край шторки и верх навигации разъедутся при ненулевой безопасной зоне');
+  const bottomOf = rule => {
+    const value = rule.style.getPropertyValue('bottom');
+    const match = /^calc\((\d+)px \+ var\(--tabbar-safe-bottom\)\)$/.exec(value);
+    assert.ok(match, `bottom обязан быть «calc(Npx + var(--tabbar-safe-bottom))», а он «${value}»`);
+    return Number(match[1]);
+  };
+  const height = Number.parseInt(tabbar.style.getPropertyValue('height'), 10);
+  assert.ok(height > 0, 'высота панели задана в пикселях');
+
+  // Шторка над панелью с зазором 12px — тем же, что поле панели от края экрана.
+  assert.equal(bottomOf(sheet), bottomOf(tabbar) + height + 12,
+    'нижний край шторки: от панели вверх на её высоту и зазор 12px');
 });
 
 test('пункт «Отдых» не переключает раздел', () => {

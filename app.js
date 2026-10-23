@@ -3,7 +3,7 @@
 // startApp и зовёт её; сам модуль ничего не делает при импорте, поэтому связывание
 // проверяется тестами на jsdom.
 import { WORKOUTS, DEFAULT_WORKOUT_ID } from './workouts/index.js';
-import { renderWorkout, renderIntro, bindHowto } from './render.js';
+import { renderWorkout, renderIntro, bindHowto, setBlockOpen } from './render.js';
 import { createStorage } from './storage.js';
 import { createMyWorkouts } from './my-workouts.js';
 import { expandWorkout } from './builder/compact.js';
@@ -11,7 +11,7 @@ import { LIBRARY } from './exercises/index.js';
 import { initTelegram } from './telegram.js';
 import { createTimer, formatTime } from './timer.js';
 import { setupPlayers } from './player.js';
-import { createBodyMap, warmupOnlyGroups, idleGroups, isMode, DEFAULT_MODE } from './bodymap.js';
+import { createBodyMap, legendColors, warmupOnlyGroups, idleGroups, isMode, DEFAULT_MODE } from './bodymap.js';
 import { groupsPhrase, regionGroups } from './muscles.js';
 import { renderWeekly } from './weekly-view.js';
 import { createSections, savedSection } from './sections.js';
@@ -19,6 +19,8 @@ import { renderWorkouts } from './workouts-view.js';
 import { renderBuilder } from './builder-view.js';
 import { createGearProfile } from './gear-profile.js';
 import { hasOwn } from './own.js';
+import { TINT_BASE } from './tint.js';
+import { loopMeter } from './icons.js';
 
 // Отсчёт сверяется с часами часто, чтобы экран не отставал от них больше чем
 // на глаз: на границе секунды подпись меняется в пределах пятой доли.
@@ -176,11 +178,21 @@ export function startApp(win = globalThis.window, { library = LIBRARY } = {}) {
     return builder;
   }
 
+  // Цвет вкладки — атрибут data-tint на body: ставит его раздел (sections.js), а
+  // внутри конструктора и генератор. Шапка Telegram и theme-color браузера
+  // следят за атрибутом здесь, чтобы кто бы его ни поменял, они не отставали.
+  const themeColor = document.querySelector('meta[name="theme-color"]');
+  new win.MutationObserver(() => {
+    const tint = document.body.dataset.tint;
+    tg.setTint(tint);
+    if (hasOwn(TINT_BASE, tint)) themeColor?.setAttribute('content', TINT_BASE[tint]);
+  }).observe(document.body, { attributes: true, attributeFilter: ['data-tint'] });
+
   const sections = createSections({
     win,
     onShow(id) {
       if (id === 'workouts') drawWorkouts();
-      if (id === 'builder') ensureBuilder();
+      if (id === 'builder') ensureBuilder().syncTint();
     },
   });
   sections.show(savedSection(win) ?? 'today');
@@ -196,6 +208,7 @@ export function startApp(win = globalThis.window, { library = LIBRARY } = {}) {
       onPick: selectWorkout,
       onDelete: deleteOwn,
       onEdit: editOwn,
+      onBuild: () => sections.show('builder'),
     });
   }
 
@@ -375,6 +388,13 @@ export function startApp(win = globalThis.window, { library = LIBRARY } = {}) {
         // всегда. Тот же стандарт, что у localStorage ниже: защиту ставим там,
         // где ветка достижима.
         const target = [...host.querySelectorAll('.exercise h3')].find(h => h.textContent === name);
+        // Упражнение может лежать в свёрнутом блоке, а скрытое не прокрутить:
+        // блок раскрывается, как если бы человек нажал на его шапку.
+        const section = target.closest('.workout-block');
+        if (section.querySelector('.blk-body').hidden) {
+          userToggled = true;
+          openOnly(section);
+        }
         target.scrollIntoView({ block: 'center', behavior: scrollBehavior(win) });
       });
       mapPick.append(link);
@@ -383,6 +403,8 @@ export function startApp(win = globalThis.window, { library = LIBRARY } = {}) {
 
   function openMap() {
     if (!bodyMap) {
+      // Ключ шкалы под схемой красится теми же цветами, что и сама схема.
+      for (const [name, value] of Object.entries(legendColors())) mapBody.style.setProperty(name, value);
       bodyMap = createBodyMap({
         workout,
         anteriorHost: document.querySelector('.bodymap-anterior'),
@@ -480,25 +502,101 @@ export function startApp(win = globalThis.window, { library = LIBRARY } = {}) {
   const marks = new Set();
   const progress = document.getElementById('progress');
   const progressText = document.getElementById('progress-text');
+  // Петля-прогресс в шапке: заливка по доле отмеченного, число в узле, подпись.
+  // Заливка — штрих петли длиной в долю от 100 (pathLength=100 в разметке).
+  const loopFill = document.getElementById('loop-fill');
+  const knot = document.getElementById('knot');
+  const loopTotal = document.getElementById('loop-total');
+  const nextLabel = document.getElementById('next-label');
+  const nextWhat = document.getElementById('next-what');
   // Отметки, которые есть на экране: сколько их всего и какие именно. Второе
   // нужно на слияние с хранилищем — см. loadMarks ниже. Пересчитываются при
   // каждой смене тренировки (showWorkout).
   let known = new Set();
   let total = 0;
 
+  // Строка «дальше» под цифрами шапки: что делать следующим. Следующее — первая
+  // неотмеченная отметка в порядке страницы. Без единой отметки: «начни», с
+  // названием первого упражнения; когда всё отмечено — «всё сделано».
+  function paintNext(boxes, nextBox) {
+    if (boxes.length === 0) {
+      nextLabel.textContent = '';
+      nextWhat.textContent = '';
+      return;
+    }
+    if (!nextBox) {
+      nextLabel.textContent = 'всё сделано';
+      nextWhat.textContent = 'Отличная работа.';
+      return;
+    }
+    const name = nextBox.closest('.exercise').querySelector('h3').textContent;
+    // Имя чекбокса — «Упражнение: круг 2» или «Упражнение: выполнено»; круг
+    // добавляем к названию только когда он есть.
+    const part = nextBox.getAttribute('aria-label').slice(name.length + 2);
+    nextLabel.textContent = marks.size === 0 ? 'начни' : 'дальше';
+    nextWhat.textContent = part === 'выполнено' ? name : `${name}, ${part}`;
+  }
+
   function paint() {
-    for (const box of host.querySelectorAll('input[data-mark]')) {
+    const boxes = [...host.querySelectorAll('input[data-mark]')];
+    let nextBox = null;
+    for (const box of boxes) {
       box.checked = marks.has(box.dataset.mark);
+      if (!box.checked && !nextBox) nextBox = box;
     }
     // Класс completed висит на самом упражнении и загорается, когда закрыты
     // все его круги — так это устроено в style.css.
     for (const exercise of host.querySelectorAll('.exercise')) {
-      const boxes = [...exercise.querySelectorAll('input[data-mark]')];
-      exercise.classList.toggle('completed', boxes.every(box => box.checked));
+      const own = [...exercise.querySelectorAll('input[data-mark]')];
+      exercise.classList.toggle('completed', own.every(box => box.checked));
+    }
+    // Блок: «сделано/всего» в шапке и мятный кружок с галочкой, когда закрыт весь.
+    for (const section of host.querySelectorAll('.workout-block')) {
+      const own = [...section.querySelectorAll('input[data-mark]')];
+      const done = own.filter(box => box.checked).length;
+      section.querySelector('.blk-prog').firstChild.textContent = `${done}/${own.length}`;
+      section.classList.toggle('is-done', own.length > 0 && done === own.length);
     }
     progress.value = marks.size;
     progressText.textContent = `Сегодня: ${marks.size} из ${total} отметок`;
+    knot.textContent = String(marks.size);
+    loopTotal.textContent = String(total);
+    // 0.01, а не 0: нулевой штрих с круглым концом рисуется точкой, поэтому при
+    // нуле заливку прячем прозрачностью, а не длиной.
+    const share = total === 0 ? 0 : marks.size / total * 100;
+    loopFill.style.strokeDasharray = `${Math.max(0.01, share)} 100`;
+    loopFill.style.opacity = marks.size > 0 ? '1' : '0';
+    paintNext(boxes, nextBox);
   }
+
+  // Блоки — раскрывающиеся списки, раскрыт один. После запуска это первый
+  // незавершённый (когда приедут сохранённые отметки), пока человек сам ничего не
+  // трогал: раскрытый им блок не должен сменяться под пальцем из-за позднего
+  // ответа хранилища. Сами блоки при выполнении не схлопываются: страница не
+  // прыгает под пальцем.
+  const blocksOf = () => [...host.querySelectorAll('.workout-block')];
+  let userToggled = false;
+
+  function openOnly(section) {
+    for (const other of blocksOf()) setBlockOpen(other, other === section);
+  }
+
+  function firstIncompleteBlock() {
+    return blocksOf().find(section =>
+      [...section.querySelectorAll('input[data-mark]')].some(box => !box.checked)) ?? null;
+  }
+
+  host.addEventListener('click', event => {
+    const head = event.target.closest('.blk-head');
+    if (!head) return;
+    userToggled = true;
+    const section = head.closest('.workout-block');
+    const opening = head.getAttribute('aria-expanded') !== 'true';
+    openOnly(opening ? section : null);
+    // Закрытый выше блок сжимается, и раскрытый уезжает из-под пальца: шапку
+    // возвращаем на верх экрана. scrollIntoView есть не везде (jsdom).
+    if (opening) section.scrollIntoView?.({ block: 'start', behavior: scrollBehavior(win) });
+  });
 
   // Каждый тап — не отдельная запись. За CloudStorage стоит запрос к клиенту
   // Telegram, и при мёртвой сети каждая запись ждёт свой таймаут в очереди:
@@ -583,6 +681,10 @@ export function startApp(win = globalThis.window, { library = LIBRARY } = {}) {
       // отметки пропадут из хранилища, даже оставшись на экране.
       if (load.touched) queueSave();
       paint();
+      // Теперь известно, что сделано: раскрывается первый блок с невыполненным.
+      // Если человек за это время сам раскрывал блоки или ставил отметки, его
+      // выбор остаётся.
+      if (!userToggled) openOnly(firstIncompleteBlock());
     });
   }
 
@@ -595,6 +697,7 @@ export function startApp(win = globalThis.window, { library = LIBRARY } = {}) {
     const box = event.target;
     if (!box.matches('input[data-mark]')) return;
     marksLoad.touched = true;
+    userToggled = true;
     const id = box.dataset.mark;
     if (box.checked) marks.add(id); else marks.delete(id);
     paint();
@@ -631,6 +734,23 @@ export function startApp(win = globalThis.window, { library = LIBRARY } = {}) {
   const value = document.getElementById('timer-value');
   const status = document.getElementById('timer-status');
   const toggle = document.getElementById('timer-toggle');
+  const say = document.getElementById('timer-say');
+  // Петля вокруг табло заполняется по мере отдыха: доля прошедшего от выбранной
+  // длительности. Длительность знает только связывание (timer.js её не отдаёт),
+  // поэтому restTotal хранится здесь и ставится до setDuration.
+  const meter = loopMeter(document, 'timer-loop');
+  sheet.querySelector('.timer-face').prepend(meter.svg);
+  let restTotal = 0;
+
+  // Время — по знаку на узел: рукописные цифры разной ширины, и одной строкой
+  // табло дрожало бы каждую секунду. Текст табло при этом тот же «01:00».
+  function paintTime(text) {
+    value.replaceChildren(...[...text].map(char => {
+      const node = document.createElement(char === ':' ? 'em' : 'i');
+      node.textContent = char;
+      return node;
+    }));
+  }
 
   const openButton = document.getElementById('timer-open');
   // Подпись пункта — отдельный узел рядом со значком: textContent самой кнопки
@@ -647,7 +767,13 @@ export function startApp(win = globalThis.window, { library = LIBRARY } = {}) {
 
   const timer = createTimer({
     onTick: remaining => {
-      value.textContent = formatTime(remaining);
+      paintTime(formatTime(remaining));
+      meter.set(restTotal > 0 ? (restTotal - remaining) / restTotal : 0);
+      // Подпись под табло — для глаза; диктору события говорит #timer-status.
+      say.textContent = remaining === 0 ? 'Отдых закончился'
+        : timer.running ? 'Идёт отдых'
+        : remaining < restTotal ? 'На паузе'
+        : 'Выбери время и нажми «Старт»';
       // «Ещё раз» в нуле — как в оригинале: старт на отработавшем таймере
       // начинает отсчёт заново, и кнопка обязана обещать именно это.
       toggle.textContent = timer.running ? 'Пауза' : remaining === 0 ? 'Ещё раз' : 'Старт';
@@ -734,7 +860,8 @@ export function startApp(win = globalThis.window, { library = LIBRARY } = {}) {
 
   function selectDuration(preset) {
     for (const other of presets) other.setAttribute('aria-pressed', String(other === preset));
-    timer.setDuration(Number(preset.dataset.time));
+    restTotal = Number(preset.dataset.time);
+    timer.setDuration(restTotal);
     stopTicking();
     pausedMs = 0;
   }
@@ -797,16 +924,6 @@ export function startApp(win = globalThis.window, { library = LIBRARY } = {}) {
     tg.setBackVisible(shouldShow);
   }, { passive: true });
 
-  // Подсветка текущего блока в навигации — как в src-original/app.js.
-  const observer = new win.IntersectionObserver(entries => {
-    for (const entry of entries) {
-      if (!entry.isIntersecting) continue;
-      for (const link of document.querySelectorAll('.block-nav a')) {
-        link.classList.toggle('active', link.hash === `#${entry.target.id}`);
-      }
-    }
-  }, { rootMargin: '-70px 0px -65% 0px', threshold: 0 });
-
   // Всё, что зависит от тренировки, собрано здесь, и первая отрисовка при
   // запуске идёт тем же путём, что и смена на другую: расходиться им не с чего.
   // Обработчики, которые вешаются один раз (отметки, раскрытие, сброс, таймер,
@@ -831,12 +948,14 @@ export function startApp(win = globalThis.window, { library = LIBRARY } = {}) {
     // стёрла бы то, что человек успел раскрыть руками, а поворот телефона сам по
     // себе просьбы «покажи мне технику» не означает.
     const expandDescriptions = !win.matchMedia(`(max-width: ${PHONE_MAX_WIDTH}px)`).matches;
-    host.replaceChildren(renderWorkout(workout, document, { expandDescriptions }));
+    // Раскрыт первый блок: до ответа хранилища неизвестно, что уже сделано, а
+    // пустого экрана без единого упражнения быть не должно.
+    userToggled = false;
+    host.replaceChildren(renderWorkout(workout, document, {
+      expandDescriptions,
+      open: workout.blocks.slice(0, 1).map(block => block.id),
+    }));
     closePlayer = setupPlayers(host, url => tg.openLink(url));
-
-    // Блоки прежней тренировки из документа ушли, наблюдать за ними нечего.
-    observer.disconnect();
-    for (const section of host.querySelectorAll('.workout-block')) observer.observe(section);
 
     // Карта: подбор относился к прежней тренировке, и число подходов в нём
     // чужое; построенная карта — тоже её. Раскрытая строится заново сразу,
