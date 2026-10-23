@@ -16,6 +16,9 @@ const { document } = makeDom();
 const style = document.createElement('style');
 style.textContent = read('style.css');
 document.head.append(style);
+const player = document.createElement('style');
+player.textContent = read('player.css');
+document.head.append(player);
 const rules = [...document.styleSheets[0].cssRules];
 const rootRule = rules.find(rule => rule.selectorText === ':root');
 const token = name => rootRule.style.getPropertyValue(name).trim();
@@ -166,4 +169,88 @@ test('страница открывается в цвете «Сегодня»: 
   const { document: page } = makeDom(html);
   assert.equal(page.body.dataset.tint, 'rose');
   assert.equal(page.querySelector('meta[name="theme-color"]').getAttribute('content'), TINT_BASE.rose);
+});
+
+test('статья открывается в цвете «Источников»: data-tint, theme-color и шрифты, как у приложения', () => {
+  const { document: page } = makeDom(read('sources.html'));
+  assert.equal(page.body.dataset.tint, 'peach');
+  assert.equal(page.querySelector('meta[name="theme-color"]').getAttribute('content'), TINT_BASE.peach);
+  const hrefs = doc => [...doc.querySelectorAll('link[rel=preload][as=font]')].map(link => link.getAttribute('href'));
+  assert.equal(hrefs(page).length, 2);
+  assert.deepEqual(hrefs(page), hrefs(makeDom(html).document), 'статья просит те же файлы шрифта, что и приложение');
+});
+
+// ---------- цвета только токенами ----------
+
+const SHEETS = ['style.css', 'player.css'];
+
+// Все шестизначные цвета прежнего оформления (тёмно-синий бренд, лаймовый акцент
+// и их производные) из style.css, player.css, index.html и sources.html до
+// 2026-10-23. Ни в стилях, ни в разметке, ни в значках вернуться не должны.
+const OLD_BRAND_COLORS = [
+  '101010', '152d4a', '162c19', '193d6a', '294525', '33475f', '344e70', '345316', '39571b', '4267cb',
+  '46566b', '486386', '4b6a22', '526278', '526982', '53637a', '557126', '61748b', '657289', '665846',
+  '7089a8', '7590b2', '7a4a06', 'a3bc65', 'aac94d', 'c49346', 'cad6e4', 'ceef69', 'd2dce8', 'd4dde8',
+  'd7e0ed', 'd8e1eb', 'd9e0e9', 'dbe3ed', 'e0e8f3', 'e0edc2', 'e2e9f2', 'e4edf8', 'e6f0d1', 'e8edf4',
+  'edf3fb', 'eef3fa', 'f2f5f8', 'f3f7fc', 'f4f6f9', 'fbe4bd', 'fff8d6', 'fff8ed',
+];
+
+test('цвета прежнего оформления нигде не остались: ни в стилях, ни в разметке, ни в значках', () => {
+  for (const name of [...SHEETS, 'index.html', 'sources.html']) {
+    const text = read(name);
+    for (const color of OLD_BRAND_COLORS) {
+      assert.doesNotMatch(text, new RegExp(`(?:#|%23)${color}`, 'i'), `${name}: старый цвет #${color}`);
+    }
+  }
+});
+
+test('вне :root цвета записаны токенами, а не числами (допустимы только #fff и #000 в масках)', () => {
+  for (const name of SHEETS) {
+    const outside = read(name).replace(/:root\{[\s\S]*?\n\}/, '');
+    assert.deepEqual(outside.match(/#[0-9a-fA-F]{6}\b/g) ?? [], [], `${name}: цвет записан шестизначным числом, а не токеном`);
+  }
+});
+
+// Тёмные кнопки владелец просил убрать («из стиля выбивается»): у кнопок, чипов
+// и переключателей заливки светлые, тёмные токены (чернила, -d, -i) и цвета
+// числом им не годятся. Тёмная заливка фона встречается только там, где это не
+// нажимаемое: значок-маска, маркер списка, точка, затемнение за шторкой, фон под
+// видео. Каждое такое правило названо здесь с причиной; новое правило с тёмным
+// фоном роняет тест и требует либо светлого тона, либо записи в этом списке.
+const DARK_FILL = /var\(--(?:ink[23]?|[a-z]+-[di]|lead-[di])\)|#(?!fff\b)[0-9a-f]{3,6}\b|rgba?\((?!\s*255)/i;
+const DARK_FILL_ALLOWED = new Map([
+  ['.workout-block.is-done .block-number::after', 'галочка «сделано»: чернильный значок-маска'],
+  ['.check input:checked+span::after', 'галочка отметки: чернильный значок-маска'],
+  ['.guide li::before', 'чёрточка маркера списка'],
+  ['.article-app li::before,.article-list li::before', 'точки маркеров статьи'],
+  ['.article-app li::before', 'точки маркеров плашки «В приложении»'],
+  ['.library-filter .dot', 'точка «фильтры выбраны» на кнопке'],
+  ['.scrim', 'затемнение за шторкой: прозрачные чернила'],
+  ['.player-shell iframe', 'фон под видео, пока оно не загрузилось'],
+]);
+
+function darkFills() {
+  const found = [];
+  const walk = list => {
+    for (const rule of list) {
+      if (rule.selectorText && rule.style) {
+        for (const prop of ['background', 'background-color']) {
+          const value = rule.style.getPropertyValue(prop);
+          if (value && DARK_FILL.test(value)) found.push(rule.selectorText.replace(/\s*,\s*/g, ','));
+        }
+      } else if (rule.cssRules) walk(rule.cssRules);
+    }
+  };
+  for (const sheet of document.styleSheets) walk(sheet.cssRules);
+  return [...new Set(found)];
+}
+
+test('тёмная заливка фона — только у значков, маркеров и подложек из списка, не у кнопок', () => {
+  const found = darkFills();
+  for (const selector of found) {
+    assert.ok(DARK_FILL_ALLOWED.has(selector), `правило «${selector}» заливает фон тёмным: у нажимаемого заливка светлая`);
+  }
+  for (const selector of DARK_FILL_ALLOWED.keys()) {
+    assert.ok(found.includes(selector), `правила «${selector}» с тёмным фоном больше нет — убери его из списка`);
+  }
 });

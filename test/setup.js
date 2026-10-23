@@ -13,25 +13,6 @@ function fillBrowserGaps(window) {
   });
 
   window.Element.prototype.scrollIntoView = function scrollIntoView() {};
-
-  // Наблюдатель за пересечениями: настоящий сам сообщает о прокрутке, которой
-  // в jsdom нет, поэтому у поддельного есть intersect() для тестов. Созданные
-  // экземпляры видны как window.intersectionObservers.
-  window.intersectionObservers = [];
-  window.IntersectionObserver = class IntersectionObserver {
-    constructor(callback, options = {}) {
-      this.callback = callback;
-      this.options = options;
-      this.targets = [];
-      window.intersectionObservers.push(this);
-    }
-
-    observe(target) { this.targets.push(target); }
-    unobserve(target) { this.targets = this.targets.filter(item => item !== target); }
-    disconnect() { this.targets = []; }
-
-    intersect(target, isIntersecting = true) { this.callback([{ target, isIntersecting }], this); }
-  };
 }
 
 // url задаётся параметром, потому что приложение читает из адреса выбор
