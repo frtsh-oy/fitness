@@ -1,15 +1,16 @@
 // Раздел «Тренировки»: свои тренировки человека («Мои») и готовые из реестра
 // («Готовые»). Карточка делает тренировку текущей, «Изменить» открывает свою в
 // конструкторе, «Удалить» убирает; что именно при этом происходит, решает
-// app.js, здесь только разметка. Шапка раздела («Тренировки», пояснение) стоит
-// в index.html: сюда приходит только список.
+// app.js, здесь только разметка.
 import { scheduleShort } from './render.js';
 import { icon } from './icons.js';
+import { renderHero } from './hero.js';
 import { LEVELS } from './builder/rules.js';
 import { expandWorkout, exerciseCount } from './builder/compact.js';
 import { plural } from './builder/texts.js';
 import { LIBRARY } from './exercises/index.js';
 
+const LEAD = 'Выбери, какая будет в «Сегодня». Свою можно собрать в конструкторе.';
 const SAVED = 'Тренировка сохранена';
 const SAVED_LOCAL_ONLY = 'Тренировка сохранена на этом устройстве: облако Telegram не ответило. Отправим её туда при следующем запуске.';
 const NO_OWN_TITLE = 'Своих тренировок пока нет';
@@ -80,16 +81,18 @@ function emptyOwn(document, onBuild) {
 // своя тренировка в «Сегодня».
 export function renderWorkouts({ host, ready, mine, currentId, saved = null, library = LIBRARY, onPick, onDelete, onEdit, onBuild }) {
   const document = host.ownerDocument;
-  host.textContent = '';
+  // Шапка и список: шапка во всю ширину, список в колонке.
+  const list = el(document, 'div', 'wrap workouts-list');
+  host.replaceChildren(renderHero(document, { title: 'Тренировки', lead: LEAD }), list);
 
   if (saved) {
     const note = el(document, 'p', 'workouts-saved', saved.localOnly ? SAVED_LOCAL_ONLY : SAVED);
     note.setAttribute('role', 'status');
-    host.append(note);
+    list.append(note);
   }
 
-  host.append(el(document, 'h2', 'workouts-title', 'Мои'));
-  if (mine?.length === 0) host.append(emptyOwn(document, onBuild));
+  list.append(el(document, 'h2', 'workouts-title', 'Мои'));
+  if (mine?.length === 0) list.append(emptyOwn(document, onBuild));
   for (const own of mine ?? []) {
     const item = el(document, 'div', own.id === currentId ? 'workout-item is-current' : 'workout-item');
     const remove = el(document, 'button', 'workout-delete', 'Удалить');
@@ -115,12 +118,12 @@ export function renderWorkouts({ host, ready, mine, currentId, saved = null, lib
       }),
       actions,
     );
-    host.append(item);
+    list.append(item);
   }
 
-  host.append(el(document, 'h2', 'workouts-title', 'Готовые'));
+  list.append(el(document, 'h2', 'workouts-title', 'Готовые'));
   for (const [id, workout] of Object.entries(ready)) {
-    host.append(card(document, {
+    list.append(card(document, {
       title: workout.title,
       lead: workout.lead,
       kicker: `${workout.kicker} · ${scheduleShort(workout.days)}`,

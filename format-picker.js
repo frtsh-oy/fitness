@@ -6,6 +6,7 @@
 // onFormat), — так блок проверяется без конструктора и без черновика.
 import { SLOT_LABELS } from './exercises/index.js';
 import { FORMATS, OPTIONAL_SLOTS, formatOf } from './builder/format.js';
+import { icon } from './icons.js';
 
 const el = (document, tag, className, text) => {
   const node = document.createElement(tag);
@@ -22,24 +23,19 @@ const el = (document, tag, className, text) => {
 // видны одновременно, но блок от этого не должен зависеть.
 export function renderFormatPicker(document, { state, onBlock, onFormat, idPrefix }) {
   const root = el(document, 'div', 'format-picker');
-  const title = el(document, 'h3', 'builder-group-title', 'Формат занятия');
+  const title = el(document, 'h2', 'builder-group-title', 'Формат занятия');
   title.id = `${idPrefix}-title`;
 
-  // Группы чипов — те же .zone-chips и .zone-chip, что у зон и инвентаря: свой
-  // вид у переключателя был бы ещё одним чипом, который чинить вместе с первым.
-  // Имя группе даёт видимая подпись над ней (aria-labelledby), а не копия в
-  // aria-label: иначе диктор прочтёт её дважды.
-  const chips = (labelId, className, items) => {
-    const group = el(document, 'div', 'zone-chips');
-    group.setAttribute('role', 'group');
-    group.setAttribute('aria-labelledby', labelId);
-    const buttons = items.map(([id, text]) => {
-      const button = el(document, 'button', `zone-chip ${className}`, text);
-      button.type = 'button';
-      group.append(button);
-      return [id, button];
-    });
-    return { group, buttons };
+  // Блоки — чипы с галочкой у нажатого (.zone-chip, тот же чип, что у зон
+  // упора), силовая часть — сегмент на три положения (.seg): блоки включаются
+  // каждый сам по себе, а формат один из трёх. Имя группе даёт видимая подпись
+  // над ней (aria-labelledby), а не копия в aria-label: иначе диктор прочтёт её
+  // дважды.
+  const group = (labelId, className) => {
+    const node = el(document, 'div', className);
+    node.setAttribute('role', 'group');
+    node.setAttribute('aria-labelledby', labelId);
+    return node;
   };
 
   const label = (id, text) => {
@@ -49,10 +45,25 @@ export function renderFormatPicker(document, { state, onBlock, onFormat, idPrefi
   };
   const blocksLabel = label('blocks', 'Блоки');
   const formatsLabel = label('strength', 'Силовая часть');
-  const blocks = chips(blocksLabel.id, 'block-chip', OPTIONAL_SLOTS.map(slot => [slot, SLOT_LABELS[slot]]));
-  const formats = chips(formatsLabel.id, 'format-chip', Object.entries(FORMATS).map(([id, format]) => [id, format.label]));
-  for (const [slot, button] of blocks.buttons) button.dataset.block = slot;
-  for (const [id, button] of formats.buttons) button.dataset.format = id;
+
+  const blocks = { group: group(blocksLabel.id, 'zone-chips'), buttons: [] };
+  for (const slot of OPTIONAL_SLOTS) {
+    const button = el(document, 'button', 'zone-chip block-chip');
+    button.type = 'button';
+    button.dataset.block = slot;
+    // Галочка слева нажатого чипа; пока не нажат — скрыта (style.css).
+    button.append(icon(document, 'tick', 'ic ic-hand tick'), SLOT_LABELS[slot]);
+    blocks.group.append(button);
+    blocks.buttons.push([slot, button]);
+  }
+  const formats = { group: group(formatsLabel.id, 'seg format-seg'), buttons: [] };
+  for (const [id, format] of Object.entries(FORMATS)) {
+    const button = el(document, 'button', 'format-chip', format.label);
+    button.type = 'button';
+    button.dataset.format = id;
+    formats.group.append(button);
+    formats.buttons.push([id, button]);
+  }
 
   const hint = el(document, 'p', 'format-hint');
   // Причина стоит в разметке заранее и лишь показывается: с ролью alert диктор

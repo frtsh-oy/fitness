@@ -58,6 +58,9 @@
   /* Значки, которые рисует сам CSS (галочка в круге, петля в заметке): маска и
      цвет текста, чтобы значок красился тем же цветом, что и подпись рядом. */
   --i-check:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M5.5 12.8c1.4 1.3 2.7 2.7 3.8 4.4C11.6 12.6 15 8.4 19 5.8' fill='none' stroke='%23000' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  /* Та же галочка, но готовой картинкой чернильного цвета: для ползунка переключателя,
+     где её рисует фон (маска красила бы и белый круг). */
+  --i-tick-ink:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M5.5 12.8c1.4 1.3 2.7 2.7 3.8 4.4C11.6 12.6 15 8.4 19 5.8' fill='none' stroke='%232A2C48' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
   --i-loop:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 132 72'%3E%3Cpath d='M66 36C66 36 52 9 32 9C15 9 6 22 6 36C6 50 15 63 32 63C52 63 66 36 66 36C66 36 80 9 100 9C117 9 126 22 126 36C126 50 117 63 100 63C80 63 66 36 66 36Z' fill='none' stroke='%23000' stroke-width='9' stroke-linecap='round'/%3E%3C/svg%3E");
 }
 body[data-tint=sky]{--lead:var(--sky); --lead-s:var(--sky-s); --lead-i:var(--sky-i); --lead-d:var(--sky-d); --lead-b:var(--sky-b); --lead-m:var(--sky-m)}
@@ -89,9 +92,6 @@ button:focus-visible,a:focus-visible,input:focus-visible,summary:focus-visible{o
    480px по центру. Шапки тянутся от края до края, внутри них тоже колонка. */
 .wrap{max-width:var(--col);margin:0 auto;padding:0 20px}
 .screen{padding-bottom:calc(72px + var(--tabbar-safe-bottom) + 36px)}
-/* Пока «Конструктор» не получил своей шапки, его содержимое (старые правила
-   ниже) ложится в ту же колонку. */
-#screen-builder{max-width:var(--col);margin:0 auto;padding:calc(20px + var(--safe-top)) 20px calc(72px + var(--tabbar-safe-bottom) + 36px)}
 /* Под плавающей панелью контент уходит в цвет бумаги, а не обрезается краем. */
 body::after{content:"";position:fixed;left:0;right:0;bottom:0;height:calc(72px + var(--tabbar-safe-bottom) + 24px);z-index:4;pointer-events:none;
   background:linear-gradient(to top,var(--paper) 36%,rgba(251,248,249,0))}
@@ -149,7 +149,7 @@ body::after{content:"";position:fixed;left:0;right:0;bottom:0;height:calc(72px +
 #workout{margin-top:8px}
 .workout-block{border-top:1px solid var(--hair)}
 .workout-block:first-child{border-top:0}
-.block-heading{display:block}
+.block-heading{display:block;font:inherit}
 .blk-head{display:flex;align-items:center;gap:12px;width:100%;min-height:68px;padding:14px 0;text-align:left}
 .block-number{position:relative;flex:none;display:grid;place-items:center;width:38px;height:38px;border-radius:50%;background:var(--bc);font:600 21px/1 var(--hand);color:var(--ink)}
 .workout-block.is-done .block-number{background:var(--mint);color:transparent}
@@ -375,198 +375,348 @@ body::after{content:"";position:fixed;left:0;right:0;bottom:0;height:calc(72px +
 .workouts-empty-hint{font-size:13px;line-height:1.45;color:var(--ink2)}
 .workouts-build{display:inline-flex;align-items:center;justify-content:center;min-height:44px;margin-top:8px;padding:0 24px;border-radius:14px;background:var(--butter-b);font-size:15px;font-weight:700;color:var(--ink)}
 
-/* ======= ВРЕМЕННО: старые правила экранов, которые ещё не переоформлены (задачи 4–6 плана) ======= */
-/* Экран библиотеки упражнений (library-view.js), живёт в «Конструкторе».
-   Высоты нажимаемого — по ступеням (чип 32, кнопка 36, главная 44, см.
-   телефонный блок); эти селекторы проверяет сторож высоты (TAP_TARGETS в
-   test/app.test.js).
-   «Назад», «К сборке» — текстовая кнопка без рамки, как навигация «назад» в
-   мобильных приложениях: это переход, а не действие, и рамка делала её
-   похожей на «Добавить». Отрицательное поле слева ставит стрелку по краю
-   текста под ней. */
-.builder-back{display:inline-flex;align-items:center;gap:4px;min-height:32px;margin-left:-2px;padding:0 6px 0 2px;border:0;border-radius:8px;background:none;font:inherit;font-size:15px;font-weight:650;color:#193d6a}
-/* Размер шрифта поля — 16px, не меньше: iOS приближает страницу, когда фокус
-   попадает в поле с кеглем ниже, и экран после ввода остаётся увеличенным.
-   appearance:none — иначе iOS рисует поле поиска своим скруглённым видом и
-   рамку с радиусом отсюда не берёт. */
-.library-search{appearance:none;-webkit-appearance:none;display:block;width:100%;min-height:40px;margin:10px 0 0;padding:0 12px;border:1px solid #cad6e4;border-radius:10px;background:#fff;color:inherit;font-size:16px}
-/* Чипы переносятся на следующую строку, а не прокручиваются вбок: «Пресс и
-   кор» и «Сложное» — полноценные фильтры, и прятать их за краем экрана нельзя.
-   Вид — как у чипов блоков (.block-nav a), выбранный — тёмный, как активный.
-   Отступы 11px и просвет 6px подобраны замером при 375px: при 14px и 8px
-   зоны занимали три строки, сложность — две, и первая карточка начиналась ниже
-   середины экрана; с этими — две и одна. */
-.library-filters{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0 0}
-.library-chip{display:inline-flex;align-items:center;min-height:32px;padding:0 11px;border:1px solid #d4dde8;border-radius:16px;background:#fff;font:inherit;font-size:13px;font-weight:600;color:inherit;white-space:nowrap}
-.library-chip[aria-pressed=true]{background:#152d4a;border-color:#152d4a;color:#fff}
-/* Строка под зонами: «Ещё фильтры» слева, «Сбросить» справа. Кнопка панели —
-   чип той же высоты, но голубой, как «Как выполнять»: она раскрывает, а не
-   фильтрует, и с чипами фильтров путаться не должна. Счёт включённых в панели — отдельным span с
-   white-space:pre: во флекс-кнопке пробел в начале текста иначе съедается, и
-   выходило бы «фильтры· 2». Уголок — как у «Как выполнять» и так же смотрит
-   вверх, когда панель раскрыта.
-   «Сбросить» — текстовая кнопка: действие второстепенное и рядом с основным
-   кнопкой выглядеть не должно, но высота у неё та же, 32px. */
-.library-tools{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:8px 0 0}
-.library-more{display:inline-flex;align-items:center;min-height:32px;padding:0 12px;border:1px solid #cad6e4;border-radius:16px;background:#f3f7fc;font:inherit;font-size:13px;font-weight:650;color:#193d6a}
-.library-more-count{white-space:pre}
-.library-more-caret{width:10px;height:10px;flex-shrink:0;margin-left:6px;fill:currentColor;transition:transform .2s}
-.library-more[aria-expanded=true] .library-more-caret{transform:rotate(180deg)}
-.library-reset{min-height:32px;padding:0 4px;border:0;background:none;font:inherit;font-size:13px;font-weight:650;color:#193d6a;text-decoration:underline;text-underline-offset:3px}
-/* В панели у каждой группы свой заголовок, поэтому верхний отступ у чипов
-   не нужен, а заголовки ближе друг к другу, чем в генераторе. */
-.library-more-panel .builder-group-title{margin:14px 0 6px}
-.library-more-panel .library-filters{margin:0}
-.library-found{margin:12px 0 8px;font-size:13px;color:#526278}
-/* Причина, по которой «Добавить» недоступна, — той же плашкой, что пометка про
-   убранные упражнения (.removed-note), над списком: она одна на все карточки. */
-.library-blocked{margin:12px 0 0;padding:10px 12px;border-radius:10px;background:#e8edf4;color:#53637a;font-size:13px}
-.library-empty{margin:0 0 10px;padding:14px;border-radius:14px;background:#fff;border:1px solid #d8e1eb}
-.library-empty-title{margin:0;font-size:16px;font-weight:650}
-.library-empty-hint{margin:4px 0 10px;font-size:13px;color:#526278}
-/* Сложность стоит слева в шапке карточки, а список мышц — справа: та же строка
-   .exercise-top, что у номера и мышц в «Сегодня». Подпись не переносится: на
-   узкой строке сжиматься должен список мышц, а не слово «Среднее». */
-.library-level{white-space:nowrap;font-size:12px;letter-spacing:.1em;font-weight:650;color:#61748b}
-/* Инвентарь — третий в шапке карточки, между сложностью и мышцами. Три подписи
-   в одну строку на 375px не помещаются, поэтому строка переносится: сложность и
-   инвентарь стоят слева (margin-right:auto у инвентаря: space-between разводил
-   бы их по краям), а мышцы прижаты вправо (margin-left:auto) и, если места не
-   хватило, уходят на вторую строку. Иначе все три сжимались бы, и «мини-петля»
-   ломалась бы по дефису. Только в библиотеке: в «Сегодня» шапка из двух частей и
-   остаётся как есть. */
-.library-card .exercise-top{flex-wrap:wrap;row-gap:2px}
-.library-gear{margin-right:auto;font-size:12px;color:#657289}
-.library-card .muscles{margin-left:auto}
-/* «Добавить» — небольшая кнопка справа от названия, а не полоса во всю ширину
-   под каждой карточкой: в списке из сорока карточек сорок одинаковых тёмных
-   полос перебивали сами упражнения. Кнопка светлая, а уже добавленное
-   («В тренировке», .is-added) — зелёное, как «Сейчас в «Сегодня»»: зелёный в
-   приложении значит «это уже твоё». Недоступная по другой причине (тренировка
-   заполнена) — серая. */
-.library-card-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin:0 0 10px}
-.library-card-head h3{margin:0}
-.library-add{flex:none;min-height:32px;padding:0 12px;border:1px solid #e4edf8;border-radius:16px;background:#e4edf8;font:inherit;font-size:13px;font-weight:650;color:#152d4a;white-space:nowrap}
-.library-add:disabled{border-color:#d8e1eb;background:#fff;color:#657289;cursor:default}
-.library-add.is-added{border-color:#e0edc2;background:#e0edc2;color:#39571b}
-.builder-add,.builder-save,.builder-generate{display:block;width:100%;min-height:44px;margin:14px 0 0;padding:0 14px;border:1px solid #152d4a;border-radius:10px;background:#152d4a;font:inherit;font-size:15px;font-weight:650;color:#fff}
-.builder-add:disabled,.builder-save:disabled,.builder-generate:disabled{border-color:#d8e1eb;background:#eef3fa;color:#657289;cursor:default}
-.library-foot{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:16px 0 0}
-.library-total{margin:0;font-size:13px;font-weight:600;color:#33475f}
-
-/* Конструктор (builder-view.js): вход, сборка, шторка замены, сохранение.
-   Нажимаемое — по ступеням высоты (см. телефонный блок); сторож высоты в
-   test/app.test.js обходит все эти экраны. Раскладка рассчитана на 375px без
-   горизонтальной прокрутки: названия переносятся (overflow-wrap), а не
-   раздвигают строку. Заголовок экрана получает фокус программно, и рамка вокруг
-   него ничего не говорит. */
-.builder h2{margin:10px 0 10px;font-size:22px;line-height:1.25;letter-spacing:-.025em}
-.builder h2:focus{outline:none}
-.builder-entry h2{margin-top:0}
-.builder-lead{max-width:520px;margin:0 0 16px;font-size:14px;line-height:1.55;color:#33475f}
-.builder-path{display:flex;flex-direction:column;align-items:flex-start;gap:3px;width:100%;min-height:44px;margin:0 0 8px;padding:12px 14px;border:1px solid #152d4a;border-radius:14px;background:#152d4a;font:inherit;color:#fff;text-align:left}
-.builder-path:last-of-type{margin-bottom:24px}
-.builder-path-title{font-size:16px;font-weight:650;letter-spacing:-.02em}
-.builder-path-note{font-size:13px;line-height:1.45;color:#d7e0ed}
-.builder-steps-title{margin:0 0 4px;font-size:15px;letter-spacing:-.02em}
-.builder-steps{margin:0;padding:0;list-style:none;counter-reset:step}
-.builder-steps li{position:relative;display:flex;flex-direction:column;padding:8px 0 8px 34px;border-top:1px solid #d8e1eb;counter-increment:step}
-.builder-steps li::before{content:counter(step);position:absolute;left:0;top:9px;width:24px;height:24px;border-radius:50%;background:#e4edf8;font-size:12px;font-weight:700;line-height:24px;text-align:center}
-.builder-steps strong{font-size:14px}
-.builder-steps span{font-size:13px;color:#526278}
+/* ---------- внутренние экраны «Конструктора» ---------- */
+/* Верх: «назад» на бумаге и крупное название под ним. У экрана нет шапки с
+   цветом: цвет несут кнопки и выбранное. Экран — колонка .wrap (поля 20px), а
+   у «Назад» отрицательное поле ставит стрелку по краю текста под ней. */
+.appbar{display:flex;align-items:center;justify-content:space-between;height:calc(56px + var(--safe-top));padding-top:calc(10px + var(--safe-top))}
+.builder-back{display:inline-flex;align-items:center;gap:2px;min-height:36px;margin-left:-6px;padding:0 8px 0 2px;border-radius:12px;font-size:14px;font-weight:600;color:var(--ink2)}
 .builder-back:disabled{opacity:.5;cursor:default}
+.page-title{padding-top:4px}
+.page-title h1{font:600 40px/1 var(--hand);letter-spacing:0;overflow-wrap:anywhere}
+/* Название подобранной тренировки составлено из зон упора и бывает длинным. */
+.page-title h1[data-long]{font-size:32px}
+.lead{font-size:14px;line-height:1.5;color:var(--ink2)}
+.page-title .lead{margin-top:8px}
+/* Заголовок экрана принимает фокус программно, и рамка вокруг него ничего не
+   говорит: его читает диктор. */
+[tabindex="-1"]:focus{outline:none}
 
-/* Строка покрытия: тот же янтарный оттенок предупреждения, что у .weekly-basis,
-   а когда все группы закрыты — зелёный, как у .workouts-saved. Пустая (без
-   дней покрытие не считается) не занимает места. */
-.builder-coverage{margin:12px 0 0;padding:10px 12px;border-radius:10px;background:#fbe4bd;color:#7a4a06;font-size:13px;line-height:1.5}
-.builder-coverage.is-ok{background:#e0edc2;color:#39571b}
+/* Плавающая панель действия над нижней: что получится и одна главная кнопка.
+   Причина, по которой кнопка недоступна, и отказ стоят в той же панели, над
+   строкой (flex-wrap). Экран с панелью получает запас снизу (.has-dock). */
+.has-dock{padding-bottom:72px}
+.dock{position:fixed;left:0;right:0;bottom:calc(84px + var(--tabbar-safe-bottom));z-index:5;display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;
+  width:min(calc(100% - 24px),calc(var(--col) - 24px));margin:0 auto;padding:10px 10px 10px 18px;border-radius:26px;
+  background:rgba(255,255,255,.94);-webkit-backdrop-filter:blur(18px);backdrop-filter:blur(18px);
+  box-shadow:0 14px 34px -12px rgba(42,44,72,.30),0 2px 8px rgba(42,44,72,.06)}
+.dock-text{flex:1;min-width:0;font-size:13px;line-height:1.35;color:var(--ink2)}
+.dock-text b{display:block;font-size:14px;font-weight:700;color:var(--ink)}
+.dock>.builder-reason,.dock>.builder-refusal{flex:1 0 100%;margin:0}
+.dock>.builder-reason{padding:0 8px}
+.dock-solo{padding:10px}
+.dock-solo .builder-save{flex:1 1 100%}
+/* Главная кнопка панели: ведущий тон экрана, чернильный текст (8:1). Недоступная
+   — серая заливка и серый текст, без «тёмной» кнопки. */
+.builder-save,.builder-generate{display:inline-flex;align-items:center;justify-content:center;flex:none;min-height:44px;padding:0 24px;border-radius:20px;
+  background:var(--lead-b);font-size:15px;font-weight:700;line-height:1;color:var(--ink);text-align:center}
+.builder-save:disabled,.builder-generate:disabled{background:var(--tonal2);color:var(--ink2);cursor:default}
+
+.builder-reason,.format-reason{margin:8px 0 0;font-size:13px;line-height:1.5;color:var(--ink2)}
+.builder-error,.builder-refusal{margin:12px 0 0;padding:12px 16px;border-radius:18px;background:var(--butter-s);color:var(--butter-i);font-size:13px;line-height:1.5}
+
+/* ---------- вход ---------- */
+/* Два пути — две большие плитки своих цветов: «Собрать самому» персиковая,
+   «Сгенерировать» сиреневая. Значок в белом кружке, справа стрелка. */
+.builder-paths{display:grid;gap:12px;margin-top:14px}
+.builder-path{position:relative;display:flex;align-items:center;gap:14px;width:100%;min-height:104px;padding:16px 16px 16px 18px;border-radius:26px;color:var(--ink);text-align:left}
+.builder-path-manual{background:var(--peach)}
+.builder-path-generate{background:var(--lilac)}
+.path-ic{flex:none;display:grid;place-items:center;width:48px;height:48px;border-radius:50%;background:rgba(255,255,255,.7)}
+.path-ic .ic{width:24px;height:24px}
+.path-text{flex:1;min-width:0}
+.builder-path-title{display:block;font:600 29px/1 var(--hand)}
+.builder-path-note{display:block;margin-top:5px;font-size:13px;line-height:1.45;color:var(--ink)}
+.path-go{flex:none}
+/* Из чего состоит тренировка: четыре шага вдоль тонкой линии, кружок каждого
+   цвета своего блока (data-kind). Номера нужны: это последовательность. */
+.builder-steps-title{margin:34px 0 4px;font:600 28px/1.05 var(--hand)}
+.builder-steps{margin-top:14px}
+.builder-steps li{position:relative;display:flex;gap:14px;padding:0 0 20px}
+.builder-steps li:last-child{padding-bottom:0}
+.builder-steps li::before{content:"";position:absolute;left:18px;top:42px;bottom:4px;width:2px;border-radius:1px;background:var(--hair)}
+.builder-steps li:last-child::before{display:none}
+.step-badge{position:relative;flex:none;display:grid;place-items:center;width:38px;height:38px;border-radius:50%;background:var(--bc);font:600 23px/1 var(--hand);color:var(--ink)}
+.step-text strong{display:block;margin-top:1px;font-size:16px;font-weight:700;line-height:1.3}
+.step-text span{display:block;margin-top:2px;font-size:13px;line-height:1.4;color:var(--ink2)}
+.builder-entry .sources-link{margin-top:26px}
+
+/* ---------- сохранение ---------- */
+/* Подпись поля — рукописная; поле в 16px (iOS не приближает страницу, пока в
+   поле ввода кегль меньше). appearance:none — иначе iOS рисует своё поле. */
+.builder-label{display:block;margin:30px 0 12px;font:600 24px/1.05 var(--hand)}
+.page-title+.builder-label{margin-top:22px}
+.save-name{appearance:none;-webkit-appearance:none;display:block;width:100%;min-height:48px;padding:0 16px;border:0;border-radius:16px;background:var(--tonal);font-size:16px;color:var(--ink)}
+.save-name::placeholder{color:var(--ink3)}
+/* Семь дней — круглые чипы в одну строку; выбранный — ведущий тон и жирнее. */
+.day-chips{display:flex;justify-content:space-between;gap:4px}
+.day-chip{display:grid;place-items:center;flex:none;min-width:42px;min-height:42px;border-radius:50%;background:var(--tonal);font-size:13px;font-weight:600;color:var(--ink)}
+.day-chip[aria-pressed=true]{background:var(--lead-b);font-weight:700}
+/* Что сохранится и как это ложится на выбранные дни — одна карточка: масляная,
+   пока есть что поправить, мятная, когда всё в порядке. Значок меняется вместе
+   с цветом: смысл не держится на цвете. */
+.builder-card{display:flex;align-items:flex-start;gap:14px;margin-top:30px;padding:16px 18px;border-radius:24px;background:var(--butter-s)}
+.builder-card.is-ok{background:var(--mint-s)}
+.sum-ic{flex:none;display:grid;place-items:center;width:30px;height:30px;border-radius:50%;background:var(--butter);color:var(--butter-i)}
+.builder-card.is-ok .sum-ic{background:var(--mint);color:var(--mint-i)}
+.sum-ic .ic{width:18px;height:18px}
+.sum-ok,.builder-card.is-ok .sum-warn{display:none}
+.builder-card.is-ok .sum-ok{display:block}
+.sum-text{flex:1;min-width:0}
+.builder-summary{font-size:15px;font-weight:700;line-height:1.35}
+.builder-coverage{margin:2px 0 0;font-size:13px;line-height:1.45;color:var(--ink)}
 .builder-coverage:empty{display:none}
-.builder-coverage p{margin:0}
 .builder-coverage p+p{margin-top:4px}
-.builder-coverage p:first-child{font-weight:650}
-.builder-save,.builder-generate{margin-top:20px}
-.builder-reason,.format-reason{margin:8px 0 0;font-size:13px;line-height:1.5;color:#526278}
-.builder-error,.builder-refusal{margin:12px 0 0;padding:10px 12px;border-radius:10px;background:#fbe4bd;color:#7a4a06;font-size:13px}
-.builder-block{margin:20px 0 0}
-.builder-block-head{display:flex;align-items:baseline;justify-content:space-between;gap:12px}
-.builder-block h3{margin:0;font-size:16px;letter-spacing:-.02em}
-.builder-block-rounds{flex:none;font-size:12px;font-weight:650;color:#526278}
-.builder-block-sub{margin:2px 0 8px;font-size:13px;color:#657289}
-.builder-item{display:flex;align-items:center;gap:10px;margin:0 0 6px;padding:10px 12px;border:1px solid #d8e1eb;border-radius:12px;background:#fff}
-.builder-item-text{display:flex;flex-direction:column;flex:1 1 auto;min-width:0}
-.builder-item-name{font-size:14px;font-weight:650;line-height:1.35;overflow-wrap:anywhere}
-.builder-item-muscles{font-size:12px;color:#657289}
-/* Метки результата: «упор» — тот же зелёный значок, что в «Сегодня» (.focus-tag),
-   но без margin-right:auto: двум меткам в ряд нужен обычный просвет, а не сдвиг
-   второй к правому краю. «заменено» — нейтральный, чтобы не спорить с упором. */
-.builder-item-tags{display:flex;flex-wrap:wrap;gap:4px;margin:2px 0 3px}
-.builder-item-tags .focus-tag{margin-right:0}
-.replaced-tag{white-space:nowrap;background:#e4edf8;color:#33475f;padding:2px 8px;border-radius:6px;font-size:12px;font-weight:650;letter-spacing:.06em}
-.builder-replace,.builder-remove{flex:none;min-height:32px;padding:0 12px;border:1px solid #cad6e4;border-radius:16px;background:#f3f7fc;font:inherit;font-size:13px;font-weight:650;color:#193d6a}
 
-/* Шторка замены встаёт над навигацией, как шторка таймера (.timer-sheet): та же
-   нижняя граница через --tabbar-safe-bottom. Фон над навигацией не лежит, чтобы
-   разделы оставались доступными. */
-.replace-backdrop{position:fixed;top:0;left:0;right:0;bottom:calc(53px + var(--tabbar-safe-bottom));z-index:6;background:#142a4673}
-.replace-sheet{position:fixed;left:0;right:0;bottom:calc(53px + var(--tabbar-safe-bottom));z-index:7;max-width:640px;max-height:70vh;margin:0 auto;overflow-y:auto;padding:14px 14px 16px;border-radius:16px 16px 0 0;background:#fff;box-shadow:0 -10px 30px #142a4647}
-.replace-sheet:focus{outline:none}
-.replace-sheet h3{margin:0;font-size:17px;letter-spacing:-.02em}
-.replace-current{margin:4px 0 0;font-size:14px;font-weight:650}
-.replace-hint{margin:2px 0 12px;font-size:13px;color:#657289}
-.replace-list{margin:0;padding:0;list-style:none}
-.replace-candidate{display:flex;align-items:center;gap:10px;padding:8px 0;border-top:1px solid #d8e1eb}
-.replace-text{display:flex;flex-direction:column;flex:1 1 auto;min-width:0}
-.replace-name{font-size:14px;font-weight:650;line-height:1.35;overflow-wrap:anywhere}
-.replace-muscles,.replace-gear{font-size:12px;color:#657289}
-.replace-pick{flex:none;min-height:32px;padding:0 12px;border:1px solid #152d4a;border-radius:16px;background:#152d4a;font:inherit;font-size:13px;font-weight:650;color:#fff}
-.replace-empty{margin:0 0 10px;padding:10px 12px;border-radius:10px;background:#e8edf4;color:#53637a;font-size:13px}
-.replace-close{display:block;width:100%;min-height:40px;margin:12px 0 0;border:1px solid #cad6e4;border-radius:10px;background:#f3f7fc;font:inherit;font-size:14px;font-weight:650;color:#193d6a}
+/* ---------- генератор ---------- */
+.builder-group-title{margin:30px 0 8px;font:600 28px/1.05 var(--hand)}
+.zone-hint,.gear-hint,.format-hint{font-size:13px;line-height:1.45;color:var(--ink2)}
+/* Уровень — радио-карточка: выбранная подсвечена ведущим мягким тоном, круг
+   слева с галочкой. Карточка выступает за колонку на 14px, чтобы текст стоял по
+   полю 20px (как панели в «Тренировках»). Недоступный уровень помечен
+   aria-disabled, а не disabled: он остаётся в обходе, и диктор читает причину. */
+.level-options{margin-top:4px}
+.level-option{display:flex;align-items:flex-start;gap:14px;width:calc(100% + 28px);min-height:44px;margin:2px -14px;padding:14px;border-radius:24px;text-align:left}
+.level-option[aria-checked=true]{background:var(--lead-s)}
+.radio{flex:none;display:grid;place-items:center;width:26px;height:26px;margin-top:4px;border-radius:50%;box-shadow:inset 0 0 0 2px var(--tonal2)}
+.radio .ic{width:16px;height:16px;stroke-width:2.4;opacity:0}
+.level-option[aria-checked=true] .radio{background:var(--lead-m);box-shadow:none}
+.level-option[aria-checked=true] .radio .ic{opacity:1}
+.level-text{flex:1;min-width:0}
+.level-title{display:block;font:600 27px/1.05 var(--hand)}
+.level-who{display:block;margin-top:3px;font-size:14px;line-height:1.4;color:var(--ink)}
+.level-facts{display:block;margin-top:5px;font-size:12.5px;line-height:1.45;color:var(--ink2)}
+.level-line+.level-line::before{content:" · "}
+.level-option[aria-disabled=true] .level-text{opacity:.55}
+.level-missing,.zone-missing p{margin:0 0 6px 40px;padding:10px 14px;border-radius:16px;background:var(--tonal);font-size:13px;line-height:1.5;color:var(--ink2)}
+.zone-missing p{margin:10px 0 0}
+/* Зоны, блоки формата и всё, что включается и выключается кнопкой-чипом: тон,
+   выбранный — ведущий кнопочный тон и галочка слева (смысл не только в цвете). */
+.zone-chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+.zone-chip{display:inline-flex;align-items:center;justify-content:center;gap:5px;min-height:32px;padding:0 12px;border-radius:16px;background:var(--tonal);font-size:13px;font-weight:600;line-height:1;color:var(--ink);white-space:nowrap}
+.zone-chip .tick{display:none;flex:none;width:15px;height:15px;stroke-width:2.2}
+.zone-chip[aria-pressed=true]{background:var(--lead-b)}
+.zone-chip[aria-pressed=true] .tick{display:inline-block}
+.zone-chip[aria-disabled=true]{opacity:.45}
 
-/* Экран сохранения. Семь дней в одну строку: чипы растягиваются на всю
-   ширину, а на очень узком экране (меньше 7×36px с просветами) переходят на
-   вторую строку, а не уменьшаются ниже 36px. Размер шрифта поля — 16px по той же причине, что у
-   .library-search. */
-.builder-label{display:block;margin:14px 0 0;font-size:13px;font-weight:650}
-.save-name{appearance:none;-webkit-appearance:none;display:block;width:100%;min-height:40px;margin:6px 0 0;padding:0 12px;border:1px solid #cad6e4;border-radius:10px;background:#fff;color:inherit;font-size:16px}
-.day-chips{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0 0}
-.day-chip{flex:1 1 36px;min-width:36px;min-height:36px;padding:0 6px;border:1px solid #d4dde8;border-radius:18px;background:#fff;font:inherit;font-size:13px;font-weight:600;color:inherit}
-.day-chip[aria-pressed=true]{background:#152d4a;border-color:#152d4a;color:#fff}
-.builder-summary{margin:14px 0 0;font-size:13px;font-weight:600;color:#33475f}
+/* «Что есть дома»: строки-переключатели. Дорожка — украшение (aria-hidden), а
+   включённость читает диктор по aria-checked строки; в кнопке-ползунке
+   галочка, чтобы смысл не держался на цвете. */
+.gear-list{margin-top:6px}
+.gear-switch{display:flex;align-items:center;gap:14px;width:100%;min-height:52px;padding:6px 0;border-top:1px solid var(--hair);text-align:left}
+.gear-list li:first-child .gear-switch{border-top:0}
+.gear-name{flex:1;min-width:0;font-size:16px;font-weight:700;line-height:1.3}
+.sw{position:relative;flex:none;width:52px;height:32px;border-radius:16px;background:var(--tonal2);transition:background .2s}
+.sw::after{content:"";position:absolute;left:3px;top:3px;width:26px;height:26px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(42,44,72,.25);transition:transform .2s}
+.gear-switch[aria-checked=true] .sw{background:var(--lead-m)}
+.gear-switch[aria-checked=true] .sw::after{transform:translateX(20px);background:#fff var(--i-tick-ink) center/16px no-repeat}
 
-/* Генератор (builder-view.js, drawGenerator) и результат. Уровни — три широкие
-   кнопки друг под другом, зоны — чипы, которые переносятся на следующую строку,
-   а не уезжают за край: на 375px «Пресс и кор» не помещается рядом с остальными.
-   Недоступное помечено aria-disabled, а не disabled (так оно остаётся в обходе),
-   поэтому и вид у него задан по этому атрибуту. */
-.builder-subtitle{margin:-4px 0 0;font-size:13px;color:#526278}
-.builder-group-title{margin:18px 0 8px;font-size:15px;letter-spacing:-.02em}
-.level-options{display:flex;flex-direction:column;gap:6px}
-.level-option{display:flex;flex-direction:column;align-items:flex-start;gap:2px;width:100%;min-height:44px;padding:10px 14px;border:1px solid #d4dde8;border-radius:14px;background:#fff;font:inherit;color:inherit;text-align:left}
-.level-option[aria-checked=true]{border-color:#152d4a;background:#eef3fa;box-shadow:0 0 0 1px #152d4a}
-.level-option[aria-disabled=true]{background:#f3f7fc;color:#657289}
-.level-title{font-size:15px;font-weight:650;letter-spacing:-.02em}
-.level-who{margin-bottom:2px;font-size:13px;color:#33475f}
-.level-option[aria-disabled=true] .level-who{color:#657289}
-.level-line{font-size:12px;color:#526278}
-.level-missing,.zone-missing p{margin:6px 0 0;padding:8px 12px;border-radius:10px;background:#e8edf4;color:#53637a;font-size:13px;line-height:1.5}
-.zone-hint,.gear-hint,.format-hint,.format-label{margin:0 0 10px;font-size:13px;line-height:1.5;color:#526278}
-.zone-chips{display:flex;flex-wrap:wrap;gap:6px}
-.zone-chip{display:inline-flex;align-items:center;min-height:32px;padding:0 12px;border:1px solid #d4dde8;border-radius:16px;background:#fff;font:inherit;font-size:13px;font-weight:600;color:inherit}
-.zone-chip[aria-pressed=true]{background:#152d4a;border-color:#152d4a;color:#fff}
-.zone-chip[aria-disabled=true]{opacity:.5}
-/* «Что есть дома» (gear-picker.js): один блок на генератор и библиотеку. Чипы —
-   те же .zone-chip, поэтому свой у блока только отступ и подсказка (.gear-hint,
-   общий с .zone-hint выше). */
-.gear-picker{margin:0 0 6px}
-/* «Формат занятия» (format-picker.js): на сборке и на результате, чипы — тоже
-   .zone-chip. Подпись группы и пояснение — вид подсказки выше; подпись второй
-   группы и пояснение идут после чипов, поэтому им нужен отступ сверху, а
-   причина (.format-reason) — вид .builder-reason, общий с ним выше. */
-.format-picker{margin:0 0 6px}
-.format-picker .zone-chips+.format-label{margin-top:12px}
-.format-picker .zone-chips+.format-hint{margin:10px 0 0}
-.builder-variant{display:block;width:100%;min-height:40px;margin:10px 0 0;padding:0 14px;border:1px solid #cad6e4;border-radius:10px;background:#f3f7fc;font:inherit;font-size:14px;font-weight:650;color:#193d6a}
+/* «Формат занятия»: подписи группы, блоки чипами, силовая часть — сегментом. */
+.format-picker{margin-top:28px}
+.format-picker .builder-group-title{margin:0}
+.format-label{margin:14px 0 8px;font-size:13px;font-weight:600;color:var(--ink2)}
+.format-picker .zone-chips{gap:6px;margin-top:0}
+.block-chip{padding:0 9px;gap:4px}
+.seg{display:flex;padding:4px;border-radius:16px;background:var(--tonal)}
+.seg button{flex:1;min-width:0;min-height:36px;border-radius:12px;font-size:13px;font-weight:600;color:var(--ink2);text-align:center;white-space:nowrap}
+.seg button[aria-pressed=true]{background:#fff;color:var(--ink);box-shadow:0 1px 3px rgba(42,44,72,.14)}
+.format-hint{margin-top:10px}
+
+
+/* ---------- сборка и результат ---------- */
+/* Карточка покрытия: петля заполняется по числу групп с нагрузкой, в узле их
+   число или галочка. Мятная, когда всё в порядке, масляная, пока есть что
+   поправить; смысл не держится на цвете — меняются и слова, и узел петли. */
+.cover{display:flex;align-items:center;gap:16px;margin-top:16px;padding:16px 18px;border-radius:24px;background:var(--butter-s);--cv:var(--butter-d)}
+.cover.is-ok{background:var(--mint-s);--cv:var(--mint-d)}
+.cover-loop{position:relative;flex:none;width:100px}
+.cover-loop svg{display:block;width:100px;height:55px;overflow:visible}
+.cover-loop .loop-track{stroke:rgba(255,255,255,.95);stroke-width:8}
+.cover-loop .loop-fill{stroke:var(--cv);stroke-width:8}
+.cover-knot{position:absolute;left:50%;top:27.5px;display:grid;place-items:center;width:34px;height:34px;margin:-17px 0 0 -17px;border-radius:50%;background:#fff;font:600 21px/1 var(--hand);color:var(--ink)}
+.cover-knot .ic{width:18px;height:18px;stroke-width:2.2;color:var(--mint-i)}
+.cover-text{flex:1;min-width:0}
+.cover .builder-coverage{margin:0}
+.cover-title{font:600 24px/1.05 var(--hand)}
+.cover-note{margin-top:4px;font-size:13px;line-height:1.45;color:var(--ink)}
+.cover-more{display:flex;align-items:center;gap:4px;min-height:32px;margin:8px 0 0 -2px;padding:0;font-size:13px;font-weight:600;color:var(--ink)}
+.cover-more[hidden]{display:none}
+.cover-more .ic{width:16px;height:16px;transition:transform .2s}
+.cover-more[aria-expanded=true] .ic{transform:rotate(180deg)}
+.cover-list{margin-top:8px;font-size:13px;line-height:1.5;color:var(--ink2)}
+.builder-variant{margin-top:10px}
+.builder-variant .ic{width:18px;height:18px}
+
+/* Кнопка второй ступени (36px), текстовая (32px) и главная (44px). Вторая — тон
+   без заливки цветом, главная — ведущий кнопочный тон. Базовая высота стоит на
+   :not(.main), а не на самой .btn: сторож высот сверяет ступень по всем
+   объявлениям, без каскада, и 36px на главной кнопке он счёл бы ошибкой. */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:0 16px;border-radius:12px;background:var(--tonal);font-size:14px;font-weight:600;line-height:1;color:var(--ink);white-space:nowrap}
+.btn:not(.main){min-height:36px}
+.btn.text{min-height:32px;padding:0 8px;background:none;color:var(--ink2)}
+.btn.pad0{padding-left:0}
+.btn.main{min-height:44px;padding:0 24px;border-radius:14px;background:var(--lead-b);font-size:15px;font-weight:700;color:var(--ink)}
+/* Круглая кнопка со значком: «Заменить», «Закрыть». Имя ей даёт aria-label. */
+.icon-btn{display:inline-grid;place-items:center;flex:none;min-width:36px;min-height:36px;border-radius:50%;background:var(--tonal);color:var(--ink2)}
+
+/* Блоки — те же раскрывающиеся списки, что в «Сегодня» (.blk-head и дальше), а
+   строки упражнений без карточек, с тонкой линией между ними. */
+.builder-blocks{margin-top:22px}
+.builder-block,.builder-addwrap{border-top:1px solid var(--hair)}
+.builder-blocks>:first-child{border-top:0}
+.builder-block .blk-sub{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.builder-item{display:flex;align-items:center;gap:10px;padding:12px 0;border-top:1px solid var(--hair)}
+.blk-body>.builder-item:first-child,.blk-tags+.builder-item{border-top:0}
+.builder-item-text{flex:1;min-width:0}
+.builder-item-name{display:block;font-size:15px;font-weight:700;line-height:1.3;overflow-wrap:anywhere}
+.builder-item-muscles{display:block;margin-top:1px;font-size:13px;line-height:1.4;color:var(--ink2)}
+/* Метки результата: «упор» мятная, «заменено» масляная; подпись, не кнопка. */
+.builder-item-tags{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+.builder-item-tags span{display:inline-flex;align-items:center;height:24px;margin:0;padding:0 10px;border-radius:12px;font-size:12px;font-weight:600;line-height:1;white-space:nowrap}
+.builder-item-tags .focus-tag{background:var(--mint);color:var(--mint-i)}
+.builder-item-tags .replaced-tag{background:var(--butter);color:var(--butter-i)}
+.builder-remove{display:inline-flex;align-items:center;flex:none;min-height:32px;padding:0 14px;border-radius:16px;background:var(--tonal);font-size:13px;font-weight:600;color:var(--ink)}
+/* «Добавить упражнение» — строка в списке блоков, на месте силовой части. */
+.builder-addwrap{padding:6px 0}
+.addrow{display:flex;align-items:center;gap:14px;width:100%;min-height:68px;padding:14px 16px;border-radius:22px;background:var(--sky-s);color:var(--ink);text-align:left}
+.addrow:disabled{opacity:.6;cursor:default}
+.addrow-ic{flex:none;display:grid;place-items:center;width:40px;height:40px;border-radius:50%;background:var(--sky)}
+.addrow-ic .ic{width:22px;height:22px}
+.addrow-text{flex:1;min-width:0}
+.addrow-title{display:block;font-size:15px;font-weight:700}
+.addrow-sub{display:block;margin-top:1px;font-size:13px;line-height:1.45;color:var(--ink2)}
+.builder-addwrap .builder-reason{margin:8px 4px 2px}
+
+/* ---------- шторка замены ---------- */
+/* Нижняя шторка закрывает и нижнюю панель: она модальная, всё под ней inert.
+   Затемнение под ней z 8, сама шторка z 9 — выше панели (6) и шторки таймера (7). */
+.scrim{position:fixed;inset:0;z-index:8;background:rgba(42,44,72,.30);touch-action:none}
+.sheet{position:fixed;left:0;right:0;bottom:0;z-index:9;display:flex;flex-direction:column;width:min(100%,var(--col));max-height:86%;margin:0 auto;overflow:hidden;
+  padding:10px 20px calc(26px + var(--tabbar-safe-bottom));border-radius:28px 28px 0 0;background:var(--surface);
+  box-shadow:0 -14px 44px -12px rgba(42,44,72,.28);animation:sheet-up .28s ease-out}
+@keyframes sheet-up{from{transform:translateY(24px);opacity:0}to{transform:none;opacity:1}}
+.grab{flex:none;width:40px;height:4px;margin:0 auto 14px;border-radius:2px;background:var(--tonal2)}
+.sheet-head{flex:none;display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px}
+.sheet-title{font:600 28px/1.05 var(--hand)}
+.replace-now{flex:none;margin-top:2px;font-size:13px;color:var(--ink2)}
+.replace-now b{color:var(--ink)}
+.replace-hint{flex:none;margin-top:2px;font-size:13px;line-height:1.45;color:var(--ink2)}
+.replace-empty{margin-top:14px;padding:12px 16px;border-radius:18px;background:var(--tonal);font-size:13px;line-height:1.5;color:var(--ink2)}
+/* Поле поиска: капсула в тон, значок слева, очистка справа. Кегль 16px — iOS не
+   приближает страницу при фокусе. Рамку фокуса рисует капсула целиком. */
+.search{display:flex;align-items:center;gap:10px;flex:none;min-height:44px;padding:0 14px;border-radius:22px;background:var(--tonal);color:var(--ink2)}
+.search .ic{width:20px;height:20px}
+.search input{appearance:none;-webkit-appearance:none;flex:1;min-width:0;height:44px;border:0;outline:0;background:none;font:inherit;font-size:16px;color:var(--ink)}
+.search input::placeholder{color:var(--ink3)}
+.search input::-webkit-search-cancel-button{-webkit-appearance:none;display:none}
+.search:focus-within{outline:2px solid var(--ink);outline-offset:2px}
+.sheet-search{margin-top:14px}
+.s-clear{flex:none;display:grid;place-items:center;min-width:32px;min-height:32px;margin-right:-8px;border-radius:50%;color:var(--ink2)}
+.s-clear[hidden]{display:none}
+.s-clear .ic{width:18px;height:18px}
+.sheet-scroll{flex:1 1 auto;min-height:0;margin:6px -20px 0;padding:0 20px;overflow-y:auto;overscroll-behavior:contain;scrollbar-width:none}
+.sheet-scroll::-webkit-scrollbar{display:none}
+.replace-candidate{border-top:1px solid var(--hair)}
+.replace-candidate:first-child{border-top:0}
+.cand{display:flex;align-items:center;gap:12px;width:100%;min-height:44px;padding:12px 0;text-align:left}
+.cand-text{flex:1;min-width:0}
+.cand-name{display:block;font-size:15px;font-weight:700;line-height:1.3;overflow-wrap:anywhere}
+.cand-sub{display:block;margin-top:1px;font-size:13px;line-height:1.4;color:var(--ink2)}
+/* Кольцо справа — «выбрать»: при нажатии мятное. */
+.cand-ring{flex:none;width:26px;height:26px;border-radius:50%;box-shadow:inset 0 0 0 2px var(--tonal2)}
+.cand:active .cand-ring{background:var(--mint);box-shadow:none}
+.cand-empty{padding:26px 0 8px}
+.cand-empty[hidden]{display:none}
+.cand-empty-title{font:600 24px/1.05 var(--hand)}
+.cand-empty-hint{margin-top:4px;font-size:13px;line-height:1.45;color:var(--ink2)}
+
+/* ---------- библиотека упражнений ---------- */
+/* Экран без цветной шапки, как остальные внутренние экраны «Конструктора»: цвет
+   несут значок фильтров, выбранный чип и кнопка «К сборке». Список — ряды без
+   карточек, между ними тонкая линия. Название ряда с мышцами — одна кнопка, она
+   раскрывает «Как выполнять»; круглая «Добавить» стоит справа. */
+.library-tools{padding-top:20px}
+.library-find{display:flex;align-items:center;gap:8px}
+.library-find .search{flex:1;min-width:0}
+.library-filter{position:relative;min-width:44px;min-height:44px}
+.library-filter .dot{position:absolute;top:6px;right:6px;width:9px;height:9px;border-radius:50%;background:var(--lead-d)}
+/* Чипы групп мышц — одна строка, которую листают вбок: восемь штук на 375px не
+   помещаются, а перенос на вторую строку съедал бы экран. Верх и низ строки
+   оставлены под кольцо фокуса: прокрутка обрезает всё, что выше и ниже. */
+.chiprow{display:flex;gap:8px;margin:0 -20px;padding:0 20px;overflow-x:auto;scrollbar-width:none}
+.chiprow::-webkit-scrollbar{display:none}
+.chiprow .zone-chip{flex:none}
+.library-zones{margin-top:10px;padding-top:4px;padding-bottom:4px}
+.library-zones .zone-chip,.library-chips .zone-chip{gap:6px;padding:0 14px}
+.library-zones .zone-chip[aria-pressed=true],.library-chips .zone-chip[aria-pressed=true]{padding-left:11px}
+
+/* Причина, по которой «Добавить» недоступна, одна на все ряды: плашка над списком. */
+.library-blocked{margin:14px 0 0;padding:12px 16px;border-radius:18px;background:var(--tonal);font-size:13px;line-height:1.5;color:var(--ink2)}
+
+.library-list{margin-top:6px}
+.library-row{--bcs:var(--lead-s);border-top:1px solid var(--hair)}
+.library-row:first-child{border-top:0}
+.library-line{display:flex;align-items:center;gap:8px}
+/* Кнопка ряда выступает влево на 8px, чтобы текст стоял по полю 20px, а нажатый
+   ряд подсвечивался шире текста. */
+.library-main{display:block;flex:1;min-width:0;min-height:44px;margin-left:-8px;padding:14px 4px 14px 8px;border-radius:16px;text-align:left}
+.library-main:active{background:var(--tonal)}
+.library-main .row-title{display:block;font-size:16px;font-weight:700;line-height:1.3;overflow-wrap:anywhere}
+.library-main .row-sub{display:block;margin-top:2px;font-size:13px;line-height:1.4;color:var(--ink2)}
+.library-meta{display:flex;align-items:center;gap:2px;margin-top:3px;font-size:12px;font-weight:600;line-height:1.4;color:var(--ink2)}
+.library-meta .ic{width:16px;height:16px;transition:transform .2s}
+.library-main[aria-expanded=true] .library-meta .ic{transform:rotate(180deg)}
+/* «Добавить»: кружок 40px с плюсом, а у добавленного — мятный с галочкой (смысл
+   не только в цвете). Добавленное и недоступное по другой причине — оба
+   disabled, и различает их класс .is-added. Зона нажатия шире кружка. */
+.library-add{position:relative;flex:none;display:grid;place-items:center;min-width:40px;min-height:40px;border-radius:50%;background:var(--tonal);color:var(--ink);transition:background .2s}
+.library-add::before{content:"";position:absolute;inset:-2px -4px}
+.library-add:active{background:var(--tonal2)}
+.library-add .ic-check{display:none}
+.library-add:disabled{cursor:default}
+.library-add:disabled:not(.is-added){opacity:.45}
+.library-add.is-added{background:var(--mint);color:var(--mint-i)}
+.library-add.is-added .ic-plus{display:none}
+.library-add.is-added .ic-check{display:block}
+/* «Как выполнять» раскрывается под рядом: подпись рукописью, текст, видео и
+   ссылки. Блочная раскладка, а не флекс: панель плеера встаёт после кнопки видео
+   и должна занять всю ширину. */
+.library-how{padding:0 0 18px;animation:libopen .22s ease-out}
+.library-how .cap{display:block;font:600 22px/1.05 var(--hand);color:var(--ink2)}
+.library-how .howto-body{margin-top:2px}
+.library-how .video{max-width:100%;margin-top:12px}
+@keyframes libopen{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
+
+.library-empty{padding:36px 0 8px}
+.library-empty-title{font:600 24px/1.05 var(--hand)}
+.library-empty-hint{margin-top:6px;font-size:13px;line-height:1.45;color:var(--ink2)}
+.library-empty .btn{display:flex;justify-content:flex-start;margin-top:8px}
+/* Плавающая панель «В тренировке: N», вход снизу; число — рукописью. */
+.dock[hidden]{display:none}
+.library-dock{animation:sheet-up .28s ease-out}
+.library-dock .dock-text .hand{margin-left:2px;font-size:28px;line-height:1;vertical-align:-3px}
+.dock .btn.main{border-radius:20px}
+
+/* Шторка фильтров: заголовок и нижняя строка остаются на месте, листается
+   середина (края сглажены маской). Боковых полей у самой шторки нет, чтобы
+   полоса прокрутки и маска шли от края до края. */
+.library-sheet{padding:10px 0 var(--tabbar-safe-bottom)}
+.library-sheet .sheet-head{padding:0 20px}
+.library-sheet-body{flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:12px 20px 20px;scrollbar-width:none;
+  -webkit-mask-image:linear-gradient(to bottom,transparent,#000 12px,#000 calc(100% - 18px),transparent);mask-image:linear-gradient(to bottom,transparent,#000 12px,#000 calc(100% - 18px),transparent)}
+.library-sheet-body::-webkit-scrollbar{display:none}
+.library-sheet-foot{flex:none;display:flex;align-items:center;gap:8px;padding:6px 20px 22px}
+.library-sheet-foot .btn.main{flex:1}
+.library-sheet-foot .btn.text{position:relative}
+.library-sheet-foot .btn.text::before{content:"";position:absolute;inset:-6px -4px}
+.library-grp{margin-top:20px}
+.library-grp:first-child{margin-top:0}
+.library-grp>.label,.library-gear-grp .builder-group-title{display:block;margin:0 0 8px;font:600 13px/1.3 var(--sans);color:var(--ink2)}
+.library-gear-grp .gear-hint{margin:-2px 0 6px}
+.library-gear-grp .gear-name{font-size:15px;font-weight:600}
+.library-chips{display:flex;flex-wrap:wrap;gap:8px}
+
+/* ======= ВРЕМЕННО: старые правила экранов, которые ещё не переоформлены (задачи 4–6 плана) ======= */
 /* Статья «На чём построены тренировки» (sources.html) и ссылки на неё из
    приложения. Колонка уже, чем у тренировки: это текст для чтения подряд.
    «Коротко» — те же .facts, что в шапке тренировки, «Чего не заменяет» — та

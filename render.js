@@ -325,6 +325,10 @@ export function blockKind(block) {
   return 'strength';
 }
 
+// Номер блока в кружке: в данных он набран с нулём («01»), а на экране без него —
+// кружок 38px читается спокойнее с одной цифрой. Нечисловой номер остаётся как есть.
+export const blockNumber = block => (/^\d+$/.test(block.n) ? String(Number(block.n)) : block.n);
+
 // Раскрытие блока — состояние в разметке (aria-expanded у кнопки и hidden у
 // тела), как у «Как выполнять»: так его читает и диктор, и тест.
 export function setBlockOpen(section, open) {
@@ -344,7 +348,7 @@ function renderBlock(document, block, { expandDescriptions, open }) {
   head.type = 'button';
   head.setAttribute('aria-expanded', String(open));
   head.setAttribute('aria-controls', bodyId);
-  const number = el(document, 'span', 'block-number', block.n);
+  const number = el(document, 'span', 'block-number', blockNumber(block));
   number.setAttribute('aria-hidden', 'true');
   const text = el(document, 'span', 'blk-text');
   text.append(el(document, 'span', 'blk-title', block.title), el(document, 'span', 'blk-sub', block.sub));

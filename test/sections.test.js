@@ -145,7 +145,7 @@ test('«Конструктор» открывается на входе: как 
   startApp(window);
   document.querySelector('[data-section="builder"]').click();
   const screen = document.querySelector('#screen-builder');
-  assert.equal(screen.querySelector('h2').textContent, 'Конструктор');
+  assert.equal(screen.querySelector('h1').textContent, 'Конструктор');
   assert.equal(screen.querySelectorAll('.builder-path').length, 2);
   assert.equal(screen.querySelectorAll('.builder-steps li').length, 4);
   assert.doesNotMatch(screen.textContent, /платн/i, 'раздел бесплатный');

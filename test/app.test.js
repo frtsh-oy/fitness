@@ -1455,18 +1455,26 @@ const TAP_TARGETS = new Map([
   ['.workout-edit', TAP_CHIP],
   ['.workouts-build', TAP_MAIN],
   ['.builder-path', TAP_MAIN],
-  ['.builder-back', TAP_CHIP],
+  ['.builder-back', TAP_BUTTON],
   ['.builder-add', TAP_MAIN],
   ['.builder-remove', TAP_CHIP],
-  ['.builder-replace', TAP_CHIP],
+  ['.builder-replace', TAP_BUTTON],
   ['.builder-save', TAP_MAIN],
-  ['.library-chip', TAP_CHIP],
-  ['.library-add', TAP_CHIP],
-  ['.library-more', TAP_CHIP],
-  ['.library-reset', TAP_CHIP],
+  ['.save-name', TAP_MAIN],
+  ['.cover-more', TAP_CHIP],
+  ['.format-chip', TAP_BUTTON],
+  ['.gear-switch', TAP_MAIN],
+  ['.library-filter', TAP_BUTTON],
+  ['.library-main', TAP_MAIN],
+  ['.library-add', TAP_BUTTON],
+  ['.library-sheet-close', TAP_BUTTON],
+  ['.seg button', TAP_BUTTON],
+  ['.btn.main', TAP_MAIN],
+  ['.btn.text', TAP_CHIP],
   ['.day-chip', TAP_BUTTON],
-  ['.replace-pick', TAP_CHIP],
+  ['.replace-pick', TAP_MAIN],
   ['.replace-close', TAP_BUTTON],
+  ['.s-clear', TAP_CHIP],
   ['.level-option', TAP_MAIN],
   ['.zone-chip', TAP_CHIP],
   ['.builder-generate', TAP_MAIN],
@@ -1551,6 +1559,11 @@ test('ни одно правило не опускает нажимаемое н
   builder.querySelector('.builder-add').click();
   collect();
   builder.querySelector('.library-add').click();
+  // Шторка фильтров открывается поверх библиотеки и собирает свои сегменты и
+  // кнопки; закрыв её, возвращаемся к сборке.
+  builder.querySelector('.library-filter').click();
+  collect();
+  builder.querySelector('.library-sheet-close').click();
   builder.querySelector('.builder-back').click();
   collect();
   builder.querySelector('.builder-save').click();
@@ -1570,9 +1583,7 @@ test('ни одно правило не опускает нажимаемое н
   rich.document.querySelector('[data-section="builder"]').click();
   richBuilder.querySelectorAll('.builder-path')[1].click();
   collect(richBuilder);
-  // Первый .zone-chip на экране — переключатель инвентаря: зону выбираем по
-  // тому, что это не он.
-  richBuilder.querySelector('.zone-chip:not(.gear-chip)').click();
+  richBuilder.querySelector('.zone-chip').click();
   richBuilder.querySelector('.builder-generate').click();
   collect(richBuilder);
 

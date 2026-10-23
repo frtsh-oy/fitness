@@ -18,7 +18,7 @@ import { generate, availability, missingGroupsMessage } from '../builder/generat
 import { replaceCandidates } from '../builder/replace.js';
 import { createGearProfile, GEAR_KEY } from '../gear-profile.js';
 import { belowFloor } from '../builder/coverage.js';
-import { CORE_GROUPS, LEVELS, MAX_STRENGTH, SKELETON } from '../builder/rules.js';
+import { CORE_GROUPS, LEVELS, MAX_STRENGTH, PLAN_DAYS, SKELETON } from '../builder/rules.js';
 import { plural } from '../builder/texts.js';
 import { LIBRARY } from '../exercises/index.js';
 import { groupsPhrase } from '../muscles.js';
@@ -110,6 +110,14 @@ function assemble(root, names) {
 const rows = root => [...root.querySelectorAll('.builder-item-name')].map(n => n.textContent);
 const coverage = root => [...root.querySelectorAll('.builder-coverage p')].map(p => p.textContent);
 const reasons = root => [...root.querySelectorAll('.builder-reason')].filter(p => !p.hidden).map(p => p.textContent);
+// Карточка покрытия на сборке и результате: список групп спрятан за кнопкой
+// («Без нагрузки: 17 групп»), и до раскрытия он в разметке есть, но скрыт.
+const coverMore = root => root.querySelector('.cover-more');
+const coverList = root => root.querySelector('.cover-list');
+const sentence = phrase => `${phrase[0].toUpperCase()}${phrase.slice(1)}.`;
+// Панель внизу сборки и результата: что получится (или почему нельзя сохранить).
+const dockTitle = root => root.querySelector('.dock-text b').textContent;
+const dockNote = root => root.querySelector('.dock-text span').textContent;
 const errorOf = root => root.querySelector('.builder-error');
 const pressedDays = root => [...root.querySelectorAll('.day-chip[aria-pressed="true"]')].map(c => c.textContent);
 const dayChip = (root, label) => [...root.querySelectorAll('.day-chip')].find(c => c.textContent === label);
@@ -123,10 +131,20 @@ function typeName(root, text) {
 const rowOf = (root, name) => [...root.querySelectorAll('.builder-item')]
   .find(row => row.querySelector('.builder-item-name').textContent === name);
 
-// Нажимает «Заменить» у первой строки блока с этим заголовком.
+const blockByTitle = (root, title) => [...root.querySelectorAll('.builder-block')]
+  .find(block => block.querySelector('.blk-title').textContent === title);
+const isOpen = block => block.querySelector('.blk-head').getAttribute('aria-expanded') === 'true';
+// Раскрывает блок, как человек: нажатием на шапку. Уже раскрытый остаётся.
+function openBlock(root, title) {
+  const block = blockByTitle(root, title);
+  assert.ok(block, `нет блока «${title}»`);
+  if (!isOpen(block)) block.querySelector('.blk-head').click();
+  return block;
+}
+
+// Раскрывает блок с этим заголовком и нажимает «Заменить» у его первой строки.
 function openReplace(root, blockTitle) {
-  const block = [...root.querySelectorAll('.builder-block')].find(b => b.querySelector('h3').textContent === blockTitle);
-  block.querySelector('.builder-replace').click();
+  openBlock(root, blockTitle).querySelector('.builder-replace').click();
   return root.querySelector('.replace-sheet');
 }
 
@@ -136,10 +154,10 @@ const generateNow = root => root.querySelector('.builder-generate').click();
 const otherVariant = root => root.querySelector('.builder-variant').click();
 const levelOption = (root, label) => [...root.querySelectorAll('.level-option')]
   .find(option => option.querySelector('.level-title').textContent === label);
-// Чипы зон. У переключателей инвентаря, блоков и формата тот же класс .zone-chip
-// (внешний вид у них общий), поэтому зоны отличаются отсутствием .gear-chip,
-// .block-chip и .format-chip.
-const zoneChips = root => [...root.querySelectorAll('.zone-chip:not(.gear-chip):not(.block-chip):not(.format-chip)')];
+// Чипы зон. У переключателей блоков тот же класс .zone-chip (внешний вид у них
+// общий), поэтому зоны отличаются отсутствием .block-chip; инвентарь и формат
+// занятия — другие узлы (.gear-switch, .format-chip).
+const zoneChips = root => [...root.querySelectorAll('.zone-chip:not(.block-chip)')];
 const zoneChip = (root, label) => zoneChips(root).find(chip => chip.textContent === label);
 const pressedZones = root => zoneChips(root).filter(chip => chip.getAttribute('aria-pressed') === 'true').map(chip => chip.textContent);
 const checkedLevels = root => [...root.querySelectorAll('.level-option[aria-checked="true"]')]
@@ -164,7 +182,7 @@ test('вход: «Собрать самому» и устройство трен
   const { document, root } = mount(t);
   openBuilder(document);
 
-  assert.equal(root.querySelector('h2').textContent, 'Конструктор');
+  assert.equal(root.querySelector('h1').textContent, 'Конструктор');
   assert.equal(root.querySelector('.builder-lead').textContent,
     'Тренировка всегда на всё тело. Собери её сам из библиотеки или получи готовую по правилам, а потом сохрани.');
 
@@ -175,13 +193,16 @@ test('вход: «Собрать самому» и устройство трен
 
   assert.equal(root.querySelector('.builder-steps-title').textContent, 'Из чего обычно состоит тренировка');
   const steps = [...root.querySelectorAll('.builder-steps li')]
-    .map(li => [li.querySelector('strong').textContent, li.querySelector('span').textContent]);
+    .map(li => [li.querySelector('strong').textContent, li.querySelector('.step-text span').textContent]);
   assert.deepEqual(steps, [
     ['Разминка', 'Плавно, без длительных остановок'],
     ['Круговой разогрев', 'Повышает пульс, резинки лёгкие'],
     ['Силовая часть', 'Парами, кругом или подходами — на выбор'],
     ['Завершение', '2–3 минуты в спокойном темпе, дыхание'],
   ]);
+  // Номера — в кружках цвета блока, как блоки в «Сегодня».
+  assert.deepEqual([...root.querySelectorAll('.builder-steps li')].map(li => [li.querySelector('.step-badge').textContent, li.dataset.kind]),
+    [['1', 'warm'], ['2', 'circuit'], ['3', 'strength'], ['4', 'finish']]);
 
   // Откуда правила — статья об источниках, сразу под составом тренировки.
   const sources = root.querySelector('.builder-steps + .sources-link');
@@ -191,15 +212,16 @@ test('вход: «Собрать самому» и устройство трен
   assert.doesNotMatch(root.textContent, /(^|[^а-яё])ИИ([^а-яё]|$)|персональн|тренер/i);
 });
 
-test('ручная сборка: разминка, разогрев и завершение заполнены сразу, предупреждение называет все 17 групп', t => {
+test('ручная сборка: разминка, разогрев и завершение заполнены сразу, покрытие называет все 17 групп без нагрузки', t => {
   const { document, root } = mount(t);
   openBuilder(document);
   startManual(root);
 
-  assert.equal(root.querySelector('h2').textContent, 'Своя тренировка');
+  assert.equal(root.querySelector('h1').textContent, 'Своя тренировка');
   const blocks = [...root.querySelectorAll('.builder-block')];
-  assert.deepEqual(blocks.map(b => b.querySelector('h3').textContent),
+  assert.deepEqual(blocks.map(b => b.querySelector('.blk-title').textContent),
     ['Стартовая разминка', 'Круговой разогрев', 'Завершение']);
+  assert.deepEqual(blocks.map(isOpen), [true, false, false], 'сборка открывается на разминке, остальные свёрнуты');
 
   // Скелет берёт из библиотеки «сколько есть, но не больше»: в каждом блоке
   // разные упражнения своего типа, и их столько, сколько позволяют оба.
@@ -221,9 +243,21 @@ test('ручная сборка: разминка, разогрев и заве�
   assert.equal(root.querySelector('.builder-coverage').getAttribute('role'), 'status');
   assert.deepEqual(coverage(root), [
     'Тренировка пока не на всё тело',
-    `Без нагрузки: ${groupsPhrase(CORE_GROUPS)}.`,
     'Считаются только силовые упражнения. Сохранить можно и так.',
   ]);
+
+  // Какие группы без нагрузки, — за кнопкой: в строку все семнадцать не уместились бы.
+  assert.equal(coverMore(root).textContent, `Без нагрузки: ${CORE_GROUPS.length} ${plural(CORE_GROUPS.length, ['группа', 'группы', 'групп'])}`);
+  assert.equal(coverMore(root).getAttribute('aria-controls'), coverList(root).id);
+  assert.equal(coverMore(root).getAttribute('aria-expanded'), 'false');
+  assert.equal(coverList(root).hidden, true);
+  assert.equal(coverList(root).textContent, sentence(groupsPhrase(CORE_GROUPS)));
+  coverMore(root).click();
+  assert.equal(coverList(root).hidden, false);
+  assert.equal(coverMore(root).getAttribute('aria-expanded'), 'true');
+  coverMore(root).click();
+  assert.equal(coverList(root).hidden, true);
+  assert.equal(coverMore(root).getAttribute('aria-expanded'), 'false');
 });
 
 test('добавление из библиотеки пересчитывает «Без нагрузки», убрать — возвращает группу', t => {
@@ -232,25 +266,37 @@ test('добавление из библиотеки пересчитывает 
   startManual(root);
   const save = () => root.querySelector('.builder-save');
   assert.equal(save().disabled, true, 'без силовых сохранять нечего');
-  assert.deepEqual(reasons(root), ['Добавь хотя бы одно силовое упражнение.']);
+  assert.equal(dockTitle(root), 'Добавь хотя бы одно силовое упражнение.');
+  assert.equal(dockNote(root), '');
+  assert.deepEqual(reasons(root), [], 'причина стоит в панели, а не под «Добавить»');
 
   openLibrary(root);
   assert.ok(root.querySelector('.library'), 'кнопка ведёт на экран библиотеки');
   addFromLibrary(root, nameOf('glute-bridge'));
   back(root);
 
-  assert.ok(root.querySelector('.builder-coverage'), 'вернулись на сборку');
+  assert.ok(root.querySelector('.cover'), 'вернулись на сборку');
   assert.ok(rows(root).includes(nameOf('glute-bridge')));
-  assert.ok([...root.querySelectorAll('.builder-block h3')].some(h => h.textContent === 'Пара 1'),
+  assert.ok([...root.querySelectorAll('.builder-block .blk-title')].some(h => h.textContent === 'Пара 1'),
     'силовое упражнение стоит в паре');
-  assert.equal(coverage(root)[1], `Без нагрузки: ${groupsPhrase(CORE_GROUPS.filter(g => g !== 'glutes'))}.`);
+  assert.equal(isOpen(blockByTitle(root, 'Пара 1')), true, 'открыт блок, куда попало упражнение');
+  assert.equal(isOpen(blockByTitle(root, 'Стартовая разминка')), false, 'остальные свёрнуты');
+  assert.equal(document.activeElement, root.querySelector('.builder-add'), 'фокус — на «Добавить»');
+  const left = CORE_GROUPS.filter(g => g !== 'glutes');
+  assert.equal(coverMore(root).textContent, `Без нагрузки: ${left.length} групп`);
+  assert.equal(coverList(root).textContent, sentence(groupsPhrase(left)));
   assert.equal(save().disabled, false);
+  const count = rows(root).length;
+  assert.equal(dockTitle(root), `${count} ${plural(count, ['упражнение', 'упражнения', 'упражнений'])}`);
+  assert.equal(dockNote(root), 'Своя сборка');
   assert.deepEqual(reasons(root), []);
 
   root.querySelector('.builder-remove').click();
   assert.equal(rows(root).includes(nameOf('glute-bridge')), false);
-  assert.equal(coverage(root)[1], `Без нагрузки: ${groupsPhrase(CORE_GROUPS)}.`);
+  assert.equal(coverList(root).textContent, sentence(groupsPhrase(CORE_GROUPS)));
   assert.equal(save().disabled, true);
+  assert.equal(dockTitle(root), 'Добавь хотя бы одно силовое упражнение.');
+  assert.equal(document.activeElement, root.querySelector('.builder-add'), 'после «Убрать» фокус — на «Добавить»');
 });
 
 test('закрыты все группы — «Все основные группы получают нагрузку»', t => {
@@ -264,13 +310,24 @@ test('закрыты все группы — «Все основные груп�
   const keys = ['squat-a', 'hinge-a', 'lunge-a', 'row-a', 'press-a', 'overhead-a', 'crunch-a', 'calves-1'];
   for (const key of keys) addFromLibrary(root, nameFor(key));
   back(root);
-  assert.equal(coverage(root)[1], `Без нагрузки: ${groupsPhrase(['biceps'])}.`);
+  assert.deepEqual(coverage(root), [
+    'Тренировка пока не на всё тело',
+    'Считаются только силовые упражнения. Сохранить можно и так.',
+  ]);
+  assert.equal(coverMore(root).textContent, 'Без нагрузки: 1 группа');
+  assert.equal(coverList(root).textContent, sentence(groupsPhrase(['biceps'])));
+  assert.equal(root.querySelector('.cover-knot').textContent, String(CORE_GROUPS.length - 1), 'в узле петли — сколько групп уже с нагрузкой');
+  assert.equal(root.querySelector('.cover').classList.contains('is-ok'), false);
 
   openLibrary(root);
   addFromLibrary(root, nameFor('biceps-1'));
   back(root);
   assert.deepEqual(coverage(root), ['Все основные группы получают нагрузку']);
   assert.equal(root.querySelector('.builder-coverage').textContent, 'Все основные группы получают нагрузку');
+  assert.equal(coverMore(root).hidden, true, 'группы закрыты — кнопки со списком нет');
+  assert.equal(coverList(root).hidden, true);
+  assert.equal(root.querySelector('.cover').classList.contains('is-ok'), true);
+  assert.ok(root.querySelector('.cover-knot svg'), 'в узле петли — галочка');
 });
 
 test('замена разминки: кандидаты того же типа; нечем заменить — «Похожих упражнений больше нет»', t => {
@@ -285,13 +342,13 @@ test('замена разминки: кандидаты того же типа; 
     ['Круговой разогрев', 'circuit', 'Того же типа'],
     ['Завершение', 'cooldown', 'Того же типа'],
   ]) {
-    const block = [...root.querySelectorAll('.builder-block')].find(b => b.querySelector('h3').textContent === title);
+    const block = [...root.querySelectorAll('.builder-block')].find(b => b.querySelector('.blk-title').textContent === title);
     const inBlock = [...block.querySelectorAll('.builder-item-name')].map(n => n.textContent);
     const sheet = openReplace(root, title);
     assert.equal(sheet.getAttribute('role'), 'dialog');
-    assert.equal(sheet.querySelector('h3').textContent, 'Заменить упражнение');
+    assert.equal(sheet.querySelector('h2').textContent, 'Заменить упражнение');
     assert.equal(sheet.querySelector('.replace-current').textContent, inBlock[0]);
-    assert.equal(sheet.querySelector('.replace-hint').textContent, hint);
+    assert.equal(sheet.querySelector('.replace-hint').textContent, `${hint}. Нажми на упражнение, чтобы заменить.`);
 
     const free = TEST_LIBRARY.filter(e => e.slot === slot && !rows(root).includes(e.name));
     const candidates = [...sheet.querySelectorAll('.replace-candidate')];
@@ -325,6 +382,7 @@ test('замена разминки: кандидаты того же типа; 
   const empty = openReplace(tight.root, 'Стартовая разминка');
   assert.equal(empty.querySelector('.replace-empty').textContent,
     'Похожих упражнений больше нет: все подходящие уже в тренировке.');
+  assert.equal(empty.querySelector('.replace-hint').textContent, 'Того же типа.', 'нажимать не на что — подсказки про нажатие нет');
   assert.equal(empty.querySelectorAll('.replace-pick').length, 0);
 });
 
@@ -337,8 +395,13 @@ test('шторка замены закрывается крестиком, Escap
   const sheet = openReplace(root, 'Стартовая разминка');
   assert.equal(sheet.getAttribute('aria-modal'), 'true');
   assert.ok(sheet.contains(document.activeElement), 'фокус внутри шторки');
+  // Под шторкой всё недоступно: экран, нижняя панель, шторка таймера.
+  const behind = [root.querySelector('.builder'), document.querySelector('.tabbar'), document.querySelector('.timer-sheet')];
+  assert.ok(behind.every(node => node.hasAttribute('inert')), 'экран, панель и таймер под шторкой inert');
   sheet.querySelector('.replace-close').click();
   assert.equal(root.querySelector('.replace-sheet'), null);
+  assert.ok(behind.every(node => !node.hasAttribute('inert')), 'после закрытия inert снят');
+  assert.ok(document.activeElement.classList.contains('builder-replace'), 'фокус вернулся на «Заменить»');
 
   openReplace(root, 'Круговой разогрев');
   root.querySelector('.replace-sheet').dispatchEvent(
@@ -353,13 +416,191 @@ test('шторка замены закрывается крестиком, Escap
   assert.deepEqual(rows(root), before);
 });
 
+// Библиотека для проверки поиска в шторке: четыре разминки с названиями и
+// мышцами, которых нет больше нигде в тестовой библиотеке. Скелет берёт две, и
+// какие именно, решает зерно, поэтому ожидания берутся из того, что на экране.
+const SEARCHABLE_WARMUPS = [
+  ['alpha', 'Альфа', 'Плечи'], ['beta', 'Бета', 'Спина'], ['gamma', 'Гамма', 'Ноги'], ['delta', 'Дельта', 'Руки'],
+].map(([key, name, muscles]) => variant(TEST_LIBRARY.find(e => e.key === 'warm-1'), { key: `w-${key}`, name, muscles }));
+const SEARCH_LIBRARY = [...TEST_LIBRARY.filter(e => e.slot !== 'warmup'), ...SEARCHABLE_WARMUPS];
+
+test('шторка замены: поиск по названию, мышцам и инвентарю; ничего не нашлось — «Показать все»; крестик очищает', t => {
+  const { document, root } = mountScreen(t, { library: SEARCH_LIBRARY });
+  startManual(root);
+  const sheet = openReplace(root, 'Стартовая разминка');
+  const input = sheet.querySelector('input[type="search"]');
+  assert.ok(input, 'в шторке есть поле поиска');
+  assert.equal(input.getAttribute('aria-label'), 'Найти упражнение');
+  assert.equal(sheet.querySelector('.sheet-search').getAttribute('role'), 'search');
+  const names = () => [...sheet.querySelectorAll('.replace-name')].map(node => node.textContent);
+  const status = () => sheet.querySelector('.sr-only[role="status"]').textContent;
+  const type = text => {
+    input.value = text;
+    input.dispatchEvent(new document.defaultView.Event('input', { bubbles: true }));
+  };
+  const clear = sheet.querySelector('.s-clear');
+
+  // Свободны две из четырёх: две другие скелет уже поставил.
+  const free = names();
+  assert.equal(free.length, 2);
+  assert.ok(free.every(name => SEARCHABLE_WARMUPS.some(entry => entry.name === name)));
+  assert.equal(status(), 'Найдено: 2');
+  assert.equal(clear.hidden, true, 'пока поле пусто, крестика нет');
+  const [first, second] = free;
+  const musclesOf = name => SEARCHABLE_WARMUPS.find(entry => entry.name === name).muscles;
+
+  type(first.toUpperCase());
+  assert.deepEqual(names(), [first], 'регистр не важен');
+  assert.equal(status(), 'Найдено: 1');
+  assert.equal(clear.hidden, false);
+  assert.equal(sheet.querySelector('.cand-empty').hidden, true);
+
+  type(musclesOf(second).toLowerCase());
+  assert.deepEqual(names(), [second], 'ищет и по мышцам');
+
+  type('без инвент');
+  assert.deepEqual(names(), free, 'и по инвентарю; порядок прежний');
+
+  type(`${first} ${musclesOf(second)}`);
+  assert.deepEqual(names(), [], 'слова должны найтись все');
+  assert.equal(sheet.querySelector('.cand-empty').hidden, false);
+  assert.equal(sheet.querySelectorAll('.replace-candidate').length, 0);
+  assert.equal(status(), 'Ничего не нашлось');
+
+  // «Показать все» очищает поле и возвращает список; фокус — в поле.
+  [...sheet.querySelectorAll('.cand-empty button')].find(button => button.textContent === 'Показать все').click();
+  assert.equal(input.value, '');
+  assert.deepEqual(names(), free);
+  assert.equal(sheet.querySelector('.cand-empty').hidden, true);
+  assert.equal(document.activeElement, input);
+
+  // Крестик делает то же самое.
+  type(first);
+  clear.click();
+  assert.equal(input.value, '');
+  assert.deepEqual(names(), free);
+  assert.equal(clear.hidden, true);
+
+  // Выбор из отфильтрованного списка заменяет упражнение так же, как из полного.
+  type(second);
+  const before = rows(root);
+  const current = sheet.querySelector('.replace-current').textContent;
+  sheet.querySelector('.replace-pick').click();
+  assert.equal(root.querySelector('.replace-sheet'), null);
+  assert.deepEqual(rows(root).sort(), before.map(name => (name === current ? second : name)).sort());
+});
+
+test('шторка замены: когда кандидатов нет, поля поиска нет', t => {
+  const warmups = SEARCHABLE_WARMUPS.slice(0, SKELETON.warmup.count);
+  const library = [...TEST_LIBRARY.filter(e => e.slot !== 'warmup'), ...warmups];
+  const { root } = mountScreen(t, { library });
+  startManual(root);
+  const sheet = openReplace(root, 'Стартовая разминка');
+  assert.ok(sheet.querySelector('.replace-empty'));
+  assert.equal(sheet.querySelector('input'), null, 'искать нечего — поля нет');
+  assert.equal(sheet.querySelector('.cand-empty'), null);
+});
+
+test('блоки сборки — раскрывающиеся списки: открыт один, нажатие на открытый сворачивает, замена и формат состояние не сбрасывают', t => {
+  const { root } = mountScreen(t, { library: TEST_LIBRARY, seed: counter() });
+  assemble(root, [nameOf('squat-a', TEST_LIBRARY), nameOf('row-a', TEST_LIBRARY)]);
+  const titles = ['Стартовая разминка', 'Круговой разогрев', 'Пара 1', 'Завершение'];
+  const states = () => titles.map(title => {
+    const block = blockByTitle(root, title);
+    const head = block.querySelector('.blk-head');
+    const body = block.querySelector('.blk-body');
+    assert.equal(head.getAttribute('aria-controls'), body.id, `${title}: шапка управляет своим телом`);
+    assert.equal(head.getAttribute('aria-expanded'), String(!body.hidden), `${title}: состояние в разметке одно`);
+    return isOpen(block);
+  });
+
+  // Возврат из библиотеки раскрыл блок, куда попали упражнения.
+  assert.deepEqual(states(), [false, false, true, false]);
+
+  // Шапка — кнопка внутри заголовка, в ней номер, название, подпись и число упражнений.
+  const block = blockByTitle(root, 'Круговой разогрев');
+  assert.equal(block.querySelector('.block-heading').tagName, 'H2');
+  assert.equal(block.querySelector('.block-heading > .blk-head').tagName, 'BUTTON');
+  assert.equal(block.querySelector('.block-number').getAttribute('aria-hidden'), 'true');
+  assert.equal(block.querySelector('.blk-prog').firstChild.textContent, String(namesIn(block).length));
+  assert.match(block.querySelector('.blk-prog .sr-only').textContent, /упражнени/);
+
+  // Один открыт: открытие другого закрывает прежний.
+  block.querySelector('.blk-head').click();
+  assert.deepEqual(states(), [false, true, false, false]);
+  blockByTitle(root, 'Завершение').querySelector('.blk-head').click();
+  assert.deepEqual(states(), [false, false, false, true]);
+  // Нажатие на открытый сворачивает его, открытых нет.
+  blockByTitle(root, 'Завершение').querySelector('.blk-head').click();
+  assert.deepEqual(states(), [false, false, false, false]);
+
+  // Замена перерисовывает блоки, а раскрытый остаётся раскрытым, и фокус — на новой строке.
+  openReplace(root, 'Стартовая разминка');
+  root.querySelector('.replace-pick').click();
+  assert.deepEqual(states(), [true, false, false, false], 'открыт тот, где заменили');
+  assert.equal(root.querySelector('.replace-sheet'), null);
+
+  // Переключатели блоков и формата тоже не сворачивают открытый блок.
+  blockChip(root, 'circuit').click();
+  blockChip(root, 'circuit').click();
+  assert.equal(isOpen(blockByTitle(root, 'Стартовая разминка')), true);
+  formatChip(root, 'loop').click();
+  assert.equal(isOpen(blockByTitle(root, 'Стартовая разминка')), true);
+  assert.ok(blockByTitle(root, 'Силовой круг'));
+});
+
+test('цвет страницы: вход, сборка и сохранение масляные, генератор сиреневый; скрытый раздел страницу не красит', async t => {
+  const { document, root, view } = mountScreen(t, { library: TEST_LIBRARY, store: okStore });
+  const tint = () => document.body.dataset.tint;
+
+  // Вход экрана сам цвет не ставит: его ставит вкладка (sections.js).
+  assert.equal(tint(), undefined);
+  startGenerator(root);
+  assert.equal(tint(), 'lilac', 'генератор — сиреневый');
+  back(root);
+  assert.equal(tint(), 'butter', 'вход — масляный');
+  assemble(root, [nameOf('squat-a', TEST_LIBRARY)]);
+  assert.equal(tint(), 'butter', 'сборка — масляная');
+  toSave(root);
+  assert.equal(tint(), 'butter', 'сохранение — масляное');
+  back(root);
+  back(root);
+  await settle(0);
+  assert.ok(root.querySelector('.builder-path'), 'вернулись на вход');
+
+  // Результат подобранной — тоже масляный: сиреневый только у выбора уровня и зон.
+  startGenerator(root);
+  assert.equal(tint(), 'lilac');
+  generateNow(root);
+  assert.equal(tint(), 'butter');
+  back(root);
+  assert.equal(tint(), 'lilac', 'назад на генератор — снова сиреневый');
+
+  // Раздел на другой вкладке (скрыт): правка из «Тренировок» его цвет не меняет.
+  document.body.dataset.tint = 'sky';
+  root.hidden = true;
+  const own = generate({ level: 'beginner', zones: [], seed: 1, library: TEST_LIBRARY, now: () => OWN.t }).compact;
+  await view.edit('my-tint0001', own);
+  assert.equal(tint(), 'sky', 'скрытый раздел страницу не красит');
+
+  // Вернулись во вкладку: раздел сам подкрашивает страницу под открытый экран.
+  root.hidden = false;
+  view.syncTint();
+  assert.equal(tint(), 'butter');
+  back(root);
+  assert.equal(tint(), 'lilac');
+  document.body.dataset.tint = 'butter';
+  view.syncTint();
+  assert.equal(tint(), 'lilac', 'на открытом генераторе возврат во вкладку оставляет сиреневый');
+});
+
 test('экран сохранения: название по умолчанию, дни пн, ср, пт и строка «Что сохранится»', t => {
   const { document, root } = mount(t);
   openBuilder(document);
   assemble(root, [nameOf('glute-bridge')]);
   toSave(root);
 
-  assert.equal(root.querySelector('h2').textContent, 'Сохранение');
+  assert.equal(root.querySelector('h1').textContent, 'Сохранение');
   assert.equal(root.querySelector('.save-name').value, 'Всё тело');
   assert.deepEqual([...root.querySelectorAll('.day-chip')].map(c => c.textContent),
     ['пн', 'вт', 'ср', 'чт', 'пт', 'сб', 'вс']);
@@ -608,7 +849,7 @@ test('«Изменить» у другой тренировки, пока идё
   await settle(0);
 
   assert.equal(root.querySelector('.builder-path'), null, 'сборка не сброшена на вход');
-  assert.equal(root.querySelector('h2').textContent, 'Своя тренировка');
+  assert.equal(root.querySelector('h1').textContent, 'Своя тренировка');
   assert.equal(rows(root).length, exerciseCount(OWN), 'на экране упражнения второй тренировки');
   assert.equal(saved.length, 1, 'первая при этом сохранена');
 });
@@ -634,7 +875,7 @@ test('сохранение одной тренировки не блокируе
   assert.equal(root.querySelector('.builder-back').disabled, false);
   releases[0]({ ok: true, localOnly: false });
   await settle(0);
-  assert.equal(root.querySelector('h2').textContent, 'Сохранение', 'экран второй остался на месте');
+  assert.equal(root.querySelector('h1').textContent, 'Сохранение', 'экран второй остался на месте');
 
   root.querySelector('.builder-save').click();
   releases[1]({ ok: true, localOnly: false });
@@ -642,7 +883,7 @@ test('сохранение одной тренировки не блокируе
   assert.equal(calls.length, 2);
   assert.equal(calls[1], 'my-other001');
   assert.deepEqual(saved.map(([id]) => id), calls, 'каждая сохранена под своим id');
-  assert.equal(root.querySelector('h2').textContent, 'Конструктор', 'после сохранения второй — вход');
+  assert.equal(root.querySelector('h1').textContent, 'Конструктор', 'после сохранения второй — вход');
 });
 
 test('«Изменить» открывает копию: сохранённая запись не делит массивы с переданной', async t => {
@@ -677,7 +918,7 @@ test('«Изменить» у собранной руками открывает
   await settle(0);
 
   assert.deepEqual(shown(document), ['screen-builder']);
-  assert.equal(root.querySelector('h2').textContent, 'Своя тренировка');
+  assert.equal(root.querySelector('h1').textContent, 'Своя тренировка');
   assert.deepEqual(rows(root).sort(), [...OWN.warmup, ...OWN.circuit, ...OWN.strength, ...OWN.cooldown].map(key => nameOf(key)).sort());
 
   rowOf(root, nameOf('leg-press')).querySelector('.builder-remove').click();
@@ -914,7 +1155,7 @@ test('на входе два пути: «Собрать самому» и «Сг
     'Выбери уровень и зоны упора — упражнения подберутся по правилам.');
 
   paths[1].click();
-  assert.equal(root.querySelector('h2').textContent, 'Генератор');
+  assert.equal(root.querySelector('h1').textContent, 'Генератор');
   assert.equal(root.querySelector('.builder-subtitle').textContent, 'Подбор упражнений по правилам');
   back(root);
   assert.equal(root.querySelectorAll('.builder-path').length, 2, 'с генератора «Назад» ведёт на вход');
@@ -960,7 +1201,7 @@ function expectNothingSelectable(root) {
   const generateButton = root.querySelector('.builder-generate');
   assert.equal(generateButton.disabled, true);
   generateButton.click();
-  assert.equal(root.querySelector('h2').textContent, 'Генератор');
+  assert.equal(root.querySelector('h1').textContent, 'Генератор');
   assert.ok(zoneChips(root).every(chip => chip.getAttribute('aria-disabled') === 'true'),
     'без выбранного уровня зоны выбрать нельзя');
 }
@@ -1038,7 +1279,7 @@ test('генерация: тренировка на всё тело с метк�
 
   const expected = generate({ level: 'beginner', zones: ['glutes'], seed: 1, library: TEST_LIBRARY }).compact;
   const count = exerciseCount(expected);
-  assert.equal(root.querySelector('h2').textContent, 'Всё тело. Упор: ягодицы');
+  assert.equal(root.querySelector('h1').textContent, 'Всё тело. Упор: ягодицы');
   assert.equal(root.querySelector('.builder-subtitle').textContent,
     `Начальный уровень · ${count} ${plural(count, ['упражнение', 'упражнения', 'упражнений'])}`);
   assert.deepEqual(coverage(root), ['Все основные группы получают нагрузку']);
@@ -1048,7 +1289,7 @@ test('генерация: тренировка на всё тело с метк�
   // Круги — у пар и только у них.
   for (const block of root.querySelectorAll('.builder-block')) {
     const rounds = tagsIn(block, 'builder-block-rounds');
-    assert.deepEqual(rounds, block.querySelector('h3').textContent.startsWith('Пара ') ? ['2 круга'] : []);
+    assert.deepEqual(rounds, block.querySelector('.blk-title').textContent.startsWith('Пара ') ? ['2 круга'] : []);
   }
 
   const [[focusKey]] = expected.focus;
@@ -1077,7 +1318,7 @@ test('третья зона недоступна', t => {
   assert.equal(third.getAttribute('aria-disabled'), null, 'место освободилось — остальные снова доступны');
   third.click();
   generateNow(root);
-  assert.equal(root.querySelector('h2').textContent, 'Всё тело. Упор: спина и грудь');
+  assert.equal(root.querySelector('h1').textContent, 'Всё тело. Упор: спина и грудь');
   assert.equal(root.querySelectorAll('.focus-tag').length, 2);
 });
 
@@ -1117,7 +1358,7 @@ test('отказ генератора остаётся на его экране:
   assert.equal(refusal.hidden, true, 'пока отказа нет, плашка скрыта');
 
   generateNow(root);
-  assert.equal(root.querySelector('h2').textContent, 'Генератор');
+  assert.equal(root.querySelector('h1').textContent, 'Генератор');
   assert.equal(refusal.getAttribute('role'), 'alert');
   assert.equal(refusal.hidden, false);
   assert.match(refusal.textContent, /^Не получилось уложиться в 9 силовых пар: ниже границы остались /);
@@ -1147,7 +1388,7 @@ test('«Другой вариант» меняет тренировку: те ж
   assert.deepEqual(rows(root).sort(),
     [...second.warmup, ...second.circuit, ...second.strength, ...second.cooldown].map(key => nameOf(key, TEST_LIBRARY)).sort(),
     'новая тренировка — по следующему зерну, замена прежней не перенесена');
-  assert.equal(root.querySelector('h2').textContent, 'Всё тело. Упор: ягодицы');
+  assert.equal(root.querySelector('h1').textContent, 'Всё тело. Упор: ягодицы');
   assert.match(root.querySelector('.builder-subtitle').textContent, /^Средний уровень · /);
   assert.deepEqual(tagsIn(root, 'focus-tag'), ['упор']);
   assert.notEqual(second.focus[0][0], firstFocus, 'и упор достался другому упражнению');
@@ -1165,7 +1406,7 @@ test('замена в сгенерированной: кандидаты из п
   // Начальный уровень берёт базовые: среднее упражнение на трицепс есть в библиотеке, но не в списке.
   rowOf(root, nameOf('press-b', TEST_LIBRARY)).querySelector('.builder-replace').click();
   const sheet = root.querySelector('.replace-sheet');
-  assert.equal(sheet.querySelector('.replace-hint').textContent, 'Те же целевые мышцы, похожая разметка');
+  assert.equal(sheet.querySelector('.replace-hint').textContent, 'Те же целевые мышцы, похожая разметка. Нажми на упражнение, чтобы заменить.');
   const names = [...sheet.querySelectorAll('.replace-name')].map(n => n.textContent);
   assert.ok(names.length > 0);
   assert.ok(names.every(name => TEST_LIBRARY.find(e => e.name === name).difficulty === 'basic'),
@@ -1180,7 +1421,12 @@ test('замена в сгенерированной: кандидаты из п
   assert.equal(rowOf(root, nameOf('press-b', TEST_LIBRARY)), undefined);
   assert.deepEqual(tagsIn(rowOf(root, nameOf('triceps-1', TEST_LIBRARY)), 'replaced-tag'), ['заменено']);
   assert.equal(root.querySelector('.builder-coverage'), status, 'строка состояния — тот же узел: диктор услышит перемену');
-  assert.deepEqual(coverage(root), [`Ниже границы уровня: ${groupsPhrase(['chest'])}.`]);
+  assert.deepEqual(coverage(root), [
+    'Часть групп ниже границы уровня',
+    `Расчёт — на ${PLAN_DAYS.length} ${plural(PLAN_DAYS.length, ['день', 'дня', 'дней'])} в неделю: на сохранении он пересчитается по выбранным.`,
+  ]);
+  assert.equal(coverMore(root).textContent, 'Ниже границы: 1 группа');
+  assert.equal(coverList(root).textContent, sentence(groupsPhrase(['chest'])));
   assert.equal(status.classList.contains('is-ok'), false);
 });
 
@@ -1192,7 +1438,7 @@ test('сохранение с двумя днями показывает гру�
   const workoutAt = days => expandWorkout('my-check001', { ...compact, days }, TEST_LIBRARY).workout;
   toSave(root);
 
-  assert.equal(root.querySelector('h2').textContent, 'Сохранение');
+  assert.equal(root.querySelector('h1').textContent, 'Сохранение');
   const count = exerciseCount(compact);
   assert.equal(root.querySelector('.builder-summary').textContent,
     `Что сохранится: ${count} ${plural(count, ['упражнение', 'упражнения', 'упражнений'])}, начальный уровень`);
@@ -1208,7 +1454,7 @@ test('сохранение с двумя днями показывает гру�
   const backButton = root.querySelector('.builder-back');
   assert.match(backButton.textContent, /К результату/);
   backButton.click();
-  assert.equal(root.querySelector('h2').textContent, 'Всё тело');
+  assert.equal(root.querySelector('h1').textContent, 'Всё тело');
   assert.deepEqual(coverage(root), ['Все основные группы получают нагрузку']);
   toSave(root);
   assert.deepEqual(pressedDays(root), ['пн', 'ср'], 'выбранные дни остались в черновике');
@@ -1225,7 +1471,7 @@ test('«Назад» с результата: без замен сразу на 
 
   back(root);
   assert.equal(questions.length, 0, 'ничего не меняли — вопроса нет');
-  assert.equal(root.querySelector('h2').textContent, 'Генератор');
+  assert.equal(root.querySelector('h1').textContent, 'Генератор');
   assert.deepEqual(checkedLevels(root), ['Продвинутый']);
   assert.deepEqual(pressedZones(root), ['Плечи']);
 
@@ -1242,7 +1488,7 @@ test('«Назад» с результата: без замен сразу на 
   back(root);
   questions[1].answer(true);
   await settle(0);
-  assert.equal(root.querySelector('h2').textContent, 'Генератор');
+  assert.equal(root.querySelector('h1').textContent, 'Генератор');
   assert.deepEqual(checkedLevels(root), ['Продвинутый']);
 });
 
@@ -1255,7 +1501,7 @@ test('«Изменить» у сгенерированной открывает 
   await settle(0);
 
   assert.deepEqual(shown(document), ['screen-builder']);
-  assert.equal(root.querySelector('h2').textContent, 'Всё тело. Упор: ягодицы');
+  assert.equal(root.querySelector('h1').textContent, 'Всё тело. Упор: ягодицы');
   assert.ok(root.querySelector('.builder-variant'), 'это результат, а не сборка');
   assert.equal(root.querySelector('.builder-remove'), null);
   assert.equal(root.querySelectorAll('.builder-replace').length, exerciseCount(generated));
@@ -1342,10 +1588,10 @@ test('«Другой вариант» у записи с тремя зонами
   };
   const { root, view } = mountScreen(t, { library: TEST_LIBRARY, seed: () => 99 });
   await view.edit('my-gen00001', three);
-  assert.equal(root.querySelector('h2').textContent, 'Всё тело. Упор: ноги, ягодицы и спина');
+  assert.equal(root.querySelector('h1').textContent, 'Всё тело. Упор: ноги, ягодицы и спина');
 
   otherVariant(root);
-  assert.equal(root.querySelector('h2').textContent, 'Всё тело. Упор: ноги и ягодицы', 'подобрана новая тренировка по двум зонам');
+  assert.equal(root.querySelector('h1').textContent, 'Всё тело. Упор: ноги и ягодицы', 'подобрана новая тренировка по двум зонам');
   assert.equal(root.querySelectorAll('.focus-tag').length, 2);
 });
 
@@ -1379,13 +1625,13 @@ const profileOf = (...owned) => {
   profile.set(owned);
   return profile;
 };
-const gearChip = (root, id) => root.querySelector(`.gear-chip[data-gear="${id}"]`);
-const pressedGear = root => [...root.querySelectorAll('.gear-chip[aria-pressed="true"]')].map(chip => chip.dataset.gear);
+const gearChip = (root, id) => root.querySelector(`.gear-switch[data-gear="${id}"]`);
+const pressedGear = root => [...root.querySelectorAll('.gear-switch[aria-checked="true"]')].map(chip => chip.dataset.gear);
 const levelNotes = root => [...root.querySelectorAll('.level-missing')].map(note => note.textContent);
 const zoneNotes = root => [...root.querySelectorAll('.zone-missing p')].filter(p => !p.hidden).map(p => p.textContent);
 const refusalOf = root => root.querySelector('.builder-refusal');
 const namesIn = block => [...block.querySelectorAll('.builder-item-name')].map(node => node.textContent);
-const blockOf = (root, title) => [...root.querySelectorAll('.builder-block')].find(block => block.querySelector('h3').textContent === title);
+const blockOf = blockByTitle;
 const candidateNames = sheet => [...sheet.querySelectorAll('.replace-name')].map(node => node.textContent);
 
 // Ручная тренировка из ключей тестовой библиотеки: что лежит «на устройстве» у
@@ -1397,16 +1643,19 @@ const MANUAL = {
   cooldown: ['stretch-1', 'stretch-2', 'breathing'], t: 1760000000000,
 };
 
-test('генератор: переключатели «Что есть дома» между подзаголовком и уровнями, по умолчанию отмечены резинки', t => {
+test('генератор: «Что есть дома» после зон упора и перед панелью, по умолчанию отмечены резинки', t => {
   const { root } = mountScreen(t, { library: TEST_LIBRARY });
   startGenerator(root);
 
   const picker = root.querySelector('.gear-picker');
   assert.ok(picker, 'блок есть на экране генератора');
-  assert.equal(root.querySelector('.builder-subtitle').nextElementSibling, picker);
-  assert.equal(picker.nextElementSibling, root.querySelector('#generator-levels'));
-  assert.equal(picker.querySelector('h3').id, 'generator-gear-title');
+  assert.equal(root.querySelector('.zone-missing').nextElementSibling, picker);
+  assert.equal(picker.nextElementSibling, root.querySelector('.dock'));
+  assert.equal(picker.querySelector('h2').id, 'generator-gear-title');
   assert.deepEqual(pressedGear(root), ['band_long', 'loop_short']);
+  // Каждая строка — переключатель: состояние читает диктор, а не цвет дорожки.
+  const switches = [...picker.querySelectorAll('.gear-switch')];
+  assert.ok(switches.every(node => node.getAttribute('role') === 'switch' && node.hasAttribute('aria-checked')));
   assert.equal(root.querySelector('[data-gear="none"]'), null, '«без инвентаря» среди переключателей нет');
 });
 
@@ -1473,13 +1722,13 @@ test('после смены инвентаря фокус на той же кн�
   assert.notEqual(after, before, 'экран перерисован целиком');
   assert.equal(before.isConnected, false);
   assert.equal(document.activeElement, after);
-  assert.equal(after.getAttribute('aria-pressed'), 'true');
+  assert.equal(after.getAttribute('aria-checked'), 'true');
   assert.deepEqual(scrolls, [], 'перерисовка из-за нажатия на этом же экране не прокручивает страницу');
 
   // Работает и во второй раз, и на другой кнопке.
   after.click();
   assert.equal(document.activeElement, gearChip(root, 'dumbbells'));
-  assert.equal(gearChip(root, 'dumbbells').getAttribute('aria-pressed'), 'false');
+  assert.equal(gearChip(root, 'dumbbells').getAttribute('aria-checked'), 'false');
   gearChip(root, 'kettlebell').click();
   assert.equal(document.activeElement, gearChip(root, 'kettlebell'));
   assert.deepEqual(pressedGear(root), ['band_long', 'loop_short', 'kettlebell']);
@@ -1494,7 +1743,7 @@ test('смена инвентаря не сбрасывает уровень и 
   // Перерисовка берёт выбор из памяти экрана, а не из разметки.
   assert.deepEqual(checkedLevels(root), ['Продвинутый']);
   assert.deepEqual(pressedZones(root), ['Ноги']);
-  assert.notEqual(document.activeElement, root.querySelector('h2'), 'фокус на переключателе, а не на заголовке');
+  assert.notEqual(document.activeElement, root.querySelector('h1'), 'фокус на переключателе, а не на заголовке');
 });
 
 test('отмечено пусто: всё без инвентаря работает, переключатели сняты, а «без инвентаря» не отключить', t => {
@@ -1503,14 +1752,14 @@ test('отмечено пусто: всё без инвентаря работа
   startGenerator(root);
 
   assert.deepEqual(pressedGear(root), []);
-  assert.equal(root.querySelectorAll('.gear-chip').length, 5);
+  assert.equal(root.querySelectorAll('.gear-switch').length, 5);
   assert.equal(root.querySelector('[data-gear="none"]'), null);
   assert.deepEqual(checkedLevels(root), ['Начальный']);
   assert.deepEqual(levelNotes(root), []);
   generateNow(root);
 
   const expected = generate({ level: 'beginner', zones: [], seed: 1, library: TEST_LIBRARY }).compact;
-  assert.equal(root.querySelector('h2').textContent, 'Всё тело');
+  assert.equal(root.querySelector('h1').textContent, 'Всё тело');
   assert.deepEqual(rows(root).sort(),
     [...expected.warmup, ...expected.circuit, ...expected.strength, ...expected.cooldown].map(key => nameOf(key, TEST_LIBRARY)).sort());
 });
@@ -1587,7 +1836,7 @@ test('«Другой вариант» у тренировки, чей урове
 
   // С результата назад: уровня на генераторе уже нет, а экран цел.
   back(root);
-  assert.equal(root.querySelector('h2').textContent, 'Генератор');
+  assert.equal(root.querySelector('h1').textContent, 'Генератор');
   assert.deepEqual(checkedLevels(root), []);
   assert.equal(root.querySelector('.builder-generate').disabled, true);
 });
@@ -1768,16 +2017,20 @@ test('библиотека в конструкторе: скрывает неп�
   openLibrary(root);
 
   const found = () => root.querySelector('.library-found').textContent;
-  assert.equal(found(), `Найдено: ${strength - BICEPS.length} · ещё ${BICEPS.length} с другим инвентарём`);
+  const total = count => `${count} ${plural(count, ['упражнение', 'упражнения', 'упражнений'])}`;
+  assert.equal(found(), `${total(strength - BICEPS.length)} · ещё ${BICEPS.length} с другим инвентарём`);
+  // «Что есть дома» лежит в шторке фильтров.
+  root.querySelector('.library-filter').click();
   assert.deepEqual(pressedGear(root), ['band_long']);
-  assert.equal(root.querySelector('.gear-picker h3').id, 'library-gear-title');
+  assert.equal(root.querySelector('.gear-picker h2').id, 'library-gear-title');
 
   gearChip(root, 'dumbbells').click();
-  assert.equal(found(), `Найдено: ${strength}`);
+  assert.equal(found(), total(strength));
   assert.deepEqual(profile.get(), ['band_long', 'dumbbells'], 'выбор в библиотеке записан в профиль');
 
-  // Обратно на сборку, на вход и на генератор: там тот же выбор.
-  root.querySelector('.library-foot .builder-back').click();
+  // Закрыть шторку, обратно на сборку, на вход и на генератор: там тот же выбор.
+  root.querySelector('.library-sheet-close').click();
+  back(root);
   back(root);
   startGenerator(root);
   assert.deepEqual(pressedGear(root), ['band_long', 'dumbbells']);
@@ -1833,7 +2086,7 @@ const formatChip = (root, id) => root.querySelector(`.format-chip[data-format="$
 const pressedBlocks = root => [...root.querySelectorAll('.block-chip[aria-pressed="true"]')].map(chip => chip.dataset.block);
 const pressedFormat = root => [...root.querySelectorAll('.format-chip[aria-pressed="true"]')].map(chip => chip.dataset.format);
 const formatReason = root => root.querySelector('.format-reason');
-const blockTitles = root => [...root.querySelectorAll('.builder-block h3')].map(h => h.textContent);
+const blockTitles = root => [...root.querySelectorAll('.builder-block .blk-title')].map(h => h.textContent);
 const roundsTags = root => [...root.querySelectorAll('.builder-block-rounds')].map(tag => tag.textContent);
 const okStore = { save: async () => ({ ok: true, localOnly: false }) };
 const ASK = 'Бросить тренировку? Несохранённые изменения пропадут.';
@@ -1854,14 +2107,17 @@ test('сборка: все три блока нажаты, выбраны «Па
   assert.deepEqual(pressedFormat(root), ['pairs']);
   assert.equal(root.querySelectorAll('.format-picker').length, 1);
   const picker = root.querySelector('.format-picker');
-  assert.equal(picker.querySelector('h3').textContent, 'Формат занятия');
-  assert.equal(picker.querySelector('h3').id, 'build-format-title');
+  assert.equal(picker.querySelector('h2').textContent, 'Формат занятия');
+  assert.equal(picker.querySelector('h2').id, 'build-format-title');
 
+  // Переключатели стоят над списком блоков, а «Добавить» — в самом списке, там, где
+  // у тренировки силовая часть: перед завершением. Причина — сразу за кнопкой.
   const add = root.querySelector('.builder-add');
   const addReason = add.nextElementSibling;
   assert.ok(addReason.classList.contains('builder-reason'), 'причина «Добавить» стоит сразу за ней');
-  assert.equal(addReason.nextElementSibling, picker);
   assert.equal(picker.nextElementSibling, root.querySelector('.builder-blocks'));
+  assert.equal(add.parentElement.parentElement, root.querySelector('.builder-blocks'));
+  assert.equal(add.parentElement.nextElementSibling, blockOf(root, 'Завершение'));
   assert.equal(picker.querySelector('.format-hint').textContent, 'Два упражнения по очереди, отдых после пары.');
   // Новые кнопки не принимаются за чипы зон и не появляются на генераторе.
   assert.equal(zoneChips(root).length, 0);
@@ -2028,7 +2284,7 @@ test('результат: «Подходы» — блок на упражнен�
 
   // Порядок на экране: «Другой вариант», отказ, переключатели, блоки.
   const picker = root.querySelector('.format-picker');
-  assert.equal(picker.querySelector('h3').id, 'result-format-title');
+  assert.equal(picker.querySelector('h2').id, 'result-format-title');
   assert.equal(root.querySelector('.builder-variant').nextElementSibling, root.querySelector('.builder-refusal'));
   assert.equal(root.querySelector('.builder-refusal').nextElementSibling, picker);
   assert.equal(picker.nextElementSibling, root.querySelector('.builder-blocks'));

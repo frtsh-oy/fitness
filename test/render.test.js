@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { makeDom } from './setup.js';
 import {
   renderWorkout, renderIntro, renderHowto, bindHowto, markId, videoUrl, scheduleShort, scheduleLong, roundsTag,
-  isoWeekday, blockKind, setBlockOpen,
+  isoWeekday, blockKind, blockNumber, setBlockOpen,
 } from '../render.js';
 import { countMarks, validateWorkout } from '../workouts/schema.js';
 import legsMwf from '../workouts/legs-mwf.js';
@@ -762,7 +762,7 @@ test('блок построен как раскрывающийся список
     assert.equal(head.getAttribute('aria-controls'), body.id);
     assert.equal(head.querySelector('.blk-title').textContent, block.title);
     assert.equal(head.querySelector('.blk-sub').textContent, block.sub);
-    assert.equal(head.querySelector('.block-number').textContent, block.n);
+    assert.equal(head.querySelector('.block-number').textContent, blockNumber(block));
     assert.equal(head.querySelector('.block-number').getAttribute('aria-hidden'), 'true', `номер ${index + 1} — украшение`);
     assert.equal(head.querySelector('.blk-caret').getAttribute('aria-hidden'), 'true');
     assert.equal(head.querySelector('.blk-prog').textContent, `0/${block.items.length * block.rounds} отметок`);
@@ -816,4 +816,10 @@ test('метка с числом кругов и заметка блока ле�
   assert.equal(circuit.querySelector('.blk-body .round-tag').textContent, '3 круга');
   assert.equal(circuit.querySelector('.blk-head .round-tag'), null);
   assert.ok(circuit.querySelector('.blk-body .block-note'), 'заметка про паузы — в теле');
+});
+
+test('номер блока в кружке — без ведущего нуля, нечисловой остаётся как есть', () => {
+  assert.equal(blockNumber({ n: '01' }), '1');
+  assert.equal(blockNumber({ n: '12' }), '12');
+  assert.equal(blockNumber({ n: 'A' }), 'A');
 });

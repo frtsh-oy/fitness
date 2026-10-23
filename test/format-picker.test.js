@@ -51,7 +51,7 @@ test('разметка: заголовок, две подписанные гру
   assert.equal(picker.tagName, 'DIV');
   assert.equal(picker.className, 'format-picker');
 
-  const title = picker.querySelector('h3.builder-group-title');
+  const title = picker.querySelector('h2.builder-group-title');
   assert.equal(title.textContent, 'Формат занятия');
   assert.equal(title.id, 'build-format-title');
 
@@ -61,7 +61,9 @@ test('разметка: заголовок, две подписанные гру
   assert.equal(blocksLabel.id, 'build-format-blocks');
   assert.equal(formatLabel.id, 'build-format-strength');
 
-  const [blocksGroup, formatGroup] = picker.querySelectorAll('div.zone-chips');
+  const [blocksGroup, formatGroup] = picker.querySelectorAll('div.zone-chips, div.seg');
+  assert.ok(blocksGroup.classList.contains('zone-chips'), 'блоки — чипы');
+  assert.ok(formatGroup.classList.contains('seg'), 'силовая часть — сегмент');
   for (const [group, label] of [[blocksGroup, 'Блоки'], [formatGroup, 'Силовая часть']]) {
     assert.equal(group.getAttribute('role'), 'group', label);
     assert.equal(nameOf(group), label);
@@ -83,6 +85,7 @@ test('кнопки блоков — по слоту из OPTIONAL_SLOTS с по�
   for (const chip of chips) {
     assert.equal(chip.type, 'button', chip.textContent);
     assert.ok(chip.classList.contains('zone-chip'), 'вид чипа даёт .zone-chip');
+    assert.ok(chip.querySelector('svg.tick'), 'галочка нажатого чипа — значок, а не символ шрифта');
     assert.equal(nameOf(chip.parentElement), 'Блоки');
   }
 });
@@ -94,8 +97,9 @@ test('кнопки формата — по одной на формат из FOR
   assert.deepEqual(chips.map(b => b.textContent), ['Пары', 'Круг', 'Подходы']);
   for (const chip of chips) {
     assert.equal(chip.type, 'button', chip.textContent);
-    assert.ok(chip.classList.contains('zone-chip'));
+    assert.ok(!chip.classList.contains('zone-chip'), 'формат — кнопка сегмента, не чип');
     assert.ok(!chip.classList.contains('block-chip'));
+    assert.ok(chip.parentElement.classList.contains('seg'));
     assert.equal(nameOf(chip.parentElement), 'Силовая часть');
   }
 });

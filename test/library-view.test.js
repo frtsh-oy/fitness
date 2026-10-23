@@ -1,7 +1,7 @@
-// Экран библиотеки: поиск, фильтры и карточки с кнопкой «Добавить». Модуль
-// самостоятельный: что значит «добавлено» и когда добавлять нельзя, ему
-// сообщает вызывающий (isAdded и addBlocked), поэтому проверяется он без
-// конструктора и без приложения.
+// Экран библиотеки: поиск, чипы групп мышц, шторка фильтров и ряды с кнопкой
+// «Добавить». Модуль самостоятельный: что значит «добавлено» и когда добавлять
+// нельзя, ему сообщает вызывающий (isAdded и addBlocked), поэтому проверяется он
+// без конструктора и без приложения.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { makeDom } from './setup.js';
@@ -50,15 +50,34 @@ function mount({
   return { document, host, view };
 }
 
-const names = host => [...host.querySelectorAll('.library-card h3')].map(h => h.textContent);
-const chip = (host, label) => [...host.querySelectorAll('.library-chip')].find(c => c.textContent === label);
-const pressed = host => [...host.querySelectorAll('.library-chip[aria-pressed="true"]')].map(c => c.textContent);
+const rows = host => [...host.querySelectorAll('.library-row')];
+const names = host => rows(host).map(row => row.querySelector('.row-title').textContent);
+const zoneChip = (host, label) => [...host.querySelectorAll('.library-zones .zone-chip')].find(c => c.textContent === label);
+const pressedZones = host => [...host.querySelectorAll('.library-zones [aria-pressed="true"]')].map(c => c.textContent);
+const searchInput = host => host.querySelector('.library-find input');
+const filterButton = host => host.querySelector('.library-filter');
+const foundText = host => host.querySelector('.library-found').textContent;
+const dockOf = host => host.querySelector('.library-dock');
 
 function type(host, text) {
-  const input = host.querySelector('input.library-search');
+  const input = searchInput(host);
   input.value = text;
   input.dispatchEvent(new input.ownerDocument.defaultView.Event('input', { bubbles: true }));
 }
+
+// Шторка фильтров: открывается кнопкой со значком, её чипы и сегменты находятся
+// по подписи. Шторка стоит в host рядом с экраном, а не внутри него.
+function openFilters(host) {
+  filterButton(host).click();
+  return host.querySelector('.library-sheet');
+}
+const control = (host, label) => [...host.querySelectorAll('.library-sheet .zone-chip, .library-sheet .seg button')]
+  .find(c => c.textContent === label);
+const pressedControls = host => [...host.querySelectorAll('.library-sheet [aria-pressed="true"]')].map(c => c.textContent);
+const gearSwitch = (host, id) => host.querySelector(`.gear-picker [data-gear="${id}"]`);
+const ownedSwitches = host => [...host.querySelectorAll('.gear-switch[aria-checked="true"]')].map(b => b.dataset.gear);
+const escape = node => node.dispatchEvent(
+  new node.ownerDocument.defaultView.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
 
 test('поиск без учёта регистра и разницы е/ё', () => {
   const lib = [strength('a', 'Ёлочка'), strength('b', 'елка'), strength('c', 'Тяга')];
@@ -106,35 +125,57 @@ test('фильтр по сложности; поиск, зона и сложно
   assert.deepEqual(keys(filterEntries(lib, { query: 'присед', zone: 'glutes' })), []);
 });
 
-test('карточка: название, мышцы, сложность и «Добавить»; добавленное — «В тренировке» и недоступно', () => {
+test('верх экрана: «К сборке», название «Библиотека» с фокусом и счёт в живой области', () => {
+  const { document, host } = mount();
+  const root = host.querySelector('.library');
+  const title = root.querySelector('h1');
+
+  assert.equal(root.firstElementChild.className, 'appbar');
+  assert.equal(root.querySelector('.appbar .builder-back').textContent, 'К сборке');
+  assert.equal(root.querySelector('.builder-back svg').getAttribute('aria-hidden'), 'true');
+  assert.equal(title.textContent, 'Библиотека');
+  assert.equal(document.activeElement, title, 'после смены экрана диктор начинает с названия');
+  assert.equal(foundText(host), '2 упражнения');
+  assert.equal(host.querySelector('.library-found').getAttribute('aria-live'), 'polite');
+});
+
+test('ряд: название, мышцы, сложность и инвентарь в одной кнопке, рядом круглая «Добавить»', () => {
   const entries = [
-    strength('a', 'Тяга', { muscles: 'Спина', difficulty: 'basic' }),
-    strength('b', 'Жим', { muscles: 'Грудь', difficulty: 'medium' }),
-    strength('c', 'Подъём', { muscles: 'Плечи', difficulty: 'hard' }),
+    strength('a', 'Тяга', { muscles: 'Спина', difficulty: 'basic', gear: ['band_handles', 'dumbbells'] }),
+    strength('b', 'Жим', { muscles: 'Грудь', difficulty: 'medium', gear: ['none'] }),
+    strength('c', 'Подъём', { muscles: 'Плечи', difficulty: 'hard', gear: ['kettlebell'] }),
   ];
   const { host } = mount({ entries, isAdded: key => key === 'b' });
-  const cards = [...host.querySelectorAll('article.exercise.library-card')];
-  assert.equal(cards.length, 3);
+  const items = rows(host);
+  assert.equal(items.length, 3);
+  assert.ok(items.every(item => item.tagName === 'LI' && item.parentElement.tagName === 'UL'));
 
-  assert.deepEqual(cards.map(c => c.querySelector('h3').textContent), ['Тяга', 'Жим', 'Подъём']);
-  assert.deepEqual(cards.map(c => c.querySelector('.muscles').textContent), ['Спина', 'Грудь', 'Плечи']);
-  assert.deepEqual(cards.map(c => c.querySelector('.library-level').textContent), ['Базовое', 'Среднее', 'Сложное']);
+  const mains = items.map(item => item.querySelector('button.library-main'));
+  assert.deepEqual(mains.map(m => m.querySelector('.row-title').textContent), ['Тяга', 'Жим', 'Подъём']);
+  assert.deepEqual(mains.map(m => m.querySelector('.row-sub').textContent), ['Спина', 'Грудь', 'Плечи']);
+  assert.deepEqual(mains.map(m => m.querySelector('.library-level').textContent), ['Базовое', 'Среднее', 'Сложное']);
+  // Инвентарь назван той же подписью, что в шторке замены.
+  assert.deepEqual(mains.map(m => m.querySelector('.library-gear').textContent),
+    ['резинка с ручками, гантели', 'без инвентаря', 'гиря']);
+  assert.equal(mains[0].querySelector('.library-meta').textContent, 'Базовое · резинка с ручками, гантели');
+  assert.ok(mains.every(m => m.type === 'button' && m.getAttribute('aria-expanded') === 'false'));
+  assert.ok(mains.every(m => m.querySelector('.sr-only').textContent === 'Как выполнять'));
 
-  const adds = cards.map(c => c.querySelector('button.library-add'));
-  assert.deepEqual(adds.map(b => b.textContent), ['Добавить', 'В тренировке', 'Добавить']);
+  const adds = items.map(item => item.querySelector('button.library-add'));
   assert.deepEqual(adds.map(b => b.disabled), [false, true, false]);
   // Добавленное отличается от недоступного по другой причине классом: оба disabled.
   assert.deepEqual(adds.map(b => b.classList.contains('is-added')), [false, true, false]);
-  // Кнопка стоит в строке названия, а не полосой под карточкой.
-  assert.ok(adds.every((b, i) => b.parentElement === cards[i].querySelector('h3').parentElement),
-    'кнопка — рядом с названием');
-  assert.ok(adds.every(b => b.type === 'button'));
+  assert.ok(adds.every(b => b.type === 'button' && b.textContent === ''), 'в кнопке значок, слов нет');
+  assert.ok(adds.every(b => b.querySelector('.ic-plus') && b.querySelector('.ic-check')),
+    'плюс и галочка в разметке, какой виден — решает класс');
+  assert.ok(adds.every((b, i) => b.previousElementSibling === mains[i] && b.parentElement.className === 'library-line'),
+    'кнопка стоит в одной строке с названием');
   // Таких кнопок много, и по голой подписи диктору их не отличить.
   assert.deepEqual(adds.map(b => b.getAttribute('aria-label')),
     ['Добавить: Тяга', 'В тренировке: Жим', 'Добавить: Подъём']);
 });
 
-test('нажатие «Добавить» отдаёт ключ, а экран сразу показывает, что вышло', () => {
+test('нажатие «Добавить» отдаёт ключ, а ряд сразу показывает, что вышло', () => {
   const added = new Set();
   const calls = [];
   const { host } = mount({
@@ -145,79 +186,164 @@ test('нажатие «Добавить» отдаёт ключ, а экран �
 
   first.click();
   assert.deepEqual(calls, ['a']);
-  assert.equal(first.textContent, 'В тренировке');
+  assert.equal(first.getAttribute('aria-label'), 'В тренировке: Тяга');
   assert.equal(first.disabled, true);
-  assert.equal(second.textContent, 'Добавить', 'соседняя карточка не тронута');
+  assert.equal(first.classList.contains('is-added'), true);
+  assert.equal(second.getAttribute('aria-label'), 'Добавить: Жим', 'соседний ряд не тронут');
 
   // Недоступная кнопка нажатий не принимает.
   first.click();
   assert.deepEqual(calls, ['a']);
 });
 
-test('«Как выполнять» раскрывает технику так же, как в «Сегодня»', () => {
-  const { host } = mount({ entries: [strength('a', 'Тяга'), strength('b', 'Жим', { detail: 'Подробность' })] });
-  const [first, second] = [...host.querySelectorAll('.library-card')];
-  const toggle = card => card.querySelector('.howto-toggle');
-  const region = card => host.querySelector(`[id="${toggle(card).getAttribute('aria-controls')}"]`);
+test('«Как выполнять» раскрывает технику, видео и ссылки под рядом; ряды раскрываются независимо', () => {
+  const links = [['dQw4w9WgXcQ', 18, 'Как установить резинку · 0:18']];
+  const { host } = mount({
+    entries: [strength('a', 'Тяга', { links }), strength('b', 'Жим', { detail: 'Подробность' })],
+  });
+  const [first, second] = rows(host);
+  const main = row => row.querySelector('.library-main');
+  const how = row => host.querySelector(`[id="${main(row).getAttribute('aria-controls')}"]`);
 
-  assert.equal(toggle(first).getAttribute('aria-expanded'), 'false');
-  assert.equal(region(first).hidden, true, 'по умолчанию техника свёрнута');
-  assert.equal(region(first).id, 'lib-a');
-  assert.equal(region(first).closest('.library-card'), first);
+  assert.equal(main(first).getAttribute('aria-expanded'), 'false');
+  assert.equal(how(first).hidden, true, 'по умолчанию техника свёрнута');
+  assert.equal(how(first).closest('.library-row'), first);
+  assert.equal(how(first).querySelector('.howto-body').id, 'lib-a');
 
-  toggle(first).click();
-  assert.equal(toggle(first).getAttribute('aria-expanded'), 'true');
-  assert.equal(region(first).hidden, false);
-  assert.match(region(first).textContent, /Техника: Тяга/);
+  main(first).click();
+  assert.equal(main(first).getAttribute('aria-expanded'), 'true');
+  assert.equal(how(first).hidden, false);
+  assert.equal(how(first).querySelector('.cap').textContent, 'Как выполнять');
+  assert.match(how(first).textContent, /Техника: Тяга/);
+  assert.equal(how(first).querySelectorAll('button.video').length, 1, 'видео — кнопка плеера, а не ссылка');
+  assert.deepEqual([...how(first).querySelectorAll('button.extra-link')].map(b => b.textContent),
+    ['Как установить резинку · 0:18']);
 
-  // Уголок внутри кнопки: палец попадает и в него.
-  toggle(second).querySelector('.howto-caret').dispatchEvent(
-    new host.ownerDocument.defaultView.MouseEvent('click', { bubbles: true }));
-  assert.equal(region(second).hidden, false);
-  assert.equal(region(first).hidden, false, 'раскрытие второй не сворачивает первую');
-  assert.match(region(second).textContent, /Подробность/);
+  // Не аккордеон: раскрытие второго ряда первый не сворачивает.
+  main(second).click();
+  assert.equal(how(second).hidden, false);
+  assert.equal(how(first).hidden, false, 'раскрытие второй не сворачивает первую');
+  assert.match(how(second).textContent, /Подробность/);
 
-  toggle(first).click();
-  assert.equal(toggle(first).getAttribute('aria-expanded'), 'false');
-  assert.equal(region(first).hidden, true);
+  main(first).click();
+  assert.equal(main(first).getAttribute('aria-expanded'), 'false');
+  assert.equal(how(first).hidden, true);
 });
 
 test('повторная отрисовка на том же узле не копит обработчиков: раскрытие — с одного нажатия', () => {
   const { document, host } = mount();
   mount({ document });
-  const toggle = host.querySelector('.howto-toggle');
+  const main = host.querySelector('.library-main');
 
   assert.equal(host.querySelectorAll('.library').length, 1, 'на узле один экран библиотеки');
-  toggle.click();
-  assert.equal(toggle.getAttribute('aria-expanded'), 'true');
+  main.click();
+  assert.equal(main.getAttribute('aria-expanded'), 'true');
 });
 
-test('ничего не найдено — подсказка и сброс фильтров', () => {
+test('поле поиска: подпись для диктора, список и счёт следят за вводом, поле остаётся тем же', () => {
+  const { host } = mount({
+    entries: [strength('a', 'Ёлочка'), strength('b', 'Тяга'), strength('c', 'Жим')],
+  });
+  const input = searchInput(host);
+  assert.equal(input.getAttribute('aria-label'), 'Найти упражнение');
+  assert.equal(input.placeholder, 'Найти упражнение');
+  assert.equal(host.querySelector('.library-find [role="search"]'), input.parentElement);
+  assert.equal(foundText(host), '3 упражнения');
+
+  input.focus();
+  type(host, 'ЕЛО');
+  assert.deepEqual(names(host), ['Ёлочка']);
+  assert.equal(foundText(host), 'Найдено: 1');
+  assert.equal(searchInput(host), input);
+  assert.equal(input.ownerDocument.activeElement, input, 'перерисовка списка не отбирает фокус у поля');
+
+  type(host, '');
+  assert.deepEqual(names(host), ['Ёлочка', 'Тяга', 'Жим']);
+  assert.equal(foundText(host), '3 упражнения', 'без запроса — просто сколько всего');
+});
+
+test('крестик в поле поиска: виден при тексте, очищает, возвращает фокус и не мешает диктору пустым', () => {
+  const { document, host } = mount({ entries: [strength('a', 'Ёлочка'), strength('b', 'Тяга')] });
+  const clear = host.querySelector('.s-clear');
+  assert.equal(clear.hidden, true, 'в пустом поле крестика нет');
+  assert.equal(clear.getAttribute('aria-label'), 'Очистить поиск');
+
+  type(host, 'тяг');
+  assert.equal(clear.hidden, false);
+  assert.deepEqual(names(host), ['Тяга']);
+
+  clear.click();
+  assert.equal(searchInput(host).value, '');
+  assert.equal(clear.hidden, true);
+  assert.deepEqual(names(host), ['Ёлочка', 'Тяга']);
+  assert.equal(document.activeElement, searchInput(host), 'крестик исчез, фокус остался в поле');
+});
+
+test('чипы групп мышц: «Все» и семь зон, выбранный нажат, список и счёт меняются', () => {
+  const lib = [
+    strength('a', 'Мост', { difficulty: 'basic', load: { glutes: 1 } }),
+    strength('b', 'Мост с паузой', { difficulty: 'medium', load: { glutes: 1 } }),
+    strength('c', 'Присед', { difficulty: 'medium', load: { quads: 1 } }),
+  ];
+  const { host } = mount({ entries: lib });
+  const zoneLabels = ['Все', ...Object.values(ZONES).map(zone => zone.label)];
+  const chips = [...host.querySelectorAll('.library-zones .zone-chip')];
+  const group = host.querySelector('.library-zones');
+
+  assert.deepEqual(chips.map(c => c.textContent), zoneLabels);
+  assert.equal(zoneLabels.length, 8, '«Все» и семь зон');
+  assert.ok(chips.every(c => c.tagName === 'BUTTON' && c.type === 'button' && c.hasAttribute('aria-pressed')));
+  assert.equal(group.getAttribute('role'), 'group');
+  assert.equal(group.getAttribute('aria-label'), 'Группа мышц');
+  // У нажатого галочка: выбранное читается не только по цвету.
+  assert.ok(chips.every(c => c.querySelector('svg.tick')));
+  assert.deepEqual(pressedZones(host), ['Все']);
+  assert.equal(foundText(host), '3 упражнения');
+
+  zoneChip(host, 'Ягодицы').click();
+  assert.deepEqual(pressedZones(host), ['Ягодицы']);
+  assert.deepEqual(names(host), ['Мост', 'Мост с паузой']);
+  assert.equal(foundText(host), 'Найдено: 2');
+
+  // Выбор зоны заменяет прежний, а не добавляется к нему.
+  zoneChip(host, 'Ноги').click();
+  assert.deepEqual(pressedZones(host), ['Ноги']);
+  assert.deepEqual(names(host), ['Присед']);
+
+  zoneChip(host, 'Все').click();
+  assert.deepEqual(pressedZones(host), ['Все']);
+  assert.deepEqual(names(host), ['Мост', 'Мост с паузой', 'Присед']);
+  assert.equal(foundText(host), '3 упражнения');
+});
+
+test('ничего не найдено — подсказка и «Показать все», пока есть что показать, подсказки нет', () => {
   const { host } = mount({
     entries: [
       strength('a', 'Тяга', { load: { lats: 1 } }),
       strength('b', 'Присед', { load: { quads: 1 } }),
     ],
   });
-  assert.equal(host.querySelector('.library-empty'), null, 'пока есть что показать, подсказки нет');
-  assert.equal(chip(host, 'Сбросить фильтры'), undefined);
+  const empty = host.querySelector('.library-empty');
+  const showAll = () => [...empty.querySelectorAll('.btn')].find(b => b.textContent === 'Показать все');
+  assert.equal(empty.hidden, true, 'пока есть что показать, подсказки нет');
+  assert.equal(empty.children.length, 0);
 
-  chip(host, 'Грудь').click();
+  zoneChip(host, 'Грудь').click();
   type(host, 'тяг');
-  assert.equal(host.querySelectorAll('.library-card').length, 0);
-  assert.match(host.textContent, /Ничего не найдено/);
-  assert.match(host.textContent, /Измени запрос или сбрось фильтры\./);
-  assert.match(host.textContent, /Найдено: 0/);
-  const reset = chip(host, 'Сбросить фильтры');
-  assert.equal(reset.tagName, 'BUTTON');
-  assert.equal(reset.type, 'button');
+  assert.equal(rows(host).length, 0);
+  assert.equal(empty.hidden, false);
+  assert.equal(empty.querySelector('.library-empty-title').textContent, 'Ничего не нашлось');
+  assert.equal(empty.querySelector('.library-empty-hint').textContent, 'Попробуй другое слово или покажи все.');
+  assert.equal(foundText(host), 'Найдено: 0');
+  assert.equal(showAll().tagName, 'BUTTON');
+  assert.equal(showAll().type, 'button');
 
-  reset.click();
-  assert.equal(host.querySelector('input.library-search').value, '');
-  assert.deepEqual(pressed(host), ['Все', 'Любая']);
+  showAll().click();
+  assert.equal(searchInput(host).value, '');
+  assert.deepEqual(pressedZones(host), ['Все']);
   assert.deepEqual(names(host), ['Тяга', 'Присед']);
-  assert.doesNotMatch(host.textContent, /Ничего не найдено/);
-  assert.equal(chip(host, 'Сбросить фильтры'), undefined);
+  assert.equal(empty.hidden, true);
+  assert.equal(empty.children.length, 0);
 });
 
 test('добавлять нельзя — кнопки недоступны и причина на экране', () => {
@@ -234,7 +360,9 @@ test('добавлять нельзя — кнопки недоступны и �
   assert.equal(note.getAttribute('role'), 'status');
   assert.equal(note.textContent, reason);
   assert.deepEqual(buttons().map(b => b.disabled), [true, true, true]);
-  assert.deepEqual(buttons().map(b => b.textContent), ['Добавить', 'Добавить', 'В тренировке']);
+  assert.deepEqual(buttons().map(b => b.getAttribute('aria-label')),
+    ['Добавить: Тяга', 'Добавить: Жим', 'В тренировке: Присед']);
+  assert.deepEqual(buttons().map(b => b.classList.contains('is-added')), [false, false, true]);
 
   // Причина ушла — кнопки снова доступны, а пометки на экране нет.
   reason = null;
@@ -250,79 +378,24 @@ test('добавлять нельзя — кнопки недоступны и �
   assert.equal(host.querySelector('.library-blocked').textContent, 'Нельзя.');
 });
 
-test('refresh меняет кнопки и счётчик, а карточки не пересобирает: раскрытое остаётся раскрытым', () => {
+test('refresh меняет кнопки и панель, а ряды не пересобирает: раскрытое остаётся раскрытым', () => {
   const added = new Set();
   const { host, view } = mount({ isAdded: key => added.has(key) });
-  const article = host.querySelector('.library-card');
-  article.querySelector('.howto-toggle').click();
-  assert.match(host.querySelector('.library-total').textContent, /^В тренировке: 0$/);
+  const row = host.querySelector('.library-row');
+  row.querySelector('.library-main').click();
+  assert.equal(dockOf(host).hidden, true, 'пока в тренировке нет силовых, панели нет');
 
   added.add('a');
   view.refresh();
 
-  assert.equal(host.querySelector('.library-card'), article, 'карточка — тот же узел');
-  assert.equal(article.querySelector('.howto-toggle').getAttribute('aria-expanded'), 'true');
-  assert.equal(article.querySelector('.library-add').textContent, 'В тренировке');
-  assert.equal(host.querySelector('.library-total').textContent, 'В тренировке: 1');
+  assert.equal(host.querySelector('.library-row'), row, 'ряд — тот же узел');
+  assert.equal(row.querySelector('.library-main').getAttribute('aria-expanded'), 'true');
+  assert.equal(row.querySelector('.library-add').getAttribute('aria-label'), 'В тренировке: Тяга');
+  assert.equal(dockOf(host).hidden, false);
+  assert.equal(dockOf(host).querySelector('.dock-text').textContent, 'В тренировке: 1');
 });
 
-test('чипы зон и сложности: выбранный нажат, список и счёт меняются', () => {
-  const lib = [
-    strength('a', 'Мост', { difficulty: 'basic', load: { glutes: 1 } }),
-    strength('b', 'Мост с паузой', { difficulty: 'medium', load: { glutes: 1 } }),
-    strength('c', 'Присед', { difficulty: 'medium', load: { quads: 1 } }),
-  ];
-  const { host } = mount({ entries: lib });
-  const zoneLabels = ['Все', ...Object.values(ZONES).map(zone => zone.label)];
-  const difficultyLabels = ['Любая', 'Базовое', 'Среднее', 'Сложное'];
-  const chips = [...host.querySelectorAll('.library-chip')];
-
-  assert.deepEqual(chips.map(c => c.textContent), [...zoneLabels, ...difficultyLabels]);
-  assert.equal(zoneLabels.length, 8, '«Все» и семь зон');
-  assert.ok(chips.every(c => c.tagName === 'BUTTON' && c.type === 'button' && c.hasAttribute('aria-pressed')));
-  assert.deepEqual(pressed(host), ['Все', 'Любая']);
-  assert.match(host.textContent, /Найдено: 3/);
-
-  chip(host, 'Ягодицы').click();
-  assert.deepEqual(pressed(host), ['Ягодицы', 'Любая']);
-  assert.deepEqual(names(host), ['Мост', 'Мост с паузой']);
-  assert.match(host.textContent, /Найдено: 2/);
-
-  chip(host, 'Среднее').click();
-  assert.deepEqual(pressed(host), ['Ягодицы', 'Среднее']);
-  assert.deepEqual(names(host), ['Мост с паузой']);
-
-  // Выбор зоны заменяет прежний, а не добавляется к нему.
-  chip(host, 'Ноги').click();
-  assert.deepEqual(pressed(host), ['Ноги', 'Среднее']);
-  assert.deepEqual(names(host), ['Присед']);
-
-  chip(host, 'Все').click();
-  chip(host, 'Любая').click();
-  assert.deepEqual(pressed(host), ['Все', 'Любая']);
-  assert.deepEqual(names(host), ['Мост', 'Мост с паузой', 'Присед']);
-});
-
-test('поле поиска: подпись для диктора, список и счёт следят за вводом, поле остаётся тем же', () => {
-  const { host } = mount({
-    entries: [strength('a', 'Ёлочка'), strength('b', 'Тяга'), strength('c', 'Жим')],
-  });
-  const input = host.querySelector('input.library-search');
-  assert.equal(input.getAttribute('aria-label'), 'Поиск упражнения');
-  assert.match(host.textContent, /Найдено: 3/);
-
-  input.focus();
-  type(host, 'ЕЛО');
-  assert.deepEqual(names(host), ['Ёлочка']);
-  assert.match(host.textContent, /Найдено: 1/);
-  assert.equal(host.querySelector('input.library-search'), input);
-  assert.equal(input.ownerDocument.activeElement, input, 'перерисовка списка не отбирает фокус у поля');
-
-  type(host, '');
-  assert.deepEqual(names(host), ['Ёлочка', 'Тяга', 'Жим']);
-});
-
-test('«К сборке» сверху и снизу возвращают назад; внизу — сколько упражнений в тренировке', () => {
+test('«К сборке» сверху и в панели возвращают назад; в панели — сколько силовых в тренировке', () => {
   let backs = 0;
   // Записи-заглушки, а не настоящая библиотека: счёт «В тренировке» зависит от
   // типа упражнения (силовое считается, разминка нет), а тип в настоящей таблице
@@ -332,18 +405,249 @@ test('«К сборке» сверху и снизу возвращают наз
     isAdded: key => key === 'a' || key === 'w',
     onBack: () => { backs += 1; },
   });
-  const backButtons = [...host.querySelectorAll('button.builder-back')];
+  const top = host.querySelector('.appbar .builder-back');
+  const go = dockOf(host).querySelector('.dock-go');
 
-  assert.deepEqual(backButtons.map(b => b.textContent), ['← К сборке', 'К сборке']);
-  assert.equal(backButtons[0], host.querySelector('.library').firstElementChild, 'верхняя — первая на экране');
-  assert.equal(backButtons[1].closest('.library-foot'), host.querySelector('.library-total').closest('.library-foot'));
+  assert.equal(top.type, 'button');
+  assert.equal(go.textContent, 'К сборке');
+  assert.equal(go.type, 'button');
   // Разминка в счёт не идёт: на экране библиотеки её нет.
-  assert.equal(host.querySelector('.library-total').textContent, 'В тренировке: 1');
+  assert.equal(dockOf(host).querySelector('.dock-text').textContent, 'В тренировке: 1');
+  assert.equal(dockOf(host).querySelector('.dock-text').getAttribute('aria-live'), 'polite');
 
-  backButtons[0].click();
-  backButtons[1].click();
+  top.click();
+  go.click();
   assert.equal(backs, 2);
 });
+
+// — Шторка фильтров ——————————————————————————————————————————————————————
+
+test('шторка фильтров: диалог под названием «Фильтры», экран под ней недоступен, Escape и фон закрывают', () => {
+  const { document, host } = mount();
+  const root = host.querySelector('.library');
+  const opener = filterButton(host);
+  assert.equal(opener.getAttribute('aria-haspopup'), 'dialog');
+  assert.equal(opener.getAttribute('aria-expanded'), 'false');
+  assert.equal(host.querySelector('.library-sheet'), null, 'пока не открыта, шторки нет');
+
+  const sheet = openFilters(host);
+  assert.equal(sheet.getAttribute('role'), 'dialog');
+  assert.equal(sheet.getAttribute('aria-modal'), 'true');
+  assert.equal(host.querySelector(`#${sheet.getAttribute('aria-labelledby')}`).textContent, 'Фильтры');
+  assert.ok(host.querySelector('.library-backdrop'), 'под шторкой затемнение');
+  assert.equal(root.hasAttribute('inert'), true, 'экран под шторкой недоступен');
+  assert.equal(opener.getAttribute('aria-expanded'), 'true');
+  assert.equal(document.activeElement, sheet, 'фокус ушёл внутрь шторки');
+  assert.equal(sheet.parentElement, host, 'шторка рядом с экраном, а не внутри него');
+
+  escape(sheet);
+  assert.equal(host.querySelector('.library-sheet'), null);
+  assert.equal(host.querySelector('.library-backdrop'), null);
+  assert.equal(root.hasAttribute('inert'), false);
+  assert.equal(opener.getAttribute('aria-expanded'), 'false');
+  assert.equal(document.activeElement, opener, 'фокус вернулся на кнопку');
+
+  openFilters(host);
+  host.querySelector('.library-backdrop').click();
+  assert.equal(host.querySelector('.library-sheet'), null, 'нажатие на фон закрывает');
+  assert.equal(root.hasAttribute('inert'), false);
+
+  openFilters(host);
+  host.querySelector('.library-sheet-close').click();
+  assert.equal(host.querySelector('.library-sheet'), null, 'крестик закрывает');
+  assert.equal(document.activeElement, opener);
+});
+
+test('шторка открывается повторно с теми же элементами: выбор в ней живёт столько же, сколько экран', () => {
+  const lib = [
+    strength('a', 'Мост', { difficulty: 'basic' }),
+    strength('b', 'Мост с паузой', { difficulty: 'medium' }),
+  ];
+  const { host } = mount({ entries: lib });
+  openFilters(host);
+  const medium = control(host, 'Среднее');
+  medium.click();
+  host.querySelector('.library-sheet-close').click();
+
+  openFilters(host);
+  assert.equal(control(host, 'Среднее'), medium, 'тот же узел');
+  assert.equal(medium.getAttribute('aria-pressed'), 'true');
+  assert.deepEqual(names(host), ['Мост с паузой']);
+});
+
+test('«Показать N» в шторке называет число найденного и закрывает её; при нуле — «Закрыть»', () => {
+  const lib = [
+    strength('a', 'Мост', { difficulty: 'basic' }),
+    strength('b', 'Мост с паузой', { difficulty: 'medium' }),
+    strength('c', 'Присед', { difficulty: 'medium' }),
+  ];
+  const { document, host } = mount({ entries: lib });
+  openFilters(host);
+  const show = () => [...host.querySelectorAll('.library-sheet-foot .btn.main')][0];
+
+  assert.equal(show().textContent, 'Показать 3');
+  control(host, 'Среднее').click();
+  assert.equal(show().textContent, 'Показать 2');
+  control(host, 'Сложное').click();
+  assert.equal(show().textContent, 'Закрыть', 'ничего не найдено — показывать нечего');
+
+  control(host, 'Среднее').click();
+  show().click();
+  assert.equal(host.querySelector('.library-sheet'), null);
+  assert.equal(document.activeElement, filterButton(host));
+  assert.deepEqual(names(host), ['Мост с паузой', 'Присед']);
+});
+
+test('сложность в шторке: сегмент на четыре положения, выбранный нажат, список и счёт меняются', () => {
+  const lib = [
+    strength('a', 'Мост', { difficulty: 'basic', load: { glutes: 1 } }),
+    strength('b', 'Мост с паузой', { difficulty: 'medium', load: { glutes: 1 } }),
+    strength('c', 'Присед', { difficulty: 'medium', load: { quads: 1 } }),
+  ];
+  const { host } = mount({ entries: lib });
+  openFilters(host);
+  const seg = control(host, 'Любая').parentElement;
+
+  assert.deepEqual([...seg.children].map(c => c.textContent), ['Любая', 'Базовое', 'Среднее', 'Сложное']);
+  assert.ok(seg.classList.contains('seg'));
+  assert.ok([...seg.children].every(c => c.tagName === 'BUTTON' && c.type === 'button' && c.hasAttribute('aria-pressed')));
+  assert.deepEqual(pressedControls(host), ['Любая']);
+
+  control(host, 'Среднее').click();
+  assert.deepEqual(pressedControls(host), ['Среднее']);
+  assert.deepEqual(names(host), ['Мост с паузой', 'Присед']);
+  assert.equal(foundText(host), 'Найдено: 2');
+
+  // Вместе с зоной на экране под шторкой.
+  zoneChip(host, 'Ягодицы').click();
+  assert.deepEqual(names(host), ['Мост с паузой']);
+
+  control(host, 'Любая').click();
+  zoneChip(host, 'Все').click();
+  assert.deepEqual(names(host), ['Мост', 'Мост с паузой', 'Присед']);
+});
+
+test('группы шторки названы видимым заголовком: aria-labelledby, а не второй aria-label', () => {
+  const { host } = mount({ entries: gearEntries(), gear: { owned: [], onChange: () => {} } });
+  openFilters(host);
+  for (const [label, firstChip] of [['Сложность', 'Любая'], ['Инвентарь', 'Любой']]) {
+    const group = control(host, firstChip).parentElement;
+    assert.equal(group.getAttribute('role'), 'group', label);
+    assert.equal(group.hasAttribute('aria-label'), false, label);
+    const title = host.querySelector(`#${group.getAttribute('aria-labelledby')}`);
+    assert.equal(title.textContent, label);
+    assert.equal(title.nextElementSibling, group, `${label}: заголовок прямо над чипами`);
+  }
+  // Группа мышц снаружи шторки — с aria-label.
+  assert.equal(zoneChip(host, 'Все').parentElement.getAttribute('aria-label'), 'Группа мышц');
+});
+
+test('«Движение»: только движения силовых из библиотеки, в порядке словаря; при одном — группы нет', () => {
+  const lib = [
+    strength('a', 'Тяга', { pattern: 'pull' }),
+    strength('b', 'Присед', { pattern: 'squat' }),
+    strength('c', 'Мост', { pattern: 'hinge' }),
+    strength('d', 'Мост на одной ноге', { pattern: 'hinge' }),
+    strength('w', 'Кошка', { slot: 'warmup', pattern: 'mobility' }),
+  ];
+  const { host } = mount({ entries: lib });
+  openFilters(host);
+  const group = control(host, 'Любое').parentElement;
+  assert.deepEqual([...group.children].map(c => c.textContent), ['Любое', 'Наклон от таза', 'Присед', 'Тяга']);
+  assert.ok([...group.children].every(c => c.querySelector('svg.tick')), 'у выбранного галочка');
+
+  control(host, 'Наклон от таза').click();
+  assert.deepEqual(names(host), ['Мост', 'Мост на одной ноге']);
+  assert.ok(pressedControls(host).includes('Наклон от таза'));
+  control(host, 'Любое').click();
+  assert.equal(names(host).length, 4);
+
+  const single = mount({ entries: [strength('a', 'Мост'), strength('b', 'Мост с паузой')] });
+  openFilters(single.host);
+  assert.equal(control(single.host, 'Любое'), undefined, 'одно движение — отсеивать нечего');
+});
+
+test('«Без инвентаря»: только с переключателями и когда есть и такие, и другие', () => {
+  const { host } = mount({ entries: gearEntries(), gear: { owned: ['dumbbells'], onChange: () => {} } });
+  openFilters(host);
+  assert.deepEqual(names(host), ['Мост', 'Мост с гантелями', 'Присед с гантелями']);
+  control(host, 'Без инвентаря').click();
+  assert.deepEqual(names(host), ['Мост']);
+  // Скрыто фильтром, а не инвентарём: «ещё M» не появляется.
+  assert.equal(foundText(host), 'Найдено: 1');
+  control(host, 'Любой').click();
+  assert.equal(names(host).length, 3);
+
+  const missing = options => {
+    const { host: other } = mount(options);
+    openFilters(other);
+    return control(other, 'Без инвентаря');
+  };
+  const bareOnly = gearEntries().filter(entry => entry.gear[0] === 'none');
+  assert.equal(missing({ entries: bareOnly, gear: { owned: [], onChange: () => {} } }), undefined);
+  const withGear = gearEntries().filter(entry => entry.gear[0] !== 'none');
+  assert.equal(missing({ entries: withGear, gear: { owned: [], onChange: () => {} } }), undefined);
+  assert.equal(missing({ entries: gearEntries() }), undefined, 'без gear про инвентарь ни слова');
+});
+
+test('значок фильтров: число включённых фильтров шторки в имени и точка; зона и инвентарь не в счёте', () => {
+  const lib = [
+    ...gearEntries(),
+    strength('pull', 'Тяга', { pattern: 'pull', gear: ['none'], difficulty: 'medium', load: { lats: 1 } }),
+  ];
+  const { host } = mount({ entries: lib, gear: { owned: [], onChange: () => {} } });
+  const button = filterButton(host);
+  const dot = () => button.querySelector('.dot');
+  assert.equal(button.getAttribute('aria-label'), 'Фильтры');
+  assert.equal(dot().hidden, true);
+  assert.equal(button.querySelector('svg').getAttribute('aria-hidden'), 'true');
+
+  zoneChip(host, 'Ноги').click();
+  openFilters(host);
+  gearSwitch(host, 'dumbbells').click();
+  assert.equal(button.getAttribute('aria-label'), 'Фильтры', 'зона на виду, а инвентарь — не фильтр');
+  assert.equal(dot().hidden, true);
+
+  control(host, 'Среднее').click();
+  assert.equal(button.getAttribute('aria-label'), 'Фильтры, выбрано: 1');
+  assert.equal(dot().hidden, false);
+  control(host, 'Тяга').click();
+  control(host, 'Без инвентаря').click();
+  assert.equal(button.getAttribute('aria-label'), 'Фильтры, выбрано: 3');
+  control(host, 'Любая').click();
+  assert.equal(button.getAttribute('aria-label'), 'Фильтры, выбрано: 2');
+});
+
+test('«Сбросить» в шторке снимает сложность, движение и «без инвентаря»; поиск, группа мышц и «Что есть дома» остаются', () => {
+  const calls = [];
+  const lib = [
+    ...gearEntries(),
+    strength('pull', 'Тяга', { pattern: 'pull', gear: ['none'], difficulty: 'medium', load: { lats: 1 } }),
+  ];
+  const { host } = mount({ entries: lib, gear: { owned: ['dumbbells'], onChange: owned => calls.push(owned) } });
+  type(host, 'тяга');
+  zoneChip(host, 'Спина').click();
+  openFilters(host);
+  control(host, 'Среднее').click();
+  control(host, 'Тяга').click();
+  control(host, 'Без инвентаря').click();
+  assert.deepEqual(names(host), ['Тяга']);
+  const reset = host.querySelector('.library-sheet-foot .btn.text');
+  assert.equal(reset.textContent, 'Сбросить');
+  assert.equal(reset.getAttribute('aria-label'), 'Сбросить фильтры');
+  assert.equal(reset.type, 'button');
+
+  reset.click();
+  assert.deepEqual(pressedControls(host), ['Любая', 'Любое', 'Любой']);
+  assert.equal(filterButton(host).getAttribute('aria-label'), 'Фильтры');
+  assert.equal(searchInput(host).value, 'тяга', 'запрос на экране не тронут');
+  assert.deepEqual(pressedZones(host), ['Спина'], 'группа мышц тоже');
+  assert.deepEqual(ownedSwitches(host), ['dumbbells']);
+  assert.deepEqual(names(host), ['Тяга']);
+  assert.deepEqual(calls, [], 'сброс наружу про инвентарь не сообщает');
+});
+
+// — Видео ————————————————————————————————————————————————————————————————
 
 // Идентификаторы панелей плеера обязаны быть уникальными на странице: у
 // кнопки видео aria-controls указывает на панель по id, и одинаковые id
@@ -375,20 +679,28 @@ test('ролики библиотеки и «Сегодня» не делят id
   assert.equal(new Set(ids).size, ids.length, 'на странице нет повторяющихся id');
 });
 
+test('название ролика в библиотеке — название упражнения: имя кнопки и подпись окна плеера', () => {
+  const { host } = mount({ entries: [strength('a', 'Румынская тяга')] });
+  const video = host.querySelector('button.video');
+
+  assert.equal(video.getAttribute('aria-label'), 'Видео: Румынская тяга, 0:05');
+  video.click();
+  assert.equal(host.querySelector('iframe').title, 'Видео: Румынская тяга');
+});
+
 test('Escape с фокусом внутри библиотеки закрывает открытое видео и возвращает фокус на кнопку', () => {
   const { document, host } = mount();
   const video = host.querySelector('button.video');
   video.click();
   assert.equal(host.querySelectorAll('.player-shell').length, 1);
 
-  host.querySelector('.player-close').dispatchEvent(
-    new document.defaultView.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  escape(host.querySelector('.player-close'));
   assert.equal(host.querySelectorAll('.player-shell').length, 0);
   assert.equal(video.getAttribute('aria-expanded'), 'false');
   assert.equal(document.activeElement, video);
 });
 
-test('смена фильтра убирает открытое видео вместе с карточкой: iframe не остаётся без хозяина', () => {
+test('смена фильтра убирает открытое видео вместе с рядом: iframe не остаётся без хозяина', () => {
   const { host } = mount();
   host.querySelector('button.video').click();
   assert.equal(host.querySelectorAll('iframe').length, 1);
@@ -401,19 +713,17 @@ test('смена фильтра убирает открытое видео вм�
 
 // — «Что есть дома» ————————————————————————————————————————————————————
 
-const gearChip = (host, id) => host.querySelector(`.gear-picker [data-gear="${id}"]`);
-const ownedChips = host => [...host.querySelectorAll('.gear-chip[aria-pressed="true"]')].map(b => b.dataset.gear);
-const foundText = host => host.querySelector('.library-found').textContent;
-
 // Записи с инвентарём. Ягодицы — три упражнения с разным инвентарём, приседы —
 // одно с гантелями: так видно и «ещё M» в зоне, и вне её.
-const gearEntries = () => [
-  strength('bridge', 'Мост', { gear: ['none'], load: { glutes: 1 } }),
-  strength('bridge-band', 'Мост с резинкой', { gear: ['band_long'], load: { glutes: 1 } }),
-  strength('bridge-db', 'Мост с гантелями', { gear: ['dumbbells'], load: { glutes: 1 } }),
-  strength('bridge-both', 'Мост с гирей и гантелями', { gear: ['dumbbells', 'kettlebell'], load: { glutes: 1 } }),
-  strength('squat-db', 'Присед с гантелями', { gear: ['dumbbells'], load: { quads: 1 } }),
-];
+function gearEntries() {
+  return [
+    strength('bridge', 'Мост', { gear: ['none'], load: { glutes: 1 } }),
+    strength('bridge-band', 'Мост с резинкой', { gear: ['band_long'], load: { glutes: 1 } }),
+    strength('bridge-db', 'Мост с гантелями', { gear: ['dumbbells'], load: { glutes: 1 } }),
+    strength('bridge-both', 'Мост с гирей и гантелями', { gear: ['dumbbells', 'kettlebell'], load: { glutes: 1 } }),
+    strength('squat-db', 'Присед с гантелями', { gear: ['dumbbells'], load: { quads: 1 } }),
+  ];
+}
 
 test('filterEntries: owned оставляет только подходящее по инвентарю, owned null не фильтрует', () => {
   const lib = gearEntries();
@@ -440,7 +750,7 @@ test('filterEntries: инвентарь действует вместе с по�
   assert.deepEqual(keys(filterEntries(lib, { owned: [], zone: 'legs' })), []);
 });
 
-test('с gear: упражнения с неотмеченным инвентарём скрыты, отметка в переключателе возвращает их', () => {
+test('с gear: упражнения с неотмеченным инвентарём скрыты, переключатель в шторке возвращает их', () => {
   const calls = [];
   const { host } = mount({
     entries: gearEntries(),
@@ -448,38 +758,38 @@ test('с gear: упражнения с неотмеченным инвентар
   });
   assert.deepEqual(names(host), ['Мост', 'Мост с резинкой']);
 
-  gearChip(host, 'dumbbells').click();
+  openFilters(host);
+  gearSwitch(host, 'dumbbells').click();
   assert.deepEqual(names(host), ['Мост', 'Мост с резинкой', 'Мост с гантелями', 'Присед с гантелями']);
   assert.deepEqual(calls, [['band_long', 'dumbbells']]);
 
-  gearChip(host, 'kettlebell').click();
+  gearSwitch(host, 'kettlebell').click();
   assert.deepEqual(names(host), ['Мост', 'Мост с резинкой', 'Мост с гантелями', 'Мост с гирей и гантелями', 'Присед с гантелями']);
   assert.deepEqual(calls.at(-1), ['band_long', 'dumbbells', 'kettlebell']);
 
   // Снять всё: остаётся только «без инвентаря».
-  for (const id of ['band_long', 'dumbbells', 'kettlebell']) gearChip(host, id).click();
+  for (const id of ['band_long', 'dumbbells', 'kettlebell']) gearSwitch(host, id).click();
   assert.deepEqual(names(host), ['Мост']);
   assert.deepEqual(calls.at(-1), []);
   assert.equal(calls.length, 5, 'по одному вызову на нажатие');
 });
 
-test('с gear: переключатели — последними в панели «Ещё фильтры», после сложности, со своим id', () => {
+test('с gear: переключатели — последней группой шторки, после сложности, со своим id заголовка', () => {
   const { host } = mount({ gear: { owned: ['band_long', 'loop_short'], onChange: () => {} } });
-  const root = host.querySelector('.library');
-  const groups = [...root.querySelectorAll('.library-filters')];
-  const picker = root.querySelector('.gear-picker');
-  const panel = root.querySelector('#library-more');
+  assert.equal(host.querySelector('.gear-picker'), null, 'в закрытой шторке переключателей на странице нет');
+  openFilters(host);
+  const body = host.querySelector('.library-sheet-body');
+  const picker = body.querySelector('.gear-picker');
 
-  assert.equal(groups.length, 2, 'зона и сложность на месте');
-  assert.equal(picker.parentElement, panel, 'в панели');
-  assert.equal(picker.previousElementSibling, groups[1], 'сразу после сложности');
-  assert.equal(picker.nextElementSibling, null, 'последним');
-  assert.equal(panel.nextElementSibling, root.querySelector('.library-found'), 'панель — сразу перед «Найдено»');
-  assert.equal(picker.querySelector('h3').id, 'library-gear-title');
-  assert.deepEqual(ownedChips(host), ['band_long', 'loop_short']);
-  // Чипы фильтров библиотеки остались своими: переключатели в их выборку не попали.
-  assert.equal(root.querySelectorAll('.library-chip').length, 8 + 4);
-  assert.equal(pressed(host).length, 2);
+  // Все записи с одним движением и без инвентаря: групп «Движение» и «Инвентарь»
+  // нет, остаются сложность и «Что есть дома».
+  assert.equal(body.children.length, 2);
+  assert.equal(body.firstElementChild.querySelector('.seg') !== null, true, 'сначала сложность');
+  assert.equal(picker.parentElement, body.lastElementChild, 'переключатели — последней группой');
+  assert.equal(picker.querySelector('h2').id, 'library-gear-title');
+  assert.equal(picker.querySelector('h2').textContent, 'Что есть дома');
+  assert.deepEqual(ownedSwitches(host), ['band_long', 'loop_short']);
+  assert.deepEqual(pressedControls(host), ['Любая'], 'переключатели в нажатые чипы не попали');
 });
 
 test('с gear: сколько скрыто, считается по тем же поиску, зоне и сложности', () => {
@@ -488,26 +798,27 @@ test('с gear: сколько скрыто, считается по тем же 
     gear: { owned: [], onChange: () => {} },
   });
   // Из пяти силовых без инвентаря подходит одно, четыре скрыты.
-  assert.equal(foundText(host), 'Найдено: 1 · ещё 4 с другим инвентарём');
+  assert.equal(foundText(host), '1 упражнение · ещё 4 с другим инвентарём');
 
   // Зона «Ягодицы»: подходит «Мост», скрыты три моста; присед в зону не входит и
   // в «ещё» не попадает.
-  chip(host, 'Ягодицы').click();
+  zoneChip(host, 'Ягодицы').click();
   assert.equal(foundText(host), 'Найдено: 1 · ещё 3 с другим инвентарём');
 
   // Поиск вместе с зоной: «гантел» находит два моста с гантелями, оба скрыты.
   type(host, 'гантел');
   assert.deepEqual(names(host), []);
   assert.equal(foundText(host), 'Найдено: 0 · ещё 2 с другим инвентарём');
-  assert.match(host.textContent, /Ничего не найдено/);
+  assert.equal(host.querySelector('.library-empty-title').textContent, 'Ничего не нашлось');
 
   // Отметили гантели: «Мост с гантелями» вернулся, скрытым остаётся «с гирей и гантелями».
-  gearChip(host, 'dumbbells').click();
+  openFilters(host);
+  gearSwitch(host, 'dumbbells').click();
   assert.deepEqual(names(host), ['Мост с гантелями']);
   assert.equal(foundText(host), 'Найдено: 1 · ещё 1 с другим инвентарём');
 
   // Отмечено всё нужное: скрытого нет, остаётся одно «Найдено: N».
-  gearChip(host, 'kettlebell').click();
+  gearSwitch(host, 'kettlebell').click();
   assert.equal(foundText(host), 'Найдено: 2');
 });
 
@@ -521,78 +832,83 @@ test('с gear: «ещё M» учитывает сложность и не счи
     ],
     gear: { owned: [], onChange: () => {} },
   });
-  assert.equal(foundText(host), 'Найдено: 1 · ещё 2 с другим инвентарём', 'разминка не в счёте');
-  chip(host, 'Сложное').click();
+  assert.equal(foundText(host), '1 упражнение · ещё 2 с другим инвентарём', 'разминка не в счёте');
+  openFilters(host);
+  control(host, 'Сложное').click();
   assert.equal(foundText(host), 'Найдено: 0 · ещё 1 с другим инвентарём');
-  chip(host, 'Базовое').click();
+  control(host, 'Базовое').click();
   assert.equal(foundText(host), 'Найдено: 1 · ещё 1 с другим инвентарём');
 });
 
-test('с gear: если скрывать нечего, строка «Найдено» прежняя', () => {
+test('с gear: если скрывать нечего, строка счёта прежняя', () => {
   const { host } = mount({
     entries: [strength('a', 'Тяга', { gear: ['none'] }), strength('b', 'Жим', { gear: ['band_long'] })],
     gear: { owned: ['band_long'], onChange: () => {} },
   });
-  assert.equal(foundText(host), 'Найдено: 2');
+  assert.equal(foundText(host), '2 упражнения');
 });
 
-test('«Сбросить фильтры» инвентарь не трогает', () => {
+test('«Показать все» инвентарь не трогает', () => {
   const calls = [];
   const { host } = mount({
     entries: gearEntries(),
     gear: { owned: ['dumbbells'], onChange: owned => calls.push(owned) },
   });
-  chip(host, 'Ноги').click();
+  zoneChip(host, 'Ноги').click();
   type(host, 'нет такого');
   assert.deepEqual(names(host), []);
-  chip(host, 'Сбросить фильтры').click();
+  [...host.querySelectorAll('.library-empty .btn')].find(b => b.textContent === 'Показать все').click();
 
-  assert.deepEqual(ownedChips(host), ['dumbbells'], 'переключатель остался отмеченным');
+  openFilters(host);
+  assert.deepEqual(ownedSwitches(host), ['dumbbells'], 'переключатель остался отмеченным');
   assert.deepEqual(names(host), ['Мост', 'Мост с гантелями', 'Присед с гантелями'], 'и список всё ещё по инвентарю');
-  assert.equal(foundText(host), 'Найдено: 3 · ещё 2 с другим инвентарём');
+  assert.equal(foundText(host), '3 упражнения · ещё 2 с другим инвентарём');
   assert.deepEqual(calls, [], 'сброс наружу про инвентарь не сообщает');
 });
 
 const emptyHint = host => host.querySelector('.library-empty-hint')?.textContent;
+const emptyButton = (host, label) => [...host.querySelectorAll('.library-empty .btn')].find(b => b.textContent === label);
 const BY_GEAR = 'С отмеченным инвентарём ничего не нашлось. Отметь инвентарь в «Что есть дома»';
 
-test('пусто из-за инвентаря, фильтров нет: подсказка про «Что есть дома», кнопки сброса нет', () => {
+test('пусто из-за инвентаря, фильтров нет: подсказка про «Что есть дома», «Показать все» нет', () => {
   const { host } = mount({
     entries: gearEntries().filter(entry => entry.gear[0] !== 'none'),
     gear: { owned: [], onChange: () => {} },
   });
 
   assert.deepEqual(names(host), []);
-  assert.equal(foundText(host), 'Найдено: 0 · ещё 4 с другим инвентарём');
-  assert.equal(host.querySelector('.library-empty-title').textContent, 'Ничего не найдено');
+  assert.equal(foundText(host), '0 упражнений · ещё 4 с другим инвентарём');
+  assert.equal(host.querySelector('.library-empty-title').textContent, 'Ничего не нашлось');
   assert.equal(emptyHint(host), `${BY_GEAR}.`);
-  assert.equal(chip(host, 'Сбросить фильтры'), undefined, 'сбрасывать нечего: сброс не поменял бы ничего');
+  assert.equal(emptyButton(host, 'Показать все'), undefined, 'сбрасывать нечего: сброс не поменял бы ничего');
 
   // Отметили нужное: подсказка уходит вместе с пустотой.
-  gearChip(host, 'dumbbells').click();
+  openFilters(host);
+  gearSwitch(host, 'dumbbells').click();
   assert.deepEqual(names(host), ['Мост с гантелями', 'Присед с гантелями']);
-  assert.equal(host.querySelector('.library-empty-hint'), null);
+  assert.equal(emptyHint(host), undefined);
+  assert.equal(host.querySelector('.library-empty').hidden, true);
 });
 
-test('запрос из одних пробелов фильтром не считается: сброс не предлагается', () => {
+test('запрос из одних пробелов фильтром не считается: «Показать все» не предлагается', () => {
   const { host } = mount({
     entries: gearEntries().filter(entry => entry.gear[0] !== 'none'),
     gear: { owned: [], onChange: () => {} },
   });
   type(host, '   ');
   assert.equal(emptyHint(host), `${BY_GEAR}.`);
-  assert.equal(chip(host, 'Сбросить фильтры'), undefined);
+  assert.equal(emptyButton(host, 'Показать все'), undefined);
 });
 
-test('пусто из-за инвентаря при поиске, зоне или сложности: подсказка называет и фильтры, сброс есть и инвентарь не трогает', () => {
+test('пусто из-за инвентаря при поиске, зоне или сложности: подсказка называет и фильтры, «Показать все» есть и инвентарь не трогает', () => {
   const entries = [
     strength('a', 'Мост', { gear: ['none'], difficulty: 'basic', load: { glutes: 1 } }),
     strength('b', 'Присед с гантелями', { gear: ['dumbbells'], difficulty: 'hard', load: { quads: 1 } }),
   ];
   const cases = [
     ['поиск', host => type(host, 'присед')],
-    ['зона', host => chip(host, 'Ноги').click()],
-    ['сложность', host => chip(host, 'Сложное').click()],
+    ['зона', host => zoneChip(host, 'Ноги').click()],
+    ['сложность', host => { openFilters(host); control(host, 'Сложное').click(); host.querySelector('.library-sheet-close').click(); }],
   ];
   for (const [what, setFilter] of cases) {
     const calls = [];
@@ -601,14 +917,14 @@ test('пусто из-за инвентаря при поиске, зоне ил
 
     assert.deepEqual(names(host), [], what);
     assert.equal(foundText(host), 'Найдено: 0 · ещё 1 с другим инвентарём', what);
-    assert.equal(emptyHint(host), `${BY_GEAR} или сбрось фильтры.`, what);
-    const reset = chip(host, 'Сбросить фильтры');
+    assert.equal(emptyHint(host), `${BY_GEAR} или покажи все.`, what);
+    const reset = emptyButton(host, 'Показать все');
     assert.equal(reset.type, 'button', what);
 
     // После сброса инвентарь тот же (пустой): «Мост» без инвентаря найден, пустоты нет.
     reset.click();
     assert.deepEqual(names(host), ['Мост'], what);
-    assert.equal(host.querySelector('.library-empty-hint'), null, what);
+    assert.equal(emptyHint(host), undefined, what);
     assert.deepEqual(calls, [], `${what}: сброс про инвентарь наружу не сообщает`);
   }
 });
@@ -621,17 +937,37 @@ test('пусто, но инвентарь ничего не скрыл: подс
   type(host, 'нет такого');
 
   assert.equal(foundText(host), 'Найдено: 0');
-  assert.equal(emptyHint(host), 'Измени запрос или сбрось фильтры.');
-  assert.equal(chip(host, 'Сбросить фильтры').type, 'button');
+  assert.equal(emptyHint(host), 'Попробуй другое слово или покажи все.');
+  assert.equal(emptyButton(host, 'Показать все').type, 'button');
   assert.doesNotMatch(host.querySelector('.library-empty').textContent, /инвентар/);
 });
 
-test('без gear пустой экран прежний: подсказка про фильтры и сброс, про инвентарь ни слова', () => {
+test('без gear пустой экран прежний: подсказка про слово и «Показать все», про инвентарь ни слова', () => {
   const { host } = mount({ entries: gearEntries() });
   type(host, 'нет такого');
-  assert.equal(emptyHint(host), 'Измени запрос или сбрось фильтры.');
-  assert.ok(chip(host, 'Сбросить фильтры'));
+  assert.equal(emptyHint(host), 'Попробуй другое слово или покажи все.');
+  assert.ok(emptyButton(host, 'Показать все'));
+  openFilters(host);
   assert.doesNotMatch(host.textContent, /инвентар/);
+});
+
+test('пусто из-за инвентаря: «Открыть «Что есть дома»» открывает шторку и ставит фокус на переключатель', () => {
+  const { document, host } = mount({
+    entries: gearEntries().filter(entry => entry.gear[0] !== 'none'),
+    gear: { owned: [], onChange: () => {} },
+  });
+  assert.equal(host.querySelector('.library-sheet'), null);
+  const open = emptyButton(host, 'Открыть «Что есть дома»');
+  assert.equal(open.type, 'button');
+  open.click();
+  assert.ok(host.querySelector('.library-sheet'));
+  assert.equal(filterButton(host).getAttribute('aria-expanded'), 'true');
+  assert.equal(document.activeElement, host.querySelector('.gear-picker button'));
+
+  // Пусто не из-за инвентаря — кнопки нет.
+  const other = mount({ entries: gearEntries(), gear: { owned: ['dumbbells', 'kettlebell', 'band_long'], onChange: () => {} } });
+  type(other.host, 'нет такого');
+  assert.equal(emptyButton(other.host, 'Открыть «Что есть дома»'), undefined);
 });
 
 test('смена инвентаря не пересобирает переключатели и поле поиска: фокус остаётся на нажатой кнопке', () => {
@@ -639,16 +975,17 @@ test('смена инвентаря не пересобирает переклю
     entries: gearEntries(),
     gear: { owned: [], onChange: () => {} },
   });
+  openFilters(host);
   const picker = host.querySelector('.gear-picker');
-  const button = gearChip(host, 'dumbbells');
-  const input = host.querySelector('input.library-search');
+  const button = gearSwitch(host, 'dumbbells');
+  const input = searchInput(host);
 
   button.focus();
   button.click();
   assert.equal(host.querySelector('.gear-picker'), picker);
-  assert.equal(gearChip(host, 'dumbbells'), button);
+  assert.equal(gearSwitch(host, 'dumbbells'), button);
   assert.equal(document.activeElement, button);
-  assert.equal(host.querySelector('input.library-search'), input);
+  assert.equal(searchInput(host), input);
 });
 
 test('с gear: «В тренировке» считает добавленное, даже когда его скрыл инвентарь', () => {
@@ -658,60 +995,46 @@ test('с gear: «В тренировке» считает добавленное
     gear: { owned: [], onChange: () => {} },
   });
   assert.deepEqual(names(host), ['Мост'], 'упражнения с гантелями не видно');
-  assert.equal(host.querySelector('.library-total').textContent, 'В тренировке: 1');
+  assert.equal(dockOf(host).querySelector('.dock-text').textContent, 'В тренировке: 1');
 });
 
-test('без gear: переключателей нет, ничего не фильтруется, «Найдено» без «ещё»', () => {
+test('без gear: переключателей нет, ничего не фильтруется, счёт без «ещё»', () => {
   const lib = gearEntries();
   const { host } = mount({ entries: lib });
+  openFilters(host);
   assert.equal(host.querySelector('.gear-picker'), null);
   assert.equal(host.querySelector('[data-gear]'), null);
   assert.equal(names(host).length, lib.length);
-  assert.equal(foundText(host), 'Найдено: 5');
+  assert.equal(foundText(host), '5 упражнений');
 
   // gear: null — то же, что не передать совсем.
   const nulled = mount({ entries: lib, gear: null });
+  openFilters(nulled.host);
   assert.equal(nulled.host.querySelector('.gear-picker'), null);
-  assert.equal(foundText(nulled.host), 'Найдено: 5');
+  assert.equal(foundText(nulled.host), '5 упражнений');
 });
 
 test('повторная отрисовка на том же узле оставляет одни переключатели', () => {
   const { document, host } = mount({ gear: { owned: [], onChange: () => {} } });
   mount({ document, gear: { owned: ['dumbbells'], onChange: () => {} } });
+  openFilters(host);
   assert.equal(host.querySelectorAll('.gear-picker').length, 1);
-  assert.deepEqual(ownedChips(host), ['dumbbells'], 'новый экран — со своим выбором');
+  assert.deepEqual(ownedSwitches(host), ['dumbbells'], 'новый экран — со своим выбором');
 });
 
-test('инвентарь на карточке: той же подписью, что в шторке замены, в верхней строке', () => {
-  const { host } = mount({
-    entries: [
-      strength('a', 'Тяга', { gear: ['band_handles', 'dumbbells'], muscles: 'Спина' }),
-      strength('b', 'Мост', { gear: ['none'] }),
-      strength('c', 'Присед', { gear: ['kettlebell'] }),
-    ],
-  });
-  const cards = [...host.querySelectorAll('.library-card')];
-  assert.deepEqual(cards.map(c => c.querySelector('.library-gear').textContent),
-    ['резинка с ручками, гантели', 'без инвентаря', 'гиря']);
-
-  const top = cards[0].querySelector('.exercise-top');
-  assert.deepEqual([...top.children].map(c => c.className), ['library-level', 'library-gear', 'muscles'],
-    'сложность, инвентарь и мышцы в одной верхней строке');
-  assert.equal(top.querySelector('.muscles').textContent, 'Спина');
-});
-
-test('инвентарь на карточке есть и при переключателях, и после смены выбора', () => {
+test('инвентарь в ряду есть и при переключателях, и после смены выбора', () => {
   const { host } = mount({
     entries: gearEntries(),
     gear: { owned: ['dumbbells'], onChange: () => {} },
   });
-  const gearOf = () => [...host.querySelectorAll('.library-card .library-gear')].map(s => s.textContent);
+  const gearOf = () => rows(host).map(row => row.querySelector('.library-gear').textContent);
   assert.deepEqual(gearOf(), ['без инвентаря', 'гантели', 'гантели']);
-  gearChip(host, 'kettlebell').click();
+  openFilters(host);
+  gearSwitch(host, 'kettlebell').click();
   assert.deepEqual(gearOf(), ['без инвентаря', 'гантели', 'гантели, гиря', 'гантели']);
 });
 
-// — Поиск по мышцам, движение, «без инвентаря», панель «Ещё фильтры» ——————————
+// — Поиск по мышцам, движение, «без инвентаря» ——————————————————————————————
 
 test('поиск: по подписи мышц, целевым группам, движению и инвентарю; каждое слово запроса', () => {
   const lib = [
@@ -749,163 +1072,10 @@ test('filterEntries: движение и «только без инвентар�
   assert.deepEqual(keys(filterEntries(lib, { pattern: 'hinge', zone: 'legs' })), []);
 });
 
-const panelOf = host => host.querySelector('#library-more');
-const moreButton = host => host.querySelector('button.library-more');
-const resetButton = host => host.querySelector('button.library-reset');
-
-test('«Ещё фильтры»: свёрнута при открытии, раскрывается и сворачивается, на виду поиск и зоны', () => {
-  const { host } = mount({ gear: { owned: [], onChange: () => {} } });
-  const panel = panelOf(host);
-  const more = moreButton(host);
-
-  assert.equal(more.type, 'button');
-  assert.equal(more.textContent, 'Ещё фильтры');
-  assert.equal(more.querySelector('svg').getAttribute('aria-hidden'), 'true');
-  assert.equal(more.getAttribute('aria-controls'), panel.id);
-  assert.equal(more.getAttribute('aria-expanded'), 'false');
-  assert.equal(panel.hidden, true);
-  // Зоны и поиск — не в панели; сложность и «Что есть дома» — в ней.
-  assert.equal(panel.contains(host.querySelector('input.library-search')), false);
-  assert.equal(panel.contains(chip(host, 'Ноги')), false);
-  assert.ok(panel.contains(chip(host, 'Сложное')));
-  assert.ok(panel.contains(host.querySelector('.gear-picker')));
-
-  more.click();
-  assert.equal(panel.hidden, false);
-  assert.equal(more.getAttribute('aria-expanded'), 'true');
-  more.click();
-  assert.equal(panel.hidden, true);
-  assert.equal(more.getAttribute('aria-expanded'), 'false');
-});
-
-test('группы панели названы видимым заголовком: aria-labelledby, а не второй aria-label', () => {
-  const { host } = mount({ entries: gearEntries(), gear: { owned: [], onChange: () => {} } });
-  for (const [label, firstChip] of [['Сложность', 'Любая'], ['Инвентарь', 'Любой']]) {
-    const group = chip(host, firstChip).parentElement;
-    assert.equal(group.getAttribute('role'), 'group', label);
-    assert.equal(group.hasAttribute('aria-label'), false, label);
-    const title = host.querySelector(`#${group.getAttribute('aria-labelledby')}`);
-    assert.equal(title.textContent, label);
-    assert.equal(title.nextElementSibling, group, `${label}: заголовок прямо над чипами`);
-  }
-  // Зона снаружи панели — по-прежнему с aria-label.
-  assert.equal(chip(host, 'Все').parentElement.getAttribute('aria-label'), 'Зона');
-});
-
-test('«Движение»: только движения силовых из библиотеки, в порядке словаря; при одном — группы нет', () => {
-  const lib = [
-    strength('a', 'Тяга', { pattern: 'pull' }),
-    strength('b', 'Присед', { pattern: 'squat' }),
-    strength('c', 'Мост', { pattern: 'hinge' }),
-    strength('d', 'Мост на одной ноге', { pattern: 'hinge' }),
-    strength('w', 'Кошка', { slot: 'warmup', pattern: 'mobility' }),
-  ];
-  const { host } = mount({ entries: lib });
-  const group = chip(host, 'Любое').parentElement;
-  assert.deepEqual([...group.children].map(c => c.textContent), ['Любое', 'Наклон от таза', 'Присед', 'Тяга']);
-
-  chip(host, 'Наклон от таза').click();
-  assert.deepEqual(names(host), ['Мост', 'Мост на одной ноге']);
-  assert.ok(pressed(host).includes('Наклон от таза'));
-  chip(host, 'Любое').click();
-  assert.equal(names(host).length, 4);
-
-  const single = mount({ entries: [strength('a', 'Мост'), strength('b', 'Мост с паузой')] });
-  assert.equal(chip(single.host, 'Любое'), undefined, 'одно движение — отсеивать нечего');
-});
-
-test('«Без инвентаря»: только с переключателями и когда есть и такие, и другие', () => {
-  const { host } = mount({ entries: gearEntries(), gear: { owned: ['dumbbells'], onChange: () => {} } });
-  assert.deepEqual(names(host), ['Мост', 'Мост с гантелями', 'Присед с гантелями']);
-  chip(host, 'Без инвентаря').click();
-  assert.deepEqual(names(host), ['Мост']);
-  // Скрыто фильтром, а не инвентарём: «ещё M» не появляется.
-  assert.equal(foundText(host), 'Найдено: 1');
-  chip(host, 'Любой').click();
-  assert.equal(names(host).length, 3);
-
-  const bareOnly = gearEntries().filter(entry => entry.gear[0] === 'none');
-  assert.equal(chip(mount({ entries: bareOnly, gear: { owned: [], onChange: () => {} } }).host, 'Без инвентаря'), undefined);
-  const withGear = gearEntries().filter(entry => entry.gear[0] !== 'none');
-  assert.equal(chip(mount({ entries: withGear, gear: { owned: [], onChange: () => {} } }).host, 'Без инвентаря'), undefined);
-  assert.equal(chip(mount({ entries: gearEntries() }).host, 'Без инвентаря'), undefined, 'без gear про инвентарь ни слова');
-});
-
-test('счёт на «Ещё фильтры» — включённые фильтры панели; инвентарь и зона не в счёте', () => {
-  const lib = [
-    ...gearEntries(),
-    strength('pull', 'Тяга', { pattern: 'pull', gear: ['none'], difficulty: 'medium', load: { lats: 1 } }),
-  ];
-  const { host } = mount({ entries: lib, gear: { owned: [], onChange: () => {} } });
-  const count = () => host.querySelector('.library-more-count').textContent;
-  assert.equal(count(), '');
-
-  chip(host, 'Ноги').click();
-  host.querySelector('.gear-picker [data-gear="dumbbells"]').click();
-  assert.equal(count(), '', 'зона на виду, а инвентарь — не фильтр');
-  chip(host, 'Среднее').click();
-  assert.equal(count(), ' · 1');
-  chip(host, 'Тяга').click();
-  chip(host, 'Без инвентаря').click();
-  assert.equal(count(), ' · 3');
-  assert.equal(moreButton(host).textContent, 'Ещё фильтры · 3');
-  chip(host, 'Любая').click();
-  assert.equal(count(), ' · 2');
-});
-
-test('«Сбросить» рядом с панелью: виден только с фильтрами, снимает все, «Что есть дома» не трогает', () => {
-  const calls = [];
-  const lib = [
-    ...gearEntries(),
-    strength('pull', 'Тяга', { pattern: 'pull', gear: ['none'], difficulty: 'medium', load: { lats: 1 } }),
-  ];
-  const { host } = mount({ entries: lib, gear: { owned: ['dumbbells'], onChange: owned => calls.push(owned) } });
-  const reset = resetButton(host);
-  assert.equal(reset.type, 'button');
-  assert.equal(reset.getAttribute('aria-label'), 'Сбросить фильтры');
-  assert.equal(reset.hidden, true, 'сбрасывать нечего');
-
-  type(host, '   ');
-  assert.equal(reset.hidden, true, 'пробелы — не запрос');
-  type(host, 'тяга');
-  assert.equal(reset.hidden, false);
-  chip(host, 'Спина').click();
-  chip(host, 'Среднее').click();
-  chip(host, 'Тяга').click();
-  chip(host, 'Без инвентаря').click();
-  assert.deepEqual(names(host), ['Тяга']);
-
-  reset.click();
-  assert.equal(resetButton(host), reset, 'тот же узел');
-  assert.equal(reset.hidden, true);
-  assert.equal(host.querySelector('input.library-search').value, '');
-  assert.deepEqual(pressed(host), ['Все', 'Любая', 'Любое', 'Любой']);
-  assert.equal(host.querySelector('.library-more-count').textContent, '');
-  assert.deepEqual(ownedChips(host), ['dumbbells']);
-  assert.deepEqual(names(host), ['Мост', 'Мост с гантелями', 'Присед с гантелями', 'Тяга']);
-  assert.deepEqual(calls, []);
-});
-
-test('пусто из-за инвентаря: «Открыть «Что есть дома»» раскрывает панель и ставит фокус на переключатель', () => {
-  const { document, host } = mount({
-    entries: gearEntries().filter(entry => entry.gear[0] !== 'none'),
-    gear: { owned: [], onChange: () => {} },
-  });
-  assert.equal(panelOf(host).hidden, true);
-  const open = chip(host, 'Открыть «Что есть дома»');
-  assert.equal(open.type, 'button');
-  open.click();
-  assert.equal(panelOf(host).hidden, false);
-  assert.equal(moreButton(host).getAttribute('aria-expanded'), 'true');
-  assert.equal(document.activeElement, host.querySelector('.gear-picker button'));
-
-  // Пусто не из-за инвентаря — кнопки нет.
-  const other = mount({ entries: gearEntries(), gear: { owned: ['dumbbells', 'kettlebell', 'band_long'], onChange: () => {} } });
-  type(other.host, 'нет такого');
-  assert.equal(chip(other.host, 'Открыть «Что есть дома»'), undefined);
-});
-
-test('поле поиска подсказывает, что ищет и по мышцам', () => {
+test('поле поиска подсказывает, что ищет, и по мышцам', () => {
   const { host } = mount();
-  assert.equal(host.querySelector('input.library-search').placeholder, 'Название или мышца');
+  // Подпись и подсказка одни: «Найти упражнение» — а по мышцам поиск находит
+  // сам, без подсказки в поле.
+  assert.equal(searchInput(host).placeholder, 'Найти упражнение');
+  assert.deepEqual(keys(filterEntries([strength('a', 'Тяга', { muscles: 'Спина' })], { query: 'спина' })), ['a']);
 });

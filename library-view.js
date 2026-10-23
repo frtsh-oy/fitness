@@ -1,30 +1,35 @@
-// Экран библиотеки упражнений: поиск по названию и мышцам, фильтры по зоне,
-// сложности, движению и инвентарю, карточки с кнопкой «Добавить». Модуль
-// самостоятельный и про конструктор ничего не знает: что значит «добавлено»,
-// когда добавлять нельзя и что делать при нажатии, ему сообщает вызывающий
-// (isAdded, addBlocked, onAdd, onBack). Так экран проверяется без конструктора,
-// а конструктор — без экрана.
+// Экран библиотеки упражнений: поиск по названию и мышцам, чипы групп мышц,
+// шторка фильтров (сложность, движение, инвентарь, «Что есть дома») и ряды
+// упражнений с круглой кнопкой «Добавить». Модуль самостоятельный и про
+// конструктор ничего не знает: что значит «добавлено», когда добавлять нельзя и
+// что делать при нажатии, ему сообщает вызывающий (isAdded, addBlocked, onAdd,
+// onBack). Так экран проверяется без конструктора, а конструктор — без экрана.
 import { DIFFICULTY_LABELS, PATTERN_LABELS, toItem } from './exercises/index.js';
 import { ZONES } from './builder/rules.js';
-import { muscleLabel } from './muscles.js';
-import { renderHowto, bindHowto, renderCaret } from './render.js';
+import { normalizeQuery, matchesQuery } from './builder/search.js';
+import { plural } from './builder/texts.js';
+import { renderHowto } from './render.js';
 import { setupPlayers } from './player.js';
 import { fitsGear, gearText } from './gear.js';
 import { renderGearPicker } from './gear-picker.js';
+import { icon } from './icons.js';
+import { openSheet } from './sheet.js';
+import { searchField } from './search-field.js';
 
 // Начало id панелей плеера библиотеки. Свой, а не общий с «Сегодня»: панель
 // получает id при открытии ролика, и без различия обе назвали бы первую
 // панель одинаково.
 const VIDEO_ID_PREFIX = 'library-video';
 // Начало id областей «Как выполнять» (см. renderHowto): по нему же область
-// библиотеки не путается с областью той же карточки в «Сегодня».
+// библиотеки не путается с областью того же упражнения в «Сегодня».
 const HOWTO_ID_PREFIX = 'lib';
 
-// Чипы: [значение фильтра, подпись]. Первый в каждой группе — «без фильтра»
-// (значение null), он и выбран при открытии экрана.
+// Варианты фильтров: [значение, подпись]. Первый в каждой группе — «без
+// фильтра» (null или false), он и выбран при открытии экрана.
 const ZONE_CHIPS = [[null, 'Все'], ...Object.entries(ZONES).map(([id, zone]) => [id, zone.label])];
-const DIFFICULTY_CHIPS = [[null, 'Любая'], ...Object.entries(DIFFICULTY_LABELS)];
-const NO_GEAR_CHIPS = [[false, 'Любой'], [true, 'Без инвентаря']];
+const DIFFICULTY_OPTIONS = [[null, 'Любая'], ...Object.entries(DIFFICULTY_LABELS)];
+const NO_GEAR_OPTIONS = [[false, 'Любой'], [true, 'Без инвентаря']];
+const EXERCISES = ['упражнение', 'упражнения', 'упражнений'];
 
 const el = (document, tag, className, text) => {
   const node = document.createElement(tag);
@@ -33,23 +38,9 @@ const el = (document, tag, className, text) => {
   return node;
 };
 
-// Запрос и название сравниваются в одном виде: без регистра, «ё» как «е» (на
-// телефоне «ё» набирают редко, и «Ёлочка» должна находиться по «елоч»), без
-// пробелов по краям (клавиатура телефона любит дописать пробел после слова).
-export function normalizeQuery(text) {
-  return text.toLowerCase().replaceAll('ё', 'е').trim();
-}
-
-// Где ищет поиск: название, подпись мышц с карточки, целевые группы (доля 1,
-// как у зоны), движение и инвентарь. Подпись мышц пишут по-разному («Бёдра и
-// ягодицы»), а названия групп из словаря одни и те же: по «квадрицепс»
-// находится и приседание, у которого в подписи «бёдра». Инвентарь — той же
-// подписью, что на карточке: по «петл» находятся упражнения с мини-петлёй, по
-// «без инв» — без инвентаря.
-function searchText(entry) {
-  const targets = Object.keys(entry.load).filter(group => entry.load[group] === 1).map(muscleLabel);
-  return normalizeQuery([entry.name, entry.muscles, ...targets, PATTERN_LABELS[entry.pattern], gearText(entry)].join(' '));
-}
+// Поиск — общий с шторкой замены (builder/search.js); нормализация запроса
+// остаётся доступной отсюда: на неё ссылаются тесты экрана.
+export { normalizeQuery };
 
 // На экране только силовые: разминка, разогрев и завершение подбираются
 // правилами и в ручную сборку не добавляются. Зона — по целевым группам
@@ -65,10 +56,9 @@ function searchText(entry) {
 export function filterEntries(entries, {
   query = '', zone = null, difficulty = null, pattern = null, noGear = false, owned = null,
 } = {}) {
-  const words = normalizeQuery(query).split(/\s+/).filter(Boolean);
   const groups = zone === null ? null : ZONES[zone].groups;
   return entries.filter(entry => entry.slot === 'strength'
-    && (words.length === 0 || words.every(word => searchText(entry).includes(word)))
+    && matchesQuery(entry, query)
     && (groups === null || groups.some(group => entry.load[group] === 1))
     && (difficulty === null || entry.difficulty === difficulty)
     && (pattern === null || entry.pattern === pattern)
@@ -91,14 +81,10 @@ export function renderLibrary({ host, entries, isAdded, addBlocked, onAdd, onBac
     owned: gear === null ? null : [...gear.owned],
   };
 
-  // Весь экран — в своём узле, а не прямо в host. Обработчик раскрытия «Как
-  // выполнять» вешается на корень (bindHowto) и живёт ровно столько же, сколько
-  // корень: при повторной отрисовке на том же host старый корень уходит вместе
-  // со своим обработчиком. Повесь его на сам host — и каждая отрисовка добавляла
-  // бы второй, а два обработчика раскрывают область и тут же сворачивают.
-  const root = el(document, 'div', 'library');
+  // Весь экран — в своём узле, а не прямо в host: при повторной отрисовке на том
+  // же host старый корень уходит вместе со своими обработчиками.
+  const root = el(document, 'div', 'library wrap has-dock');
   host.replaceChildren(root);
-  bindHowto(root);
 
   let closeVideo = () => {};
   // Escape закрывает открытое видео, пока фокус внутри экрана (на кнопке
@@ -109,206 +95,233 @@ export function renderLibrary({ host, entries, isAdded, addBlocked, onAdd, onBac
     if (event.key === 'Escape') closeVideo();
   });
 
-  const backButton = withArrow => {
-    const button = el(document, 'button', 'builder-back');
-    button.type = 'button';
-    if (withArrow) {
-      // Стрелка — украшение: диктор читал бы «стрелка влево, к сборке».
-      const arrow = el(document, 'span', null, '←');
-      arrow.setAttribute('aria-hidden', 'true');
-      button.append(arrow, ' К сборке');
-    } else {
-      button.textContent = 'К сборке';
-    }
-    button.addEventListener('click', () => onBack());
-    return button;
-  };
+  const back = el(document, 'button', 'builder-back');
+  back.type = 'button';
+  // Стрелка — украшение: диктор читал бы «стрелка влево, к сборке».
+  back.append(icon(document, 'back'), 'К сборке');
+  back.addEventListener('click', () => onBack());
+  const bar = el(document, 'div', 'appbar');
+  bar.append(back);
 
-  const search = el(document, 'input', 'library-search');
-  search.type = 'search';
-  search.autocomplete = 'off';
-  search.placeholder = 'Название или мышца';
-  search.setAttribute('aria-label', 'Поиск упражнения');
-  search.addEventListener('input', () => {
-    state.query = search.value;
-    drawList();
+  // Название принимает фокус программно: после смены экрана диктор начинает с
+  // него. Счёт под названием — и подпись, и живая область: он меняется с каждой
+  // буквой поиска, а на слух это иначе не слышно.
+  const title = el(document, 'h1', null, 'Библиотека');
+  title.tabIndex = -1;
+  const found = el(document, 'p', 'lead library-found');
+  found.setAttribute('aria-live', 'polite');
+  const heading = el(document, 'div', 'page-title');
+  heading.append(title, found);
+
+  const search = searchField(document, {
+    label: 'Найти упражнение',
+    onChange(value) {
+      state.query = value;
+      drawList();
+    },
   });
 
-  // Нажатые чипы — по состоянию, а не по тому, на что нажали: «Сбросить
-  // фильтры» тоже меняет состояние, и подсветка обязана следовать за ним.
-  const chips = [];
-  const chipGroup = (label, key, options) => {
-    const group = el(document, 'div', 'library-filters');
-    group.setAttribute('role', 'group');
-    group.setAttribute('aria-label', label);
-    for (const [value, text] of options) {
-      const button = el(document, 'button', 'library-chip', text);
-      button.type = 'button';
-      button.addEventListener('click', () => {
-        state[key] = value;
-        syncChips();
-        drawList();
-      });
-      chips.push({ button, key, value });
-      group.append(button);
-    }
+  // Нажатые чипы и сегменты — по состоянию, а не по тому, на что нажали:
+  // «Сбросить» тоже меняет состояние, и подсветка обязана следовать за ним.
+  const options = [];
+  const syncOptions = () => {
+    for (const { button, key, value } of options) button.setAttribute('aria-pressed', String(state[key] === value));
+  };
+  const makeOption = (button, key, value) => {
+    button.type = 'button';
+    button.addEventListener('click', () => {
+      state[key] = value;
+      syncOptions();
+      drawList();
+    });
+    options.push({ button, key, value });
+    return button;
+  };
+  // Чип — кнопка с галочкой слева у нажатого (тот же .zone-chip, что у зон
+  // упора): выбранное читается не только по цвету.
+  const chip = (key, value, text) => {
+    const button = el(document, 'button', 'zone-chip');
+    button.append(icon(document, 'tick', 'ic ic-hand tick'), text);
+    return makeOption(button, key, value);
+  };
+  const segment = (key, choices) => {
+    const group = el(document, 'div', 'seg');
+    group.append(...choices.map(([value, text]) => makeOption(el(document, 'button', null, text), key, value)));
     return group;
   };
-  const syncChips = () => {
-    for (const { button, key, value } of chips) button.setAttribute('aria-pressed', String(state[key] === value));
-  };
-  // В панели у группы видимый заголовок, и группа называется по нему
-  // (aria-labelledby), как «Что есть дома» в gear-picker.js: так диктор не
-  // читает одно название дважды.
-  const titledGroup = (label, key, options) => {
-    const title = el(document, 'h3', 'builder-group-title', label);
-    title.id = `library-${key}-title`;
-    const group = chipGroup(label, key, options);
-    group.removeAttribute('aria-label');
-    group.setAttribute('aria-labelledby', title.id);
-    return [title, group];
-  };
 
-  // Инвентарь не сбрасывается: это не фильтр поиска, а то, что есть у человека
-  // дома, и «Сбросить» не должно возвращать ему упражнения, которых он не сделает.
-  // «Только без инвентаря» — фильтр на сегодня, его сброс снимает.
-  function resetFilters() {
-    state.query = '';
-    state.zone = null;
-    state.difficulty = null;
-    state.pattern = null;
-    state.noGear = false;
-    search.value = '';
-    syncChips();
-    drawList();
-  }
+  const zones = el(document, 'div', 'chiprow library-zones');
+  zones.setAttribute('role', 'group');
+  zones.setAttribute('aria-label', 'Группа мышц');
+  zones.append(...ZONE_CHIPS.map(([value, text]) => chip('zone', value, text)));
 
-  // Реже нужные фильтры — под кнопкой «Ещё фильтры»: на 375px зоны, сложность и
-  // «Что есть дома» вместе занимали весь первый экран, и от карточек виднелся
-  // один заголовок. Поиск и зона остаются на виду: с них начинают. Свёрнутая
-  // кнопка говорит, сколько фильтров внутри включено, — иначе короткий список
-  // казался бы загадкой.
-  const panel = el(document, 'div', 'library-more-panel');
-  panel.id = 'library-more';
-  const more = el(document, 'button', 'library-more');
-  more.type = 'button';
-  more.setAttribute('aria-controls', panel.id);
-  const moreCount = el(document, 'span', 'library-more-count');
-  // Уголок — украшение (aria-hidden): раскрыто или нет, диктору скажет aria-expanded.
-  more.append('Ещё фильтры', moreCount, renderCaret(document, 'library-more-caret'));
-  const setPanel = open => {
-    panel.hidden = !open;
-    more.setAttribute('aria-expanded', String(open));
-  };
-  setPanel(false);
-  more.addEventListener('click', () => setPanel(panel.hidden));
+  const filterButton = el(document, 'button', 'icon-btn library-filter');
+  filterButton.type = 'button';
+  filterButton.setAttribute('aria-haspopup', 'dialog');
+  filterButton.setAttribute('aria-expanded', 'false');
+  // Точка у значка — в шторке что-то включено; число — в имени кнопки.
+  const dot = el(document, 'span', 'dot');
+  dot.hidden = true;
+  filterButton.append(icon(document, 'filters'), dot);
+  filterButton.addEventListener('click', () => openFilters(filterButton));
 
-  // «Сбросить» рядом с кнопкой панели — всегда тем же узлом, только прячется,
-  // когда сбрасывать нечего: часть фильтров свёрнута, и снять их все разом
-  // иначе было бы нечем, пока список не опустеет.
-  const reset = el(document, 'button', 'library-reset', 'Сбросить');
-  reset.type = 'button';
-  reset.setAttribute('aria-label', 'Сбросить фильтры');
-  reset.addEventListener('click', resetFilters);
-  const tools = el(document, 'div', 'library-tools');
-  tools.append(more, reset);
+  const find = el(document, 'div', 'library-find');
+  find.append(search.field, filterButton);
+  const tools = el(document, 'section', 'library-tools');
+  tools.setAttribute('aria-label', 'Поиск и фильтры');
+  tools.append(find, zones);
 
   // Пометка о причине создаётся, когда добавлять нельзя, и убирается, когда
   // можно: пустой role="status" в разметке только занимал бы место.
   let blockedNote = null;
-  const found = el(document, 'p', 'library-found');
-  found.setAttribute('aria-live', 'polite');
-  const emptyBox = el(document, 'div');
-  const list = el(document, 'div', 'cards library-list');
-  const total = el(document, 'p', 'library-total');
+  const emptyBox = el(document, 'div', 'library-empty');
+  emptyBox.hidden = true;
+  const list = el(document, 'ul', 'library-list');
+  list.setAttribute('role', 'list');
 
   // Кнопки «Добавить» нынешнего списка по ключу упражнения.
   const addButtons = new Map();
 
-  function card(entry) {
-    const article = el(document, 'article', 'exercise library-card');
-    const top = el(document, 'div', 'exercise-top');
-    top.append(
-      el(document, 'span', 'library-level', DIFFICULTY_LABELS[entry.difficulty]),
-      // Инвентарь называется на карточке всегда, и с переключателями, и без них:
-      // той же подписью, что в шторке замены.
-      el(document, 'span', 'library-gear', gearText(entry)),
-      el(document, 'span', 'muscles', entry.muscles),
-    );
-    // «Добавить» — в строке названия, справа: полоса во всю ширину под каждой
-    // карточкой перебивала в списке сами упражнения.
+  // Ряд: название, мышцы и «Базовое · длинная резинка» — одна кнопка, она
+  // раскрывает «Как выполнять» (текст, видео, ссылки); справа круглая «Добавить».
+  function row(entry) {
+    const item = el(document, 'li', 'library-row');
+    const how = el(document, 'div', 'library-how');
+    how.id = `library-how-${entry.key}`;
+    how.hidden = true;
+
+    // Инвентарь называется в ряду всегда, и с переключателями, и без них: той же
+    // подписью, что в шторке замены. Текст в одном узле, а уголок отдельно: во
+    // флекс-строке пробелы вокруг «·» стёрлись бы.
+    const kind = el(document, 'span');
+    kind.append(el(document, 'span', 'library-level', DIFFICULTY_LABELS[entry.difficulty]), ' · ',
+      el(document, 'span', 'library-gear', gearText(entry)));
+    const meta = el(document, 'span', 'library-meta');
+    meta.append(kind, icon(document, 'down'));
+    const main = el(document, 'button', 'library-main');
+    main.type = 'button';
+    main.setAttribute('aria-expanded', 'false');
+    main.setAttribute('aria-controls', how.id);
+    // Пробелы между строками — имя кнопки для диктора склеивается из них.
+    main.append(el(document, 'span', 'row-title', entry.name), ' ', el(document, 'span', 'row-sub muscles', entry.muscles), ' ',
+      meta, ' ', el(document, 'span', 'sr-only', 'Как выполнять'));
+    main.addEventListener('click', () => {
+      const open = main.getAttribute('aria-expanded') !== 'true';
+      main.setAttribute('aria-expanded', String(open));
+      how.hidden = !open;
+    });
+
     const add = el(document, 'button', 'library-add');
     add.type = 'button';
+    // Плюс, а у добавленного — галочка: смысл не держится на цвете кружка.
+    add.append(icon(document, 'plus', 'ic ic-plus'), icon(document, 'tick', 'ic ic-hand ic-check'));
     add.addEventListener('click', () => {
       onAdd(entry.key);
       refresh();
     });
     addButtons.set(entry.key, { button: add, name: entry.name });
-    const head = el(document, 'div', 'library-card-head');
-    head.append(el(document, 'h3', null, entry.name), add);
-    article.append(top, head);
 
-    const { refs, body, links } = renderHowto(document, {
-      idPrefix: HOWTO_ID_PREFIX,
-      item: toItem(entry),
-      expanded: false,
-    });
-    article.append(refs, body, ...links);
-    return article;
+    const howto = renderHowto(document, { idPrefix: HOWTO_ID_PREFIX, item: toItem(entry), expanded: true });
+    how.append(el(document, 'span', 'cap', 'Как выполнять'), howto.body, ...(howto.video ? [howto.video] : []), ...howto.links);
+
+    const line = el(document, 'div', 'library-line');
+    line.append(main, add);
+    item.append(line, how);
+    return item;
   }
 
   // Поиск, зона, сложность, движение или «только без инвентаря»: то, что
-  // «Сбросить фильтры» умеет снять. «Что есть дома» сюда не входит, он сбросом
-  // не трогается.
+  // «Показать все» умеет снять. «Что есть дома» сюда не входит, оно сбросом не
+  // трогается.
   const panelFilters = () => [state.difficulty !== null, state.pattern !== null, state.noGear].filter(Boolean).length;
   const hasFilters = () => normalizeQuery(state.query) !== '' || state.zone !== null || panelFilters() > 0;
 
-  // byGear — сколько упражнений скрыл инвентарь при тех же поиске, зоне и
+  // Инвентарь не сбрасывается: это не фильтр поиска, а то, что есть у человека
+  // дома, и «Показать все» не должно возвращать ему упражнения, которых он не
+  // сделает. «Только без инвентаря» — фильтр на сегодня, его сброс снимает.
+  function resetFilters() {
+    state.zone = null;
+    state.difficulty = null;
+    state.pattern = null;
+    state.noGear = false;
+    syncOptions();
+    // Очистка поля сама перерисовывает список.
+    search.set('');
+  }
+
+  // Только то, что внутри шторки: сложность, движение и «без инвентаря». Поиск
+  // и группа мышц остаются на экране под шторкой, и сбрасывать их отсюда не надо.
+  function resetPanel() {
+    state.difficulty = null;
+    state.pattern = null;
+    state.noGear = false;
+    syncOptions();
+    drawList();
+  }
+
+  // byGear — сколько упражнений скрыл инвентарь при тех же поиске, группе и
   // сложности. Если они есть, пусто из-за инвентаря, а не запроса, и подсказка
-  // говорит об этом; «Сбросить фильтры» предлагается, только когда есть что
-  // сбрасывать: без фильтров сброс ничего бы не изменил.
-  // «Что есть дома» лежит в свёрнутой панели, поэтому подсказка про инвентарь
-  // ведёт туда кнопкой: раскрывает панель и ставит фокус на первый переключатель.
+  // говорит об этом; «Показать все» предлагается, только когда есть что
+  // сбрасывать. «Что есть дома» лежит в шторке, поэтому подсказка про инвентарь
+  // ведёт туда кнопкой: открывает шторку и ставит фокус на первый переключатель.
   function emptyContent(byGear) {
-    const reset = el(document, 'button', 'library-chip', 'Сбросить фильтры');
+    const reset = el(document, 'button', 'btn text pad0', 'Показать все');
     reset.type = 'button';
     reset.addEventListener('click', resetFilters);
-    const title = el(document, 'p', 'library-empty-title', 'Ничего не найдено');
+    const title = el(document, 'p', 'library-empty-title', 'Ничего не нашлось');
     if (byGear === 0) {
-      return [title, el(document, 'p', 'library-empty-hint', 'Измени запрос или сбрось фильтры.'), reset];
+      return [title, el(document, 'p', 'library-empty-hint', 'Попробуй другое слово или покажи все.'), reset];
     }
-    const toPicker = el(document, 'button', 'library-chip', 'Открыть «Что есть дома»');
+    const toPicker = el(document, 'button', 'btn text pad0', 'Открыть «Что есть дома»');
     toPicker.type = 'button';
     toPicker.addEventListener('click', () => {
-      setPanel(true);
+      openFilters(toPicker);
       picker.querySelector('button').focus();
     });
     const filtered = hasFilters();
-    const hint = `С отмеченным инвентарём ничего не нашлось. Отметь инвентарь в «Что есть дома»${filtered ? ' или сбрось фильтры' : ''}.`;
+    const hint = `С отмеченным инвентарём ничего не нашлось. Отметь инвентарь в «Что есть дома»${filtered ? ' или покажи все' : ''}.`;
     return [title, el(document, 'p', 'library-empty-hint', hint), toPicker, ...(filtered ? [reset] : [])];
   }
 
   // Перерисовывается только список: поле поиска и чипы остаются теми же узлами,
   // иначе набор текста терял бы фокус на каждой букве. Открытое видео уходит
-  // вместе со своей карточкой, а плеер нового списка ставится заново.
+  // вместе со своим рядом, а плеер нового списка ставится заново.
   function drawList() {
     const shown = filterEntries(entries, state);
-    // «Ещё M» — сколько прошло бы по тем же поиску, зоне и сложности без
+    // «Ещё M» — сколько прошло бы по тем же поиску, группе и сложности без
     // фильтра инвентаря: человек видит, что дело в инвентаре, а не в запросе.
     const hidden = state.owned === null ? 0 : filterEntries(entries, { ...state, owned: null }).length - shown.length;
-    found.textContent = `Найдено: ${shown.length}${hidden > 0 ? ` · ещё ${hidden} с другим инвентарём` : ''}`;
+    const count = hasFilters() ? `Найдено: ${shown.length}` : `${shown.length} ${plural(shown.length, EXERCISES)}`;
+    found.textContent = `${count}${hidden > 0 ? ` · ещё ${hidden} с другим инвентарём` : ''}`;
     const active = panelFilters();
-    moreCount.textContent = active > 0 ? ` · ${active}` : '';
-    reset.hidden = !hasFilters();
+    dot.hidden = active === 0;
+    filterButton.setAttribute('aria-label', active > 0 ? `Фильтры, выбрано: ${active}` : 'Фильтры');
+    showButton.textContent = shown.length > 0 ? `Показать ${shown.length}` : 'Закрыть';
     addButtons.clear();
-    list.replaceChildren(...shown.map(card));
-    emptyBox.className = shown.length === 0 ? 'library-empty' : '';
+    list.replaceChildren(...shown.map(row));
+    emptyBox.hidden = shown.length > 0;
     emptyBox.replaceChildren(...(shown.length === 0 ? emptyContent(hidden) : []));
     closeVideo = setupPlayers(list, openLink, { idPrefix: VIDEO_ID_PREFIX });
     refresh();
   }
 
-  // Меняется только то, что зависит от состава тренировки, — карточки не
+  // Плавающая панель: сколько упражнений уже в тренировке и обратный ход. Живёт
+  // в разметке всегда и лишь прячется, пока в тренировке нет силовых: живая
+  // область, которой не было, число не озвучила бы.
+  const dockCount = el(document, 'span', 'hand');
+  const dockTitle = el(document, 'b');
+  dockTitle.append('В тренировке: ', dockCount);
+  const dockText = el(document, 'p', 'dock-text library-total');
+  dockText.setAttribute('aria-live', 'polite');
+  dockText.append(dockTitle);
+  const dockGo = el(document, 'button', 'btn main dock-go', 'К сборке');
+  dockGo.type = 'button';
+  dockGo.addEventListener('click', () => onBack());
+  const dock = el(document, 'div', 'dock library-dock');
+  dock.hidden = true;
+  dock.append(dockText, dockGo);
+
+  // Меняется только то, что зависит от состава тренировки, — ряды не
   // пересобираются. Раскрытая техника и открытое видео остаются на месте, а
   // нажатая кнопка — тем же узлом (у пересобранной фокус терялся бы).
   function refresh() {
@@ -320,27 +333,25 @@ export function renderLibrary({ host, entries, isAdded, addBlocked, onAdd, onBac
       if (!blockedNote) {
         blockedNote = el(document, 'p', 'library-blocked');
         blockedNote.setAttribute('role', 'status');
-        found.before(blockedNote);
+        tools.after(blockedNote);
       }
       blockedNote.textContent = reason;
     }
 
     for (const [key, { button, name }] of addButtons) {
       const added = isAdded(key);
-      button.textContent = added ? 'В тренировке' : 'Добавить';
       // Подпись называет упражнение: таких кнопок много, и по голой подписи
       // диктору их не отличить.
-      button.setAttribute('aria-label', `${button.textContent}: ${name}`);
+      button.setAttribute('aria-label', `${added ? 'В тренировке' : 'Добавить'}: ${name}`);
       button.disabled = added || reason !== null;
-      // Уже добавленное выглядит иначе, чем недоступное по другой причине: оба
+      // Добавленное выглядит иначе, чем недоступное по другой причине: оба
       // disabled, и по одному атрибуту стиль их не различил бы.
       button.classList.toggle('is-added', added);
     }
-    total.textContent = `В тренировке: ${strengthEntries.filter(entry => isAdded(entry.key)).length}`;
+    const inWorkout = strengthEntries.filter(entry => isAdded(entry.key)).length;
+    dockCount.textContent = String(inWorkout);
+    dock.hidden = inWorkout === 0;
   }
-
-  const foot = el(document, 'div', 'library-foot');
-  foot.append(total, backButton(false));
 
   // Переключатели — один и тот же узел на всё время экрана: перерисовывается
   // только список, и нажатая кнопка остаётся в фокусе.
@@ -354,33 +365,77 @@ export function renderLibrary({ host, entries, isAdded, addBlocked, onAdd, onBac
     },
   });
 
-  // Движение — только те, что есть среди силовых, и только если их больше
-  // одного: чип, который ничего не отсеивает, лишь занимает место. По той же
-  // причине «Без инвентаря» — только когда есть и такие упражнения, и другие, и
-  // только с переключателями: без них экран про инвентарь не говорит вовсе.
+  // Шторка фильтров. Содержимое собрано один раз и каждый раз ложится в новую
+  // шторку тем же узлом: выбор и фокус переключателей живут столько же, сколько
+  // экран. Движение — только те, что есть среди силовых, и только если их
+  // больше одного: чип, который ничего не отсеивает, лишь занимает место. По
+  // той же причине «Без инвентаря» — только когда есть и такие упражнения, и
+  // другие, и только с переключателями: без них экран про инвентарь не говорит.
   const patterns = new Set(strengthEntries.map(entry => entry.pattern));
-  const patternChips = [[null, 'Любое'], ...Object.entries(PATTERN_LABELS).filter(([id]) => patterns.has(id))];
   const bare = strengthEntries.filter(entry => fitsGear(entry, [])).length;
-  panel.append(
-    ...titledGroup('Сложность', 'difficulty', DIFFICULTY_CHIPS),
-    ...(patterns.size > 1 ? titledGroup('Движение', 'pattern', patternChips) : []),
-    ...(picker && bare > 0 && bare < strengthEntries.length ? titledGroup('Инвентарь', 'noGear', NO_GEAR_CHIPS) : []),
-    ...(picker ? [picker] : []),
+  const group = (key, label, control) => {
+    const caption = el(document, 'span', 'label', label);
+    caption.id = `library-${key}-label`;
+    control.setAttribute('role', 'group');
+    control.setAttribute('aria-labelledby', caption.id);
+    const node = el(document, 'div', 'library-grp');
+    node.append(caption, control);
+    return node;
+  };
+  const patternChips = el(document, 'div', 'library-chips');
+  patternChips.append(...[[null, 'Любое'], ...Object.entries(PATTERN_LABELS).filter(([id]) => patterns.has(id))]
+    .map(([value, text]) => chip('pattern', value, text)));
+
+  const filterBody = el(document, 'div', 'library-sheet-body');
+  filterBody.append(
+    group('difficulty', 'Сложность', segment('difficulty', DIFFICULTY_OPTIONS)),
+    ...(patterns.size > 1 ? [group('pattern', 'Движение', patternChips)] : []),
+    ...(picker && bare > 0 && bare < strengthEntries.length ? [group('noGear', 'Инвентарь', segment('noGear', NO_GEAR_OPTIONS))] : []),
+    ...(picker ? [(() => {
+      const node = el(document, 'div', 'library-grp library-gear-grp');
+      node.append(picker);
+      return node;
+    })()] : []),
   );
 
-  root.append(
-    backButton(true),
-    search,
-    chipGroup('Зона', 'zone', ZONE_CHIPS),
-    tools,
-    panel,
-    found,
-    emptyBox,
-    list,
-    foot,
-  );
-  syncChips();
+  const resetButton = el(document, 'button', 'btn text', 'Сбросить');
+  resetButton.type = 'button';
+  resetButton.setAttribute('aria-label', 'Сбросить фильтры');
+  resetButton.addEventListener('click', resetPanel);
+  const showButton = el(document, 'button', 'btn main', 'Показать');
+  showButton.type = 'button';
+  const filterFoot = el(document, 'div', 'library-sheet-foot');
+  filterFoot.append(resetButton, showButton);
+
+  function openFilters(opener) {
+    const { sheet, close, show } = openSheet({
+      host,
+      screen: root,
+      labelledBy: 'library-sheet-title',
+      className: 'library-sheet',
+      scrimClass: 'library-backdrop',
+      opener,
+      onClose: () => filterButton.setAttribute('aria-expanded', 'false'),
+    });
+    const sheetTitle = el(document, 'h2', 'sheet-title', 'Фильтры');
+    sheetTitle.id = 'library-sheet-title';
+    const closeButton = el(document, 'button', 'icon-btn library-sheet-close');
+    closeButton.type = 'button';
+    closeButton.setAttribute('aria-label', 'Закрыть фильтры');
+    closeButton.append(icon(document, 'close'));
+    closeButton.addEventListener('click', () => close());
+    showButton.onclick = () => close();
+    const head = el(document, 'div', 'sheet-head');
+    head.append(sheetTitle, closeButton);
+    sheet.append(el(document, 'div', 'grab'), head, filterBody, filterFoot);
+    filterButton.setAttribute('aria-expanded', 'true');
+    show();
+  }
+
+  root.append(bar, heading, tools, list, emptyBox, dock);
+  syncOptions();
   drawList();
+  title.focus({ preventScroll: true });
 
   return { refresh };
 }

@@ -19,15 +19,19 @@ import { DEFAULT_FORMAT, OPTIONAL_SLOTS, formatOf } from './builder/format.js';
 import {
   pickSkeleton, makeRandom, generate, availability, missingGroupsMessage, missingZoneMessage, missingGear, closableGroups,
 } from './builder/generator.js';
-import { replaceCandidates, replaceExercise } from './builder/replace.js';
+import { replaceCandidates, replaceExercise, searchCandidates } from './builder/replace.js';
 import { zeroGroups, belowFloor } from './builder/coverage.js';
 import { groupsPhrase } from './muscles.js';
-import { LEVELS, ZONES, MAX_STRENGTH, MAX_ZONES, DEFAULT_DAYS, PLAN_DAYS } from './builder/rules.js';
+import { LEVELS, ZONES, MAX_STRENGTH, MAX_ZONES, DEFAULT_DAYS, PLAN_DAYS, CORE_GROUPS } from './builder/rules.js';
 import { plural, defaultName } from './builder/texts.js';
 import { gearText, gearNames, fitsGear, fitLibrary, unownedGear } from './gear.js';
 import { renderGearPicker } from './gear-picker.js';
 import { renderFormatPicker } from './format-picker.js';
-import { roundsTag } from './render.js';
+import { openSheet } from './sheet.js';
+import { searchField } from './search-field.js';
+import { roundsTag, blockKind, blockNumber, setBlockOpen } from './render.js';
+import { icon, loopMeter } from './icons.js';
+import { renderHero } from './hero.js';
 import { createGearProfile } from './gear-profile.js';
 import { newWorkoutId, OWN_LIMIT } from './my-workouts.js';
 
@@ -38,19 +42,23 @@ const GENERATE_NOTE = 'Выбери уровень и зоны упора — у
 // ручная, и подобранная по правилам. Разминку, разогрев и завершение можно
 // выключить, а силовые разложить кругом или подходами («Формат занятия»), поэтому
 // заголовок говорит «обычно», а не «всегда».
+// Третий элемент — тип блока: от него шаг получает цвет, как блок в «Сегодня».
 const STEPS = [
-  ['Разминка', 'Плавно, без длительных остановок'],
-  ['Круговой разогрев', 'Повышает пульс, резинки лёгкие'],
-  ['Силовая часть', 'Парами, кругом или подходами — на выбор'],
-  ['Завершение', '2–3 минуты в спокойном темпе, дыхание'],
+  ['Разминка', 'Плавно, без длительных остановок', 'warm'],
+  ['Круговой разогрев', 'Повышает пульс, резинки лёгкие', 'circuit'],
+  ['Силовая часть', 'Парами, кругом или подходами — на выбор', 'strength'],
+  ['Завершение', '2–3 минуты в спокойном темпе, дыхание', 'finish'],
 ];
 
 const ALL_COVERED = 'Все основные группы получают нагрузку';
 const NOT_WHOLE_BODY = 'Тренировка пока не на всё тело';
 const ONLY_STRENGTH = 'Считаются только силовые упражнения. Сохранить можно и так.';
 const ALL_ABOVE_FLOOR = 'Все основные группы не ниже границы уровня.';
+const BELOW_TITLE = 'Часть групп ниже границы уровня';
+const belowNote = days => `Расчёт — на ${days} ${plural(days, ['день', 'дня', 'дней'])} в неделю: на сохранении он пересчитается по выбранным.`;
+const GROUPS = ['группа', 'группы', 'групп'];
+const MANUAL_KIND = 'Своя сборка';
 const ONE_DAY = 'Один день в неделю — мало: каждую группу лучше нагружать хотя бы дважды в неделю.';
-const belowText = groups => `Ниже границы уровня: ${groupsPhrase(groups)}.`;
 
 const GENERATOR_LEAD = 'Подбор упражнений по правилам';
 const ZONE_HINT = 'Упор добавит упражнение на каждую выбранную зону, не больше двух. Остальные группы мышц остаются в тренировке.';
@@ -75,9 +83,15 @@ const noFitText = slot => `Для блока «${SLOT_LABELS[slot]}» нет п�
 const NO_CANDIDATES = 'Похожих упражнений больше нет: все подходящие уже в тренировке.';
 const HINT_STRENGTH = 'Те же целевые мышцы, похожая разметка';
 const HINT_OTHER = 'Того же типа';
+// Строка кандидата целиком — кнопка, а кнопкой её делает только кружок справа:
+// без слов не очевидно, что нажатие и есть замена.
+const TAP_TO_REPLACE = 'Нажми на упражнение, чтобы заменить.';
 
 // Дни недели по ISO (1 — понедельник), как в compact.days.
-const DAYS = [[1, 'пн'], [2, 'вт'], [3, 'ср'], [4, 'чт'], [5, 'пт'], [6, 'сб'], [7, 'вс']];
+const DAYS = [
+  [1, 'пн', 'понедельник'], [2, 'вт', 'вторник'], [3, 'ср', 'среда'], [4, 'чт', 'четверг'],
+  [5, 'пт', 'пятница'], [6, 'сб', 'суббота'], [7, 'вс', 'воскресенье'],
+];
 
 const SLOTS = Object.keys(SLOT_LABELS);
 
@@ -157,21 +171,36 @@ export function renderBuilder({
 
   const isDirty = () => draft !== null && snapshot(draft) !== startedAs;
 
+  // Цвет страницы на экране «Конструктора»: генератор сиреневый, остальное —
+  // масляный цвет вкладки. Красим, только пока раздел на виду: правку открывают и
+  // из «Тренировок», когда «Конструктор» ещё скрыт, и чужой цвет там не нужен.
+  // Вернувшись во вкладку, раздел зовёт syncTint: sections.js ставит цвет вкладки,
+  // а на открытом генераторе он должен остаться сиреневым.
+  let screenTint = 'butter';
+  function paintTint() {
+    if (!host.hidden) document.body.dataset.tint = screenTint;
+  }
+
   // Смена экрана. Экраны делят один раздел и одну полосу прокрутки, поэтому новый
   // открывается сверху, а фокус переходит на его заголовок: иначе после нажатия
   // на кнопку, которой уже нет в разметке, он оставался бы нигде. Экран, который
   // перерисовывается из-за нажатия на нём же (переключатели инвентаря), остаётся
   // там, где был: scroll: false не уводит страницу наверх.
-  function show(root, focus = root.querySelector('h2'), { scroll = true } = {}) {
+  function show(root, focus = root.querySelector('h1'), { scroll = true } = {}) {
     host.replaceChildren(root);
+    screenTint = root.classList.contains('builder-generator') ? 'lilac' : 'butter';
+    paintTint();
     if (scroll) win.scrollTo({ top: 0, behavior: 'instant' });
     focus?.focus({ preventScroll: !scroll });
   }
 
+  // Заголовок экрана. Принимает фокус программно, но в порядок обхода Tab не
+  // попадает. Длинное название (у подобранной тренировки оно из зон упора)
+  // набирается мельче: в 40px оно заняло бы три строки.
   function heading(text) {
-    const title = make('h2', null, text);
-    // Принимает фокус программно, но в порядок обхода Tab не попадает.
+    const title = make('h1', null, text);
     title.tabIndex = -1;
+    if (text.length > 22) title.dataset.long = '';
     return title;
   }
 
@@ -179,11 +208,20 @@ export function renderBuilder({
     const button = make('button', 'builder-back');
     button.type = 'button';
     // Стрелка — украшение: диктор читал бы «стрелка влево».
-    const arrow = make('span', null, '←');
-    arrow.setAttribute('aria-hidden', 'true');
-    button.append(arrow, ` ${text}`);
+    button.append(icon(document, 'back'), text);
     button.addEventListener('click', onClick);
     return button;
+  }
+
+  // Верх внутреннего экрана: «назад», ниже название на бумаге и, если есть,
+  // строка под ним (она же .builder-subtitle у генератора и результата).
+  function topOf(back, title, lead = null) {
+    const bar = make('div', 'appbar');
+    bar.append(back);
+    const block = make('div', 'page-title');
+    block.append(title);
+    if (lead) block.append(lead);
+    return [bar, block];
   }
 
   // Причина, по которой кнопка недоступна, стоит под ней и видна всегда, пока
@@ -215,8 +253,11 @@ export function renderBuilder({
     return box;
   }
 
+  // Цвет карточки вокруг строки состояния (.builder-card) меняется вместе со
+  // строкой: мятный — всё закрыто, масляный — есть что поправить.
   function paintStatus(box, ok, lines) {
     box.classList.toggle('is-ok', ok);
+    box.closest('.builder-card')?.classList.toggle('is-ok', ok);
     box.replaceChildren(...lines.map(line => make('p', null, line)));
   }
 
@@ -228,23 +269,39 @@ export function renderBuilder({
     const root = make('div', 'builder builder-entry');
     // Пробел между подписями: имя кнопки для диктора склеивается из них, и без
     // него «самомуЛистай» читалось бы одним словом.
-    const path = (title, note, onClick) => {
-      const button = make('button', 'builder-path');
+    const path = (kind, iconName, title, note, onClick) => {
+      const button = make('button', `builder-path builder-path-${kind}`);
       button.type = 'button';
-      button.append(make('span', 'builder-path-title', title), ' ', make('span', 'builder-path-note', note));
+      const mark = make('span', 'path-ic');
+      mark.append(icon(document, iconName));
+      const text = make('span', 'path-text');
+      text.append(make('span', 'builder-path-title', title), ' ', make('span', 'builder-path-note', note));
+      button.append(mark, text, icon(document, 'next', 'ic path-go'));
       button.addEventListener('click', onClick);
       return button;
     };
 
     const steps = make('ol', 'builder-steps');
-    for (const [name, note] of STEPS) {
+    // Номера видны в кружках, и список остаётся списком для диктора и в Safari,
+    // который при list-style: none роль списка снимает.
+    steps.setAttribute('role', 'list');
+    STEPS.forEach(([name, note, kind], index) => {
       const item = make('li');
-      item.append(make('strong', null, name), ' ', make('span', null, note));
+      item.dataset.kind = kind;
+      const text = make('span', 'step-text');
+      text.append(make('strong', null, name), ' ', make('span', null, note));
+      item.append(make('span', 'step-badge', String(index + 1)), text);
       steps.append(item);
-    }
-    root.append(heading('Конструктор'), make('p', 'builder-lead', ENTRY_LEAD),
-      path('Собрать самому', MANUAL_NOTE, startManual), path('Сгенерировать', GENERATE_NOTE, startGenerator),
-      make('h3', 'builder-steps-title', 'Из чего обычно состоит тренировка'), steps, sourcesLink());
+    });
+
+    const paths = make('div', 'builder-paths');
+    paths.append(
+      path('manual', 'blocks', 'Собрать самому', MANUAL_NOTE, startManual),
+      path('generate', 'sparkles', 'Сгенерировать', GENERATE_NOTE, startGenerator),
+    );
+    const body = make('div', 'wrap');
+    body.append(paths, make('h2', 'builder-steps-title', 'Из чего обычно состоит тренировка'), steps, sourcesLink());
+    root.append(renderHero(document, { title: 'Конструктор', lead: ENTRY_LEAD, leadClass: 'builder-lead' }), body);
     return root;
   }
 
@@ -256,6 +313,9 @@ export function renderBuilder({
     };
     draftId = newWorkoutId();
     startedAs = snapshot(draft);
+    // Сборка открывается на разминке: она первая в списке, и видно, как выглядит
+    // раскрытый блок.
+    openId = 'start';
     drawBuild();
   }
 
@@ -294,6 +354,7 @@ export function renderBuilder({
     draftId = id;
     startedAs = snapshot(draft);
     replaced.clear();
+    openId = '';
     if (draft.level === null) {
       drawBuild();
     } else {
@@ -309,42 +370,85 @@ export function renderBuilder({
   // — Общее у сборки и результата ——————————————————————————————————————
 
   // Кнопка в строке упражнения. Кнопок несколько, и по голой подписи диктору их
-  // не отличить; видимая подпись стоит в начале имени.
-  function itemButton(className, text, item, onClick) {
-    const button = make('button', className, text);
+  // не отличить: имя кнопки — «действие: упражнение». У круглой кнопки (mark —
+  // имя значка) подписи на экране нет, имя ей даёт aria-label; у текстовой
+  // видимая подпись стоит в начале имени.
+  function itemButton(className, text, item, onClick, mark = null) {
+    const button = make('button', className);
     button.type = 'button';
+    if (mark === null) button.textContent = text;
+    else button.append(icon(document, mark));
     button.setAttribute('aria-label', `${text}: ${item.name}`);
     button.addEventListener('click', () => onClick(button));
     return button;
   }
 
-  // Строка упражнения: название, метки (их ставит результат), мышцы и кнопка.
+  // Строка упражнения: название, мышцы, метки (их ставит результат) и кнопка.
   function itemRow(item, button, tags = []) {
     const node = make('div', 'builder-item');
     node.dataset.key = item.key;
     const text = make('div', 'builder-item-text');
-    text.append(make('span', 'builder-item-name', item.name));
+    text.append(make('span', 'builder-item-name', item.name), make('span', 'builder-item-muscles', item.muscles));
     if (tags.length > 0) {
       const list = make('span', 'builder-item-tags');
       list.append(...tags.map(([className, label]) => make('span', className, label)));
       text.append(list);
     }
-    text.append(make('span', 'builder-item-muscles', item.muscles));
     node.append(text, button);
     return node;
   }
 
-  // Блоки тренировки: заголовок, подпись и строки. Круги (или подходы) у силовых
-  // блоков показывает только результат: у подобранной они зависят от уровня, у
-  // ручной сборки всегда два. Силовой блок — любой, чей id не из скелета: его
-  // имя зависит от формата (pair1, loop, ex1), и по началу id его не узнать.
-  function blockSections(workout, rowOf, withRounds) {
+  // Какой блок раскрыт на экране сборки и результата. Один на оба: перерисовка
+  // (замена, формат) его не сворачивает, а возврат из библиотеки открывает тот
+  // блок, куда попало упражнение. Пусто — все свёрнуты.
+  let openId = '';
+
+  function applyOpen(container) {
+    for (const section of container.querySelectorAll('.builder-block')) {
+      setBlockOpen(section, section.dataset.block === openId);
+    }
+  }
+
+  // Блоки тренировки — раскрывающиеся списки, как в «Сегодня»: шапка-кнопка (номер
+  // цвета блока, название, подпись, число упражнений) и тело со строками. Круги
+  // (или подходы) у силовых блоков показывает только результат: у подобранной
+  // они зависят от уровня, у ручной сборки всегда два. Силовой блок — любой, чей
+  // id не из скелета: его имя зависит от формата (pair1, loop, ex1), и по началу
+  // id его не узнать.
+  function blockSections(workout, rowOf, { rounds, onToggle }) {
     return workout.blocks.map(block => {
+      const open = block.id === openId;
       const section = make('section', 'builder-block');
-      const head = make('div', 'builder-block-head');
-      head.append(make('h3', null, block.title));
-      if (withRounds && !SKELETON_BLOCK_IDS.includes(block.id)) head.append(make('span', 'builder-block-rounds', roundsTag(block)));
-      section.append(head, make('p', 'builder-block-sub', block.sub), ...block.items.map(rowOf));
+      section.dataset.kind = blockKind(block);
+      section.dataset.block = block.id;
+
+      const bodyId = `builder-${block.id}-body`;
+      const head = make('button', 'blk-head');
+      head.type = 'button';
+      head.setAttribute('aria-expanded', String(open));
+      head.setAttribute('aria-controls', bodyId);
+      const number = make('span', 'block-number', blockNumber(block));
+      number.setAttribute('aria-hidden', 'true');
+      const text = make('span', 'blk-text');
+      text.append(make('span', 'blk-title', block.title), make('span', 'blk-sub builder-block-sub', block.sub));
+      const count = make('span', 'blk-prog', String(block.items.length));
+      count.append(make('span', 'sr-only', ` ${plural(block.items.length, EXERCISES)}`));
+      head.append(number, text, count, icon(document, 'down', 'ic blk-caret'));
+      head.addEventListener('click', () => onToggle(block.id));
+      const heading = make('h2', 'block-heading');
+      heading.append(head);
+
+      const body = make('div', 'blk-body');
+      body.id = bodyId;
+      body.hidden = !open;
+      if (rounds && !SKELETON_BLOCK_IDS.includes(block.id)) {
+        const tags = make('div', 'blk-tags');
+        tags.append(make('span', 'round-tag builder-block-rounds', roundsTag(block)));
+        body.append(tags);
+      }
+      body.append(...block.items.map(rowOf));
+
+      section.append(heading, body);
       return section;
     });
   }
@@ -352,6 +456,57 @@ export function renderBuilder({
   // Кнопка в строке с этим ключом: после замены фокус возвращается на неё.
   const rowButton = (blocks, key) => [...blocks.querySelectorAll('.builder-item')]
     .find(node => node.dataset.key === key)?.querySelector('button');
+
+  // Карточка покрытия мышц: петля заполняется по числу основных групп с нагрузкой
+  // (в узле — их число, а когда всё в порядке — галочка), справа слова состояния.
+  // Строка состояния — один узел на экран, и меняется его содержимое: заново
+  // перерисованный узел диктор не озвучил бы. Список групп спрятан за кнопкой
+  // «Без нагрузки: 17 групп»: в строку он занимал бы половину экрана. Кнопка и
+  // список стоят вне строки состояния: иначе диктор читал бы их при каждой правке.
+  function coverCard() {
+    const meter = loopMeter(document);
+    const knot = make('span', 'cover-knot');
+    knot.setAttribute('aria-hidden', 'true');
+    const loop = make('div', 'cover-loop');
+    loop.append(meter.svg, knot);
+
+    const status = statusBox();
+    const list = make('p', 'cover-list');
+    list.id = 'cover-list';
+    list.hidden = true;
+    const more = make('button', 'cover-more');
+    more.type = 'button';
+    more.setAttribute('aria-controls', list.id);
+    more.addEventListener('click', () => {
+      list.hidden = !list.hidden;
+      more.setAttribute('aria-expanded', String(!list.hidden));
+    });
+
+    const text = make('div', 'cover-text');
+    text.append(status, more);
+    const card = make('section', 'cover');
+    card.setAttribute('aria-label', 'Покрытие мышц');
+    card.append(loop, text);
+
+    // groups — группы, которым не хватает нагрузки, с подписью кнопки (label).
+    function paint({ ok, covered, title, note = null, groups = [], label = '' }) {
+      card.classList.toggle('is-ok', ok);
+      status.classList.toggle('is-ok', ok);
+      meter.set(covered / CORE_GROUPS.length);
+      knot.replaceChildren(ok ? icon(document, 'tick', 'ic ic-hand') : String(covered));
+      status.replaceChildren(make('p', 'cover-title', title), ...(note === null ? [] : [make('p', 'cover-note', note)]));
+      more.hidden = groups.length === 0;
+      if (groups.length === 0) {
+        list.hidden = true;
+      } else {
+        more.replaceChildren(`${label}: ${groups.length} ${plural(groups.length, GROUPS)}`, icon(document, 'down'));
+        const phrase = groupsPhrase(groups);
+        list.textContent = `${phrase[0].toUpperCase()}${phrase.slice(1)}.`;
+      }
+      more.setAttribute('aria-expanded', String(!list.hidden));
+    }
+    return { nodes: [card, list], paint };
+  }
 
   // Переключатели «Формат занятия» для текущего экрана. Узел один на экран и
   // живёт, пока он открыт: refresh() перерисовывает блоки и счётчики, но не его,
@@ -394,31 +549,30 @@ export function renderBuilder({
       : `Похожих упражнений с отмеченным инвентарём больше нет. Есть с инвентарём: ${gearNames(gear)}.`;
   }
 
-  // Шторка замены. Ставится рядом с корнем экрана, а не внутрь него: сборка и
-  // результат перерисовываются при каждом изменении, а шторке нельзя пропадать
-  // вместе с ними. Что сделать с экраном после выбора, знает onPick(newKey): он
-  // обновляет экран и отдаёт кнопку, на которую вернуть фокус.
+  // Шторка замены (sheet.js). Ставится рядом с корнем экрана, а не внутрь него:
+  // сборка и результат перерисовываются при каждом изменении, а шторке нельзя
+  // пропадать вместе с ними. Что сделать с экраном после выбора, знает
+  // onPick(newKey): он обновляет экран и отдаёт кнопку, на которую вернуть фокус.
+  // Кандидатов можно искать по названию, мышцам и инвентарю — как в библиотеке.
   function openReplace({ root, slot, key, opener, onPick }) {
     const current = library.find(entry => entry.key === key);
-    const backdrop = make('div', 'replace-backdrop');
-    const sheet = make('div', 'replace-sheet');
-    sheet.setAttribute('role', 'dialog');
-    sheet.setAttribute('aria-modal', 'true');
-    sheet.setAttribute('aria-labelledby', 'replace-title');
-    sheet.tabIndex = -1;
+    const { sheet, close, show } = openSheet({
+      host, screen: root, labelledBy: 'replace-title', className: 'replace-sheet', scrimClass: 'replace-backdrop', opener,
+    });
 
-    const title = make('h3', null, 'Заменить упражнение');
+    const title = make('h2', 'sheet-title', 'Заменить упражнение');
     title.id = 'replace-title';
-    const list = make('ul', 'replace-list');
+    const closeButton = make('button', 'icon-btn replace-close');
+    closeButton.type = 'button';
+    closeButton.setAttribute('aria-label', 'Закрыть');
+    closeButton.append(icon(document, 'close'));
+    closeButton.addEventListener('click', () => close());
+    const head = make('div', 'sheet-head');
+    head.append(title, closeButton);
 
-    // После закрытия фокус возвращается туда, откуда шторку открыли (или на
-    // кнопку выбранной замены): иначе он остался бы на узле, которого нет.
-    function close(focus = opener) {
-      backdrop.remove();
-      sheet.remove();
-      root.removeAttribute('inert');
-      if (focus?.isConnected) focus.focus();
-    }
+    const now = make('p', 'replace-now');
+    now.append('Сейчас: ', make('b', 'replace-current', current.name));
+    const hint = make('p', 'replace-hint', `${slot === 'strength' ? HINT_STRENGTH : HINT_OTHER}.`);
 
     // Подходящие по инвентарю и само заменяемое: replaceCandidates бросает на
     // ключе, которого нет в переданной библиотеке, а в сохранённой тренировке
@@ -427,68 +581,124 @@ export function renderBuilder({
     const owned = gearProfile.get();
     const reachable = library.filter(entry => entry.key === key || fitsGear(entry, owned));
     const candidates = replaceCandidates({ compact: draft, slot, key, library: reachable });
-    for (const entry of candidates) {
+
+    function candidateRow(entry) {
       const item = make('li', 'replace-candidate');
-      const text = make('div', 'replace-text');
-      text.append(make('span', 'replace-name', entry.name), make('span', 'replace-muscles', entry.muscles), make('span', 'replace-gear', gearText(entry)));
-      const pick = make('button', 'replace-pick', 'Выбрать');
+      // Строка целиком — кнопка выбора: имя ей даёт содержимое, а невидимая
+      // подпись в начале говорит, что это за действие.
+      const pick = make('button', 'cand replace-pick');
       pick.type = 'button';
-      pick.setAttribute('aria-label', `Выбрать: ${entry.name}`);
+      const text = make('span', 'cand-text');
+      const sub = make('span', 'cand-sub');
+      sub.append(make('span', 'replace-muscles', entry.muscles), ' · ', make('span', 'replace-gear', gearText(entry)));
+      text.append(make('span', 'cand-name replace-name', entry.name), sub);
+      const ring = make('span', 'cand-ring');
+      ring.setAttribute('aria-hidden', 'true');
+      pick.append(make('span', 'sr-only', 'Выбрать: '), text, ring);
       pick.addEventListener('click', () => {
         draft = replaceExercise(draft, slot, key, entry.key);
         close(onPick(entry.key));
       });
-      item.append(text, pick);
-      list.append(item);
+      item.append(pick);
+      return item;
     }
 
-    const closeButton = make('button', 'replace-close', 'Закрыть');
-    closeButton.type = 'button';
-    closeButton.addEventListener('click', () => close());
-    backdrop.addEventListener('click', () => close());
-    sheet.addEventListener('keydown', event => { if (event.key === 'Escape') close(); });
+    sheet.append(make('div', 'grab'), head, now, hint);
+    if (candidates.length === 0) {
+      sheet.append(make('p', 'replace-empty', noCandidatesText(slot, key, owned)));
+    } else {
+      hint.append(` ${TAP_TO_REPLACE}`);
+      const search = searchField(document, { label: 'Найти упражнение', className: 'sheet-search', onChange: () => showMatches() });
 
-    sheet.append(title, make('p', 'replace-current', current.name),
-      make('p', 'replace-hint', slot === 'strength' ? HINT_STRENGTH : HINT_OTHER));
-    if (candidates.length === 0) sheet.append(make('p', 'replace-empty', noCandidatesText(slot, key, owned)));
-    else sheet.append(list);
-    sheet.append(closeButton);
+      const list = make('ul', 'replace-list');
+      // Сколько нашлось — вслух для диктора: список под полем перестраивается на
+      // каждую букву, а глазами это видно, на слух — нет.
+      const found = make('p', 'sr-only');
+      found.setAttribute('role', 'status');
+      const empty = make('div', 'cand-empty');
+      const showAll = make('button', 'btn text pad0', 'Показать все');
+      showAll.type = 'button';
+      empty.append(make('p', 'cand-empty-title', 'Ничего не нашлось'), make('p', 'cand-empty-hint', 'Попробуй другое слово или покажи все.'), showAll);
 
-    root.setAttribute('inert', '');
-    host.append(backdrop, sheet);
-    sheet.focus();
+      function showMatches() {
+        const matches = searchCandidates(candidates, search.input.value);
+        list.replaceChildren(...matches.map(candidateRow));
+        empty.hidden = matches.length > 0;
+        found.textContent = matches.length > 0 ? `Найдено: ${matches.length}` : 'Ничего не нашлось';
+      }
+      showAll.addEventListener('click', () => {
+        search.set('');
+        search.input.focus();
+      });
+
+      const scroll = make('div', 'sheet-scroll');
+      scroll.append(list, empty, found);
+      sheet.append(search.field, scroll);
+      showMatches();
+    }
+
+    show();
   }
 
   // — Сборка ————————————————————————————————————————————————————————
 
   const addBlocked = () => (draft.strength.length >= MAX_STRENGTH ? STRENGTH_FULL : null);
 
+  // Панель с итогом и главной кнопкой «Сохранить»: что получится (или почему
+  // сохранить нельзя) и кнопка. Подпись и кнопку держит экран, а менять их
+  // умеет refresh: узлы остаются теми же.
+  function saveDock() {
+    const title = make('b');
+    const note = make('span');
+    const text = make('p', 'dock-text');
+    text.append(title, note);
+    const button = make('button', 'builder-save', 'Сохранить');
+    button.type = 'button';
+    button.addEventListener('click', drawSave);
+    const dock = make('div', 'dock');
+    dock.append(text, button);
+    return { dock, title, note, button };
+  }
+
   function drawBuild() {
-    const root = make('div', 'builder builder-build');
-    const coverage = statusBox();
-    const add = make('button', 'builder-add', 'Добавить упражнение');
-    add.type = 'button';
-    add.addEventListener('click', showLibrary);
-    const addReason = reasonNote();
+    const root = make('div', 'builder builder-build wrap has-dock');
+    const cover = coverCard();
     const picker = formatPicker('build-format', () => refresh());
     const blocks = make('div', 'builder-blocks');
-    const save = make('button', 'builder-save', 'Сохранить');
-    save.type = 'button';
-    save.addEventListener('click', drawSave);
-    const saveReason = reasonNote();
+    const bar = saveDock();
+
+    // «Добавить упражнение» стоит в списке блоков, там, где у тренировки силовая
+    // часть: перед завершением, а без него — в конце.
+    const add = make('button', 'addrow builder-add');
+    add.type = 'button';
+    add.addEventListener('click', showLibrary);
+    const addMark = make('span', 'addrow-ic');
+    addMark.append(icon(document, 'plus'));
+    const addSub = make('span', 'addrow-sub');
+    const addText = make('span', 'addrow-text');
+    addText.append(make('span', 'addrow-title', 'Добавить упражнение'), ' ', addSub);
+    add.append(addMark, addText);
+    const addReason = reasonNote();
+    const addWrap = make('div', 'builder-addwrap');
+    addWrap.append(add, addReason);
 
     // Упражнение и его кнопка: у силовых «Убрать» (замена силового — это убрать
     // и добавить другое из библиотеки), у остальных «Заменить».
     function row(item) {
       const slot = SLOTS.find(name => draft[name].includes(item.key));
       if (slot === 'strength') return itemRow(item, itemButton('builder-remove', 'Убрать', item, () => remove(item.key)));
-      return itemRow(item, itemButton('builder-replace', 'Заменить', item,
-        opener => openReplace({ root, slot, key: item.key, opener, onPick: picked })));
+      return itemRow(item, itemButton('builder-replace icon-btn', 'Заменить', item,
+        opener => openReplace({ root, slot, key: item.key, opener, onPick: picked }), 'swap'));
     }
 
     function picked(key) {
       refresh();
       return rowButton(blocks, key);
+    }
+
+    function toggle(id) {
+      openId = openId === id ? '' : id;
+      applyOpen(blocks);
     }
 
     function remove(key) {
@@ -508,21 +718,30 @@ export function renderBuilder({
       // человек выбирает на следующем экране, а ноль подходов в неделю от их
       // числа не зависит — зависело бы лишь «ноль дней», и это не про нагрузку.
       const zero = zeroGroups(workoutOf(DEFAULT_DAYS));
-      paintStatus(coverage, zero.length === 0, zero.length === 0
-        ? [ALL_COVERED]
-        : [NOT_WHOLE_BODY, `Без нагрузки: ${groupsPhrase(zero)}.`, ONLY_STRENGTH]);
+      const covered = CORE_GROUPS.length - zero.length;
+      cover.paint(zero.length === 0
+        ? { ok: true, covered, title: ALL_COVERED }
+        : { ok: false, covered, title: NOT_WHOLE_BODY, note: ONLY_STRENGTH, groups: zero, label: 'Без нагрузки' });
 
-      blocks.replaceChildren(...blockSections(expandWorkout(draftId, draft, library).workout, row, false));
+      const sections = blockSections(expandWorkout(draftId, draft, library).workout, row, { rounds: false, onToggle: toggle });
+      const finish = sections.findIndex(section => section.dataset.kind === 'finish');
+      sections.splice(finish === -1 ? sections.length : finish, 0, addWrap);
+      blocks.replaceChildren(...sections);
 
+      const available = fitLibrary(library, gearProfile.get()).filter(entry => entry.slot === 'strength').length;
+      addSub.textContent = `Из библиотеки, ${available} ${plural(available, EXERCISES)}`;
       const blocked = addBlocked();
       add.disabled = blocked !== null;
       setNote(addReason, blocked);
+
+      const count = exerciseCount(draft);
       const empty = draft.strength.length === 0;
-      save.disabled = empty;
-      setNote(saveReason, empty ? NO_STRENGTH : null);
+      bar.title.textContent = empty ? NO_STRENGTH : `${count} ${plural(count, EXERCISES)}`;
+      bar.note.textContent = empty ? '' : MANUAL_KIND;
+      bar.button.disabled = empty;
     }
 
-    root.append(backButton('Назад', () => leave(abandon)), heading('Своя тренировка'), coverage, add, addReason, picker, blocks, save, saveReason);
+    root.append(...topOf(backButton('Назад', () => leave(abandon)), heading('Своя тренировка')), ...cover.nodes, picker, blocks, bar.dock);
     refresh();
     show(root);
   }
@@ -535,7 +754,13 @@ export function renderBuilder({
       gear: { owned: gearProfile.get(), onChange: owned => gearProfile.set(owned) },
       isAdded: key => draft.strength.includes(key),
       addBlocked,
-      onAdd(key) { draft = { ...draft, strength: [...draft.strength, key] }; },
+      onAdd(key) {
+        draft = { ...draft, strength: [...draft.strength, key] };
+        // Раскрыт блок, куда попало упражнение: вернувшись на сборку, человек
+        // увидит его сразу.
+        const block = expandWorkout(draftId, draft, library).workout.blocks.find(candidate => candidate.items.some(item => item.key === key));
+        openId = block?.id ?? openId;
+      },
       // Экран сборки заново, а не прежний узел: состав мог измениться, и
       // «Добавить» после возврата должна стать тем, на чём фокус.
       onBack: () => {
@@ -580,13 +805,18 @@ export function renderBuilder({
       zones: selected === null ? [] : (choice?.zones ?? []).filter(zone => info[selected].zones[zone]),
     };
 
-    const root = make('div', 'builder builder-generator');
+    const root = make('div', 'builder builder-generator wrap has-dock');
     const refusal = alertNote('builder-refusal');
     const generateButton = make('button', 'builder-generate', 'Сгенерировать');
     generateButton.type = 'button';
     generateButton.addEventListener('click', () => runGenerator(choice.level, choice.zones, refusal));
+    // Плавающая панель: что будет сгенерировано, кнопка и отказ над ними.
+    const dockTitle = make('b');
+    const dockNote = make('span');
+    const dockText = make('p', 'dock-text');
+    dockText.append(dockTitle, dockNote);
 
-    const levelsTitle = make('h3', 'builder-group-title', 'Уровень');
+    const levelsTitle = make('h2', 'builder-group-title', 'Уровень');
     levelsTitle.id = 'generator-levels';
     const levels = make('div', 'level-options');
     levels.setAttribute('role', 'radiogroup');
@@ -596,13 +826,19 @@ export function renderBuilder({
       const option = make('button', 'level-option');
       option.type = 'button';
       option.setAttribute('role', 'radio');
-      // Пробелы между строками — по той же причине, что на входе.
-      option.append(make('span', 'level-title', level.label), ' ', make('span', 'level-who', level.who));
+      // Пробелы между строками — по той же причине, что на входе. Круг слева
+      // выбранного — с галочкой: смысл не держится на цвете.
+      const radio = make('span', 'radio');
+      radio.append(icon(document, 'tick', 'ic ic-hand'));
+      const text = make('span', 'level-text');
+      const facts = make('span', 'level-facts');
       for (const line of [
         `Подходов на упражнение: ${level.rounds}`,
         `Упражнения: ${poolText(level.pool)}`,
         `Остановка: за ${level.reserve} повтора до отказа`,
-      ]) option.append(' ', make('span', 'level-line', line));
+      ]) facts.append(' ', make('span', 'level-line', line));
+      text.append(make('span', 'level-title', level.label), ' ', make('span', 'level-who', level.who), facts);
+      option.append(radio, text);
       item.append(option);
       if (!usable(id)) {
         setUnavailable(option, true);
@@ -616,15 +852,17 @@ export function renderBuilder({
       return [id, option];
     });
 
-    const zonesTitle = make('h3', 'builder-group-title', 'Зоны упора');
+    const zonesTitle = make('h2', 'builder-group-title', 'Зоны упора');
     zonesTitle.id = 'generator-zones';
     const zones = make('div', 'zone-chips');
     zones.setAttribute('role', 'group');
     zones.setAttribute('aria-labelledby', zonesTitle.id);
     const missing = make('div', 'zone-missing');
     const chips = Object.entries(ZONES).map(([id, zone]) => {
-      const chip = make('button', 'zone-chip', zone.label);
+      const chip = make('button', 'zone-chip');
       chip.type = 'button';
+      // Галочка слева выбранного чипа, пока не выбран — скрыта (style.css).
+      chip.append(icon(document, 'tick', 'ic ic-hand tick'), zone.label);
       chip.addEventListener('click', () => toggleZone(id));
       const note = make('p');
       note.id = `zone-missing-${id}`;
@@ -655,6 +893,10 @@ export function renderBuilder({
         else chip.removeAttribute('aria-describedby');
       }
       generateButton.disabled = choice.level === null;
+      dockTitle.textContent = choice.level === null ? 'Уровень не выбран' : `${LEVELS[choice.level].label} уровень`;
+      dockNote.textContent = choice.zones.length === 0
+        ? (choice.level === null ? '' : 'Без упора')
+        : `Упор: ${choice.zones.map(zone => ZONES[zone].label.toLowerCase()).join(', ')}`;
     }
 
     // Любая перемена выбора делает прежний отказ неактуальным.
@@ -684,8 +926,11 @@ export function renderBuilder({
       },
     });
 
-    root.append(backButton('Назад', abandon), heading('Генератор'), make('p', 'builder-subtitle', GENERATOR_LEAD),
-      picker, levelsTitle, levels, zonesTitle, make('p', 'zone-hint', ZONE_HINT), zones, missing, generateButton, refusal);
+    const dock = make('div', 'dock');
+    dock.append(refusal, dockText, generateButton);
+
+    root.append(...topOf(backButton('Назад', abandon), heading('Генератор'), make('p', 'lead builder-subtitle', GENERATOR_LEAD)),
+      levelsTitle, levels, zonesTitle, make('p', 'zone-hint', ZONE_HINT), zones, missing, picker, dock);
     paint();
     if (focusGear === null) show(root);
     else show(root, root.querySelector(`[data-gear="${focusGear}"]`), { scroll: false });
@@ -728,6 +973,7 @@ export function renderBuilder({
     draftId ??= newWorkoutId();
     startedAs = snapshot(draft);
     replaced.clear();
+    openId = '';
     drawResult();
   }
 
@@ -742,20 +988,19 @@ export function renderBuilder({
   // — Результат ———————————————————————————————————————————————————————
 
   function drawResult() {
-    const root = make('div', 'builder builder-result');
-    const subtitle = make('p', 'builder-subtitle');
-    const coverage = statusBox();
-    const another = make('button', 'builder-variant', 'Другой вариант');
+    const root = make('div', 'builder builder-result wrap has-dock');
+    const subtitle = make('p', 'lead builder-subtitle');
+    const cover = coverCard();
+    const another = make('button', 'btn builder-variant');
     another.type = 'button';
+    another.append(icon(document, 'again', 'ic ic-sm'), 'Другой вариант');
     const refusal = alertNote('builder-refusal');
     // Зоны — из выбора, а не из записи: выбор уже приведён к тому, что принимает
     // генератор (см. edit), а запись могла принести лишнюю зону.
     another.addEventListener('click', () => runGenerator(choice.level, choice.zones, refusal));
     const picker = formatPicker('result-format', () => refresh());
     const blocks = make('div', 'builder-blocks');
-    const save = make('button', 'builder-save', 'Сохранить');
-    save.type = 'button';
-    save.addEventListener('click', drawSave);
+    const bar = saveDock();
 
     // Заменить можно любое упражнение, и силовое тоже: «Убрать» ломало бы то, что
     // подобрано под уровень и упор.
@@ -764,8 +1009,8 @@ export function renderBuilder({
       const tags = [];
       if (item.focus) tags.push(['focus-tag', TAG_FOCUS]);
       if (replaced.has(item.key)) tags.push(['replaced-tag', TAG_REPLACED]);
-      return itemRow(item, itemButton('builder-replace', 'Заменить', item,
-        opener => openReplace({ root, slot, key: item.key, opener, onPick: picked })), tags);
+      return itemRow(item, itemButton('builder-replace icon-btn', 'Заменить', item,
+        opener => openReplace({ root, slot, key: item.key, opener, onPick: picked }), 'swap'), tags);
     }
 
     function picked(key) {
@@ -774,19 +1019,30 @@ export function renderBuilder({
       return rowButton(blocks, key);
     }
 
+    function toggle(id) {
+      openId = openId === id ? '' : id;
+      applyOpen(blocks);
+    }
+
     function refresh() {
       // Число упражнений меняется, когда блок включают и выключают.
       const count = exerciseCount(draft);
-      subtitle.textContent = `${LEVELS[draft.level].label} уровень · ${count} ${plural(count, EXERCISES)}`;
+      const level = `${LEVELS[draft.level].label} уровень`;
+      subtitle.textContent = `${level} · ${count} ${plural(count, EXERCISES)}`;
+      bar.title.textContent = `${count} ${plural(count, EXERCISES)}`;
+      bar.note.textContent = level;
       // Граница уровня рассчитана на три дня (PLAN_DAYS). Дни человек выбирает
       // на сохранении, и там та же граница пересчитывается уже при них.
       const below = belowFloor(workoutOf(PLAN_DAYS), LEVELS[draft.level].floor);
-      paintStatus(coverage, below.length === 0, [below.length === 0 ? ALL_COVERED : belowText(below)]);
-      blocks.replaceChildren(...blockSections(expandWorkout(draftId, draft, library).workout, row, true));
+      const covered = CORE_GROUPS.length - below.length;
+      cover.paint(below.length === 0
+        ? { ok: true, covered, title: ALL_COVERED }
+        : { ok: false, covered, title: BELOW_TITLE, note: belowNote(PLAN_DAYS.length), groups: below, label: 'Ниже границы' });
+      blocks.replaceChildren(...blockSections(expandWorkout(draftId, draft, library).workout, row, { rounds: true, onToggle: toggle }));
     }
 
-    root.append(backButton('Назад', () => leave(backToGenerator)), heading(defaultName(draft.zones)),
-      subtitle, coverage, another, refusal, picker, blocks, save);
+    root.append(...topOf(backButton('Назад', () => leave(backToGenerator)), heading(defaultName(draft.zones)), subtitle),
+      ...cover.nodes, another, refusal, picker, blocks, bar.dock);
     refresh();
     show(root);
   }
@@ -794,7 +1050,7 @@ export function renderBuilder({
   // — Сохранение ————————————————————————————————————————————————————
 
   function drawSave() {
-    const root = make('div', 'builder builder-saving');
+    const root = make('div', 'builder builder-saving wrap has-dock');
     // Назад — туда, откуда пришли: подобранная — на результат, собранная — на сборку.
     const back = draft.level === null ? backButton('К сборке', drawBuild) : backButton('К результату', drawResult);
 
@@ -804,6 +1060,7 @@ export function renderBuilder({
     name.id = 'save-name';
     name.type = 'text';
     name.autocomplete = 'off';
+    name.placeholder = 'Например, «Моя пятница»';
     // Не длиннее, чем принимает запись. Поле ограничивает ввод пальцем; а
     // значение, поставленное не пальцем, ловит refresh.
     name.setAttribute('maxlength', String(NAME_MAX));
@@ -814,9 +1071,11 @@ export function renderBuilder({
     const days = make('div', 'day-chips');
     days.setAttribute('role', 'group');
     days.setAttribute('aria-labelledby', 'save-days');
-    const chips = DAYS.map(([day, label]) => {
+    const chips = DAYS.map(([day, label, full]) => {
       const chip = make('button', 'day-chip', label);
       chip.type = 'button';
+      // «пн» диктор читает по буквам: полное название — в подписи кнопки.
+      chip.setAttribute('aria-label', full);
       chip.addEventListener('click', () => {
         const chosen = draft.days.includes(day) ? draft.days.filter(other => other !== day) : [...draft.days, day];
         draft = { ...draft, days: chosen.sort((a, b) => a - b) };
@@ -830,6 +1089,16 @@ export function renderBuilder({
     const kind = draft.level === null ? 'своя сборка' : `${LEVELS[draft.level].label.toLowerCase()} уровень`;
     const summary = make('p', 'builder-summary', `Что сохранится: ${count} ${plural(count, EXERCISES)}, ${kind}`);
     const status = statusBox();
+
+    // Что сохранится и как это ложится на выбранные дни — одна карточка со
+    // значком: мятная, пока всё в порядке, масляная, когда есть что поправить.
+    const card = make('section', 'builder-card builder-sum');
+    card.setAttribute('aria-label', 'Что сохранится');
+    const mark = make('span', 'sum-ic');
+    mark.append(icon(document, 'tick', 'ic ic-hand sum-ok'), icon(document, 'alert', 'ic sum-warn'));
+    const cardText = make('div', 'sum-text');
+    cardText.append(summary, status);
+    card.append(mark, cardText);
 
     const save = make('button', 'builder-save', 'Сохранить тренировку');
     save.type = 'button';
@@ -906,11 +1175,16 @@ export function renderBuilder({
       onSaved(id, compact, { localOnly: result.localOnly });
     });
 
-    root.append(back, heading('Сохранение'), nameLabel, name, daysLabel, days, summary, status, save, saveReason, error);
+    // Кнопка живёт в плавающей панели над нижней: одно главное действие экрана.
+    // Причина, по которой она недоступна, стоит в той же панели над кнопкой.
+    const dock = make('div', 'dock dock-solo');
+    dock.append(saveReason, save);
+
+    root.append(...topOf(back, heading('Сохранение')), nameLabel, name, daysLabel, days, card, error, dock);
     refresh();
     show(root);
   }
 
   host.replaceChildren(entryScreen());
-  return { edit };
+  return { edit, syncTint: paintTint };
 }

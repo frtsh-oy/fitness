@@ -191,14 +191,14 @@ export function startApp(win = globalThis.window, { library = LIBRARY } = {}) {
     win,
     onShow(id) {
       if (id === 'workouts') drawWorkouts();
-      if (id === 'builder') ensureBuilder();
+      if (id === 'builder') ensureBuilder().syncTint();
     },
   });
   sections.show(savedSection(win) ?? 'today');
 
   function drawWorkouts() {
     renderWorkouts({
-      host: document.getElementById('workouts-list'),
+      host: document.getElementById('screen-workouts'),
       ready: WORKOUTS,
       mine,
       currentId: workout.id,

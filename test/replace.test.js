@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { similarity, replaceCandidates, replaceExercise } from '../builder/replace.js';
+import { similarity, replaceCandidates, replaceExercise, searchCandidates } from '../builder/replace.js';
 import { pickSkeleton, makeRandom } from '../builder/generator.js';
 import { expandWorkout } from '../builder/compact.js';
 import { zeroGroups } from '../builder/coverage.js';
@@ -197,4 +197,24 @@ test('замена на уже стоящее в тренировке — оши
   assert.throws(() => replaceExercise(GEN, 'strength', 'glutes-1', 'glutes-1'), /«glutes-1» уже есть в тренировке/);
   // В другом слоте тоже: тренировка показала бы его дважды.
   assert.throws(() => replaceExercise(GEN, 'strength', 'glutes-1', 'warm-3'), /«warm-3» уже есть в тренировке/);
+});
+
+test('поиск среди кандидатов: порядок «от похожего» остаётся, пустой запрос оставляет всех', () => {
+  const found = replaceCandidates({ compact: MANUAL_ONE, slot: 'strength', key: 'squat-a', library: TEST_LIBRARY });
+  assert.ok(found.length > 2, 'условие теста: есть из чего выбирать');
+
+  assert.deepEqual(searchCandidates(found, ''), found);
+  assert.deepEqual(searchCandidates(found, '   '), found);
+
+  // Название двойника находит его одного; совпадение — по слову, регистр не важен.
+  assert.deepEqual(keys(searchCandidates(found, 'МНОГОСУСТАВНОЕ squat b')), ['squat-b']);
+
+  // Что нашлось — в том же порядке, что и среди всех кандидатов.
+  const several = searchCandidates(found, 'многосуставное');
+  assert.ok(several.length > 1);
+  assert.deepEqual(keys(several), keys(found).filter(key => several.some(entry => entry.key === key)));
+
+  assert.deepEqual(searchCandidates(found, 'такого слова нет нигде'), []);
+  // Исходный список поиск не меняет.
+  assert.equal(found.length, candidates(MANUAL_ONE, 'strength', 'squat-a').length);
 });

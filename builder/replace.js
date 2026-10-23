@@ -11,6 +11,7 @@
 // на те же мышцы нет.
 import { LIBRARY, SLOT_LABELS } from '../exercises/index.js';
 import { LEVELS, ZONES } from './rules.js';
+import { matchesQuery } from './search.js';
 
 // Слоты записи. Список слотов у compact.js наружу не выходит, а ключи
 // SLOT_LABELS — те же четыре в том же порядке.
@@ -66,6 +67,13 @@ export function replaceCandidates({ compact, slot, key, library = LIBRARY }) {
     // не localeCompare: результат не зависит от языка устройства.
     .sort((x, y) => y.score - x.score || (x.entry.key < y.entry.key ? -1 : 1))
     .map(({ entry }) => entry);
+}
+
+// Кандидаты, подошедшие под слова запроса (название, мышцы, инвентарь — как в
+// библиотеке). Порядок прежний: самые похожие остаются первыми. Пустой запрос
+// оставляет всех.
+export function searchCandidates(candidates, query) {
+  return candidates.filter(entry => matchesQuery(entry, query));
 }
 
 // Новая запись с newKey на месте key; исходная не меняется. Массивы копируем все,
